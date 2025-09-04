@@ -1,0 +1,13 @@
+lib/
+	main.dart
+	screens/
+		dashboard_screen.dart
+		sos_monitor_screen.dart
+	services/
+		notification_service.dart
+		websocket_service.dart
+	models/
+		sos_alert.dart
+	widgets/
+		alert_card.dart
+		real_time_map.dart
