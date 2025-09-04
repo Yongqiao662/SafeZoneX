@@ -1,4 +1,4 @@
-"# SafeZoneX 🛡️
+# SafeZoneX 🛡️
 
 **Your Campus Safety in One Tap**
 
