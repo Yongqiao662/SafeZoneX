@@ -11,6 +11,7 @@ class MainDashboardScreen extends StatefulWidget {
 class _MainDashboardScreenState extends State<MainDashboardScreen> {
   int _selectedIndex = 0;
   bool _isChatOverlayVisible = false;
+  Set<int> _hoveredIcons = {}; // Track which icons are being hovered
 
   List<Widget> get _pages => [
     HomeScreen(onChatTap: _showChatOverlay),
@@ -247,31 +248,71 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
 
   Widget _buildNavIcon(IconData icon, int index) {
     bool isSelected = _selectedIndex == index;
+    bool isHovered = _hoveredIcons.contains(index);
     
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        gradient: isSelected
-            ? const LinearGradient(
-                colors: [Colors.deepPurple, Colors.purpleAccent],
-              )
-            : null,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: isSelected
-            ? [
-                BoxShadow(
-                  color: Colors.deepPurple.withOpacity(0.3),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                ),
-              ]
-            : null,
-      ),
-      child: Icon(
-        icon,
-        size: 24,
-        color: isSelected ? Colors.white : Colors.white.withOpacity(0.6),
+    return MouseRegion(
+      onEnter: (_) {
+        setState(() {
+          _hoveredIcons.add(index);
+        });
+      },
+      onExit: (_) {
+        setState(() {
+          _hoveredIcons.remove(index);
+        });
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          gradient: isSelected
+              ? const LinearGradient(
+                  colors: [Colors.deepPurple, Colors.purpleAccent],
+                )
+              : isHovered
+                  ? LinearGradient(
+                      colors: [
+                        Colors.deepPurple.withOpacity(0.3),
+                        Colors.purpleAccent.withOpacity(0.3),
+                      ],
+                    )
+                  : null,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: Colors.deepPurple.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+              : isHovered
+                  ? [
+                      BoxShadow(
+                        color: Colors.deepPurple.withOpacity(0.15),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ]
+                  : null,
+        ),
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 150),
+          opacity: isSelected 
+              ? 1.0 
+              : isHovered 
+                  ? 0.8 
+                  : 1.0,
+          child: Icon(
+            icon,
+            size: 24,
+            color: isSelected 
+                ? Colors.white 
+                : isHovered
+                    ? Colors.white.withOpacity(0.9)
+                    : Colors.white.withOpacity(0.6),
+          ),
+        ),
       ),
     );
   }

@@ -1,8 +1,22 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Location permissions for end-to-end tracking -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <!-- Internet permission for WebSocket communication -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Wake lock for background tracking -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    
     <application
         android:label="safezonex"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        
+        <!-- Google Maps API Key -->
+        <meta-data android:name="com.google.android.geo.API_KEY"
+                   android:value="AIzaSyAhVXxYn4NttDrHLzRHy1glc8ukrmkissM"/>
+                   
         <activity
             android:name=".MainActivity"
             android:exported="true"

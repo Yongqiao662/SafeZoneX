@@ -5,6 +5,8 @@ import 'chat_screen.dart';
 import 'map_screen.dart';
 import 'profile_screen.dart';
 import '../services/websocket_service.dart';
+import '../services/enhanced_location_tracking_service.dart';
+import '../widgets/enhanced_location_dashboard.dart';
 
 class HomeScreen extends StatefulWidget {
   final VoidCallback? onChatTap;
@@ -28,16 +30,17 @@ class _HomeScreenState extends State<HomeScreen>
   late Animation<double> _cardOpacityAnimation;
   late Animation<double> _sosScaleAnimation;
   
-  bool _isSosPressed = false;
   bool _isGuardianPulseActive = false;
   
-  // WebSocket service
+  // Services
   final WebSocketService _wsService = WebSocketService();
+  final EnhancedLocationTrackingService _enhancedLocationService = EnhancedLocationTrackingService();
 
   @override
   void initState() {
     super.initState();
     _initAnimations();
+    _initializeServices();
     _startEntryAnimation();
     _connectWebSocket();
   }
@@ -107,6 +110,51 @@ class _HomeScreenState extends State<HomeScreen>
     _pulseController.repeat(reverse: true);
   }
 
+  /// Initialize enhanced location service
+  Future<void> _initializeServices() async {
+    try {
+      // Initialize with your Google Maps API key
+      await _enhancedLocationService.initialize(
+        googleMapsApiKey: 'AIzaSyAhVXxYn4NttDrHLzRHy1glc8ukrmkissM', // Your actual API key
+        backendApiUrl: 'ws://10.0.2.2:8080', // Your backend URL
+      );
+
+      // Set up callbacks for location updates
+      _enhancedLocationService.onLocationUpdate = (position, address) {
+        if (mounted) {
+          setState(() {
+            // Update UI with new location
+          });
+        }
+      };
+
+      _enhancedLocationService.onSafeZoneStatusChanged = (isInSafeZone) {
+        if (mounted) {
+          setState(() {
+            // Update safe zone status in UI
+          });
+        }
+      };
+
+      _enhancedLocationService.onEmergencyTriggered = (emergencyData) {
+        // Handle emergency alerts
+        final location = emergencyData['location'] as Map<String, dynamic>;
+        _wsService.sendSOSAlert(
+          userId: 'user_${DateTime.now().millisecondsSinceEpoch}',
+          userName: 'Current User',
+          userPhone: '+1234567890',
+          latitude: location['latitude'],
+          longitude: location['longitude'],
+          address: location['address'] ?? 'Unknown location',
+          additionalInfo: 'Enhanced emergency tracking activated',
+        );
+      };
+
+    } catch (e) {
+      debugPrint('Error initializing services: $e');
+    }
+  }
+
   void _startEntryAnimation() async {
     _fadeController.forward();
     await Future.delayed(const Duration(milliseconds: 400));
@@ -157,6 +205,9 @@ class _HomeScreenState extends State<HomeScreen>
                         _buildQuickActions(),
                         const SizedBox(height: 30),
                         _buildStatusCard(),
+                        const SizedBox(height: 20),
+                        // Enhanced Location Tracking Dashboard
+                        const EnhancedLocationDashboard(),
                         const SizedBox(height: 20),
                       ],
                     ),
@@ -281,16 +332,13 @@ class _HomeScreenState extends State<HomeScreen>
               GestureDetector(
                 onTapDown: (_) {
                   _sosController.forward();
-                  setState(() => _isSosPressed = true);
                   HapticFeedback.mediumImpact();
                 },
                 onTapUp: (_) {
                   _sosController.reverse();
-                  setState(() => _isSosPressed = false);
                 },
                 onTapCancel: () {
                   _sosController.reverse();
-                  setState(() => _isSosPressed = false);
                 },
                 onLongPress: () {
                   HapticFeedback.heavyImpact();
@@ -457,8 +505,8 @@ class _HomeScreenState extends State<HomeScreen>
                 Expanded(
                   child: _buildActionCard(
                     icon: Icons.location_on_rounded,
-                    title: 'Location',
-                    subtitle: 'Share Live Location',
+                    title: 'Campus Safe Zones',
+                    subtitle: 'Nearby Safe Spots',
                     color: const Color(0xFFE17055),
                     onTap: () => Navigator.push(
                       context,
@@ -635,23 +683,35 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  void _activateGuardianPulse() {
+  void _activateGuardianPulse() async {
     setState(() => _isGuardianPulseActive = true);
     HapticFeedback.heavyImpact();
     
-    // Send SOS alert via WebSocket
-    _wsService.sendSOSAlert(
-      userId: 'user_${DateTime.now().millisecondsSinceEpoch}',
-      userName: 'Current User', // Replace with actual user name
-      userPhone: '+1234567890', // Replace with actual user phone
-      latitude: 37.7749, // Replace with actual GPS coordinates
-      longitude: -122.4194, // Replace with actual GPS coordinates  
-      address: 'Campus Location - Replace with actual address',
-      alertType: 'Emergency SOS',
-      additionalInfo: 'SOS button pressed from mobile app',
-    );
-    
-    print('🚨 SOS Alert sent to monitoring dashboard!');
+    // Send SOS alert with real location via WebSocket
+    try {
+      await _wsService.sendSOSAlertWithRealLocation(
+        userId: 'user_${DateTime.now().millisecondsSinceEpoch}',
+        userName: 'Current User', // Replace with actual user name
+        userPhone: '+1234567890', // Replace with actual user phone
+        alertType: 'Emergency SOS - Guardian Pulse Activated',
+        additionalInfo: 'Emergency SOS button pressed with real-time location tracking',
+      );
+      
+      print('🚨 SOS Alert sent with real GPS location to monitoring dashboard!');
+    } catch (e) {
+      print('❌ Failed to send SOS alert: $e');
+      // Fallback to basic alert if location fails
+      _wsService.sendSOSAlert(
+        userId: 'user_${DateTime.now().millisecondsSinceEpoch}',
+        userName: 'Current User',
+        userPhone: '+1234567890',
+        latitude: 0.0, // Fallback coordinates
+        longitude: 0.0,
+        address: 'Location unavailable',
+        alertType: 'Emergency SOS - Location Failed',
+        additionalInfo: 'SOS button pressed - Location service unavailable: $e',
+      );
+    }
     
     // Navigate to SOS screen after a brief delay
     Future.delayed(const Duration(milliseconds: 500), () {
