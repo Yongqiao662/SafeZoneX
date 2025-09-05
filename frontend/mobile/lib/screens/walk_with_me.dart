@@ -111,8 +111,10 @@ class _FindWalkPageState extends State<FindWalkPage> {
         title: const Text(
           'Find Walking Partners',
           style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w500,
+                fontSize: 24,
+                fontWeight: FontWeight.w300,
+                color: Colors.white,
+                letterSpacing: 1.5,
           ),
         ),
         backgroundColor: Colors.transparent,
@@ -120,10 +122,17 @@ class _FindWalkPageState extends State<FindWalkPage> {
         flexibleSpace: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
-              colors: [Colors.deepPurple, Colors.purpleAccent],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color(0xFF1a1a2e),
+                Color(0xFF16213e),
+                Color(0xFF0f0f1e),
+              ],
             ),
           ),
         ),
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: Container(
         decoration: const BoxDecoration(

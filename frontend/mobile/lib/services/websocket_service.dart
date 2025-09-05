@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'location_tracking_service.dart';
 
 class WebSocketService {
   static final WebSocketService _instance = WebSocketService._internal();
@@ -72,6 +73,55 @@ class WebSocketService {
     } else {
       print('WebSocket not connected, cannot send message');
     }
+  }
+
+  // Enhanced SOS alert with real-time location
+  Future<void> sendSOSAlertWithRealLocation({
+    required String userId,
+    required String userName,
+    required String userPhone,
+    String alertType = 'Emergency SOS',
+    String? additionalInfo,
+    String? emergencyContact,
+  }) async {
+    final locationService = LocationTrackingService();
+    
+    // Ensure we have current location
+    await locationService.getCurrentLocation();
+    final locationData = locationService.getEmergencyLocationData();
+    
+    sendSOSAlert(
+      userId: userId,
+      userName: userName,
+      userPhone: userPhone,
+      latitude: locationData['latitude'],
+      longitude: locationData['longitude'],
+      address: locationData['address'],
+      alertType: alertType,
+      additionalInfo: additionalInfo ?? 
+        'SOS with live GPS - Accuracy: ${locationData['accuracy']?.toStringAsFixed(1) ?? 'Unknown'}m',
+    );
+  }
+
+  // Send live location updates during tracking
+  void sendLocationUpdate({
+    required String userId,
+    required double latitude,
+    required double longitude,
+    required String address,
+    String? status,
+    Map<String, dynamic>? additionalData,
+  }) {
+    sendMessage({
+      'type': 'location_update',
+      'userId': userId,
+      'latitude': latitude,
+      'longitude': longitude,
+      'address': address,
+      'status': status ?? 'tracking',
+      'timestamp': DateTime.now().toIso8601String(),
+      'additionalData': additionalData ?? {},
+    });
   }
 
   void sendSOSAlert({
