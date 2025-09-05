@@ -146,7 +146,127 @@ Campus safety is a critical concern for educational institutions worldwide. Trad
 
 ---
 
-## 📋 Prerequisites & Downloads
+## � Quick Start Guide
+
+### �📋 Prerequisites
+
+Before you begin, ensure you have the following installed:
+
+- **Flutter SDK** (3.0+) - [Download](https://flutter.dev/docs/get-started/install)
+- **Dart SDK** (included with Flutter)
+- **Android Studio** - [Download](https://developer.android.com/studio)
+- **VS Code** (recommended) - [Download](https://code.visualstudio.com/)
+- **Google Maps API Key** - [Get API Key](#-google-maps-api-setup)
+
+### ⚡ Quick Setup (5 Minutes)
+
+1. **Clone the Repository**
+   ```bash
+   git clone https://github.com/yourusername/SafeZoneX.git
+   cd SafeZoneX
+   ```
+
+2. **Setup Google Maps API Key** 🗺️
+   ```bash
+   # Step 1: Get your API key from Google Cloud Console
+   # Visit: https://console.cloud.google.com/
+   
+   # Step 2: Copy the API key configuration file
+   cd frontend/mobile/android
+   cp local.properties.example local.properties
+   
+   # Step 3: Edit local.properties and add your API key
+   # Replace 'your_google_maps_api_key_here' with your actual key
+   ```
+
+3. **Install Dependencies**
+   ```bash
+   cd frontend/mobile
+   flutter pub get
+   ```
+
+4. **Run the App**
+   ```bash
+   flutter run
+   ```
+
+🎉 **That's it!** The app should now be running on your device/emulator.
+
+---
+
+## 🔧 Detailed Setup Instructions
+
+### 🗺️ **Google Maps API Setup** (Required)
+
+**⚠️ IMPORTANT: This step is required for the app to work properly**
+
+#### Step 1: Get Your API Key
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project or select existing one
+3. Enable these APIs:
+   ```
+   ✓ Maps SDK for Android
+   ✓ Maps SDK for iOS
+   ✓ Geocoding API
+   ✓ Directions API
+   ✓ Places API (optional)
+   ```
+4. Go to "Credentials" → "Create Credentials" → "API Key"
+5. Copy your API key (starts with `AIza...`)
+
+#### Step 2: Add API Key to Project
+1. Navigate to the Android configuration:
+   ```bash
+   cd SafeZoneX/frontend/mobile/android
+   ```
+
+2. Copy the example file:
+   ```bash
+   cp local.properties.example local.properties
+   ```
+
+3. Edit `local.properties` and replace the placeholder:
+   ```properties
+   GOOGLE_MAPS_API_KEY=your_actual_api_key_here
+   ```
+
+4. **NEVER commit this file to git** - it contains your secret API key!
+
+#### Step 3: Secure Your API Key
+1. In Google Cloud Console → Credentials
+2. Click on your API key to edit it
+3. Set "Application restrictions" → "Android apps"
+4. Add your app's SHA-1 fingerprint:
+   ```bash
+   # Get SHA-1 fingerprint
+   keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android
+   ```
+
+#### Step 4: For iOS (Optional)
+If you plan to build for iOS, add your API key to `ios/Runner/AppDelegate.swift`:
+```swift
+GMSServices.provideAPIKey("YOUR_API_KEY_HERE")
+```
+
+#### Step 5: Location Configuration (Important)
+The app currently uses demo coordinates for testing. For production:
+1. Update campus location coordinates in `lib/screens/walk_with_me.dart`
+2. Replace demo coordinates with your actual campus coordinates
+3. Configure campus buildings and landmarks
+4. Test location services work correctly in your area
+
+### 🔒 **Security Best Practices**
+
+- ✅ **DO**: Keep your API key in `local.properties`
+- ✅ **DO**: Restrict your API key to specific apps and APIs
+- ✅ **DO**: Monitor your API usage in Google Cloud Console
+- ❌ **DON'T**: Commit `local.properties` to version control
+- ❌ **DON'T**: Share your API key publicly
+- ❌ **DON'T**: Use unrestricted API keys
+
+---
+
+## 📱 Platform-Specific Setup
 
 ### 🛠️ **Development Environment**
 
@@ -166,6 +286,52 @@ flutter --version
 - **Android SDK** (API level 21+)
 - **iOS SDK** (iOS 11.0+)
 - **Web Browser** (Chrome recommended for development)
+
+#### **Google Maps API Setup** 🗺️
+**Required for location services and mapping features**
+
+1. **Get Google Maps API Key**:
+   ```bash
+   # Visit Google Cloud Console
+   https://console.cloud.google.com/
+   
+   # Create or select a project
+   # Enable these APIs:
+   - Maps SDK for Android
+   - Maps SDK for iOS 
+   - Geocoding API
+   - Directions API
+   - Places API
+   ```
+
+2. **Configure API Key**:
+   ```bash
+   # Copy local.properties.example to local.properties
+   cd SafeZoneX/frontend/mobile/android
+   cp local.properties.example local.properties
+   
+   # Edit local.properties and add your API key:
+   GOOGLE_MAPS_API_KEY=your_actual_api_key_here
+   ```
+
+3. **Security Setup**:
+   ```bash
+   # In Google Cloud Console > Credentials:
+   # 1. Restrict API key by application (Android apps)
+   # 2. Add your app's SHA-1 fingerprint
+   # 3. Restrict APIs to only needed services
+   
+   # Get your SHA-1 fingerprint:
+   keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android
+   ```
+
+4. **iOS Configuration** (if developing for iOS):
+   ```bash
+   # Add API key to ios/Runner/AppDelegate.swift:
+   GMSServices.provideAPIKey("YOUR_API_KEY_HERE")
+   ```
+
+⚠️ **Security Note**: Never commit your actual API key to version control. The app uses placeholders that read from local.properties.
 
 ### 📦 **Dependencies**
 

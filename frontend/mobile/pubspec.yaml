@@ -22,6 +22,8 @@ dependencies:
   http: ^1.1.0
   # Local storage
   shared_preferences: ^2.2.0
+  # Image picker for camera/gallery
+  image_picker: ^1.0.4
 
 dev_dependencies:
   flutter_test:

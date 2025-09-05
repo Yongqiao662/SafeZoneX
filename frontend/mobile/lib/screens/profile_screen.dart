@@ -53,9 +53,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         width: 100,
                         height: 100,
                         decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Colors.deepPurple, Colors.purpleAccent],
-                          ),
+                          color: Colors.deepPurple, // Single purple color instead of gradient
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(

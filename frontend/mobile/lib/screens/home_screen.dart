@@ -5,8 +5,6 @@ import 'chat_screen.dart';
 import 'map_screen.dart';
 import 'profile_screen.dart';
 import '../services/websocket_service.dart';
-import '../services/enhanced_location_tracking_service.dart';
-import '../widgets/enhanced_location_dashboard.dart';
 
 class HomeScreen extends StatefulWidget {
   final VoidCallback? onChatTap;
@@ -34,24 +32,13 @@ class _HomeScreenState extends State<HomeScreen>
   
   // Services
   final WebSocketService _wsService = WebSocketService();
-  final EnhancedLocationTrackingService _enhancedLocationService = EnhancedLocationTrackingService();
 
   @override
   void initState() {
     super.initState();
     _initAnimations();
-    _initializeServices();
     _startEntryAnimation();
-    _connectWebSocket();
-  }
-  
-  void _connectWebSocket() async {
-    try {
-      await _wsService.connect();
-      print('🔌 Connected to SafeZoneX server');
-    } catch (e) {
-      print('❌ Failed to connect to server: $e');
-    }
+    // Enhanced location service removed for better performance
   }
 
   void _initAnimations() {
@@ -110,51 +97,6 @@ class _HomeScreenState extends State<HomeScreen>
     _pulseController.repeat(reverse: true);
   }
 
-  /// Initialize enhanced location service
-  Future<void> _initializeServices() async {
-    try {
-      // Initialize with your Google Maps API key
-      await _enhancedLocationService.initialize(
-        googleMapsApiKey: 'AIzaSyAhVXxYn4NttDrHLzRHy1glc8ukrmkissM', // Your actual API key
-        backendApiUrl: 'ws://10.0.2.2:8080', // Your backend URL
-      );
-
-      // Set up callbacks for location updates
-      _enhancedLocationService.onLocationUpdate = (position, address) {
-        if (mounted) {
-          setState(() {
-            // Update UI with new location
-          });
-        }
-      };
-
-      _enhancedLocationService.onSafeZoneStatusChanged = (isInSafeZone) {
-        if (mounted) {
-          setState(() {
-            // Update safe zone status in UI
-          });
-        }
-      };
-
-      _enhancedLocationService.onEmergencyTriggered = (emergencyData) {
-        // Handle emergency alerts
-        final location = emergencyData['location'] as Map<String, dynamic>;
-        _wsService.sendSOSAlert(
-          userId: 'user_${DateTime.now().millisecondsSinceEpoch}',
-          userName: 'Current User',
-          userPhone: '+1234567890',
-          latitude: location['latitude'],
-          longitude: location['longitude'],
-          address: location['address'] ?? 'Unknown location',
-          additionalInfo: 'Enhanced emergency tracking activated',
-        );
-      };
-
-    } catch (e) {
-      debugPrint('Error initializing services: $e');
-    }
-  }
-
   void _startEntryAnimation() async {
     _fadeController.forward();
     await Future.delayed(const Duration(milliseconds: 400));
@@ -205,9 +147,6 @@ class _HomeScreenState extends State<HomeScreen>
                         _buildQuickActions(),
                         const SizedBox(height: 30),
                         _buildStatusCard(),
-                        const SizedBox(height: 20),
-                        // Enhanced Location Tracking Dashboard
-                        const EnhancedLocationDashboard(),
                         const SizedBox(height: 20),
                       ],
                     ),
@@ -448,32 +387,38 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Widget _buildQuickActions() {
-    return SlideTransition(
-      position: _cardSlideAnimation,
-      child: FadeTransition(
-        opacity: _cardOpacityAnimation,
+ Widget _buildQuickActions() {
+  return SlideTransition(
+    position: _cardSlideAnimation,
+    child: FadeTransition(
+      opacity: _cardOpacityAnimation,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Header with better spacing
             Padding(
-              padding: const EdgeInsets.only(bottom: 20),
+              padding: const EdgeInsets.only(left: 8, bottom: 24),
               child: Text(
                 'Quick Actions',
                 style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w500,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w600,
                   color: Colors.white,
+                  letterSpacing: 0.5,
                 ),
               ),
             ),
+            
+            // First row of actions
             Row(
               children: [
                 Expanded(
                   child: _buildActionCard(
                     icon: Icons.chat_bubble_rounded,
                     title: 'Connect',
-                    subtitle: 'Live Chat Support',
+                    subtitle: 'Live chat with safety advisors',
                     color: const Color(0xFF6C5CE7),
                     onTap: () {
                       if (widget.onChatTap != null) {
@@ -487,26 +432,12 @@ class _HomeScreenState extends State<HomeScreen>
                     },
                   ),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildActionCard(
-                    icon: Icons.directions_walk_rounded,
-                    title: 'Escort',
-                    subtitle: 'Request Safe Walk',
-                    color: const Color(0xFF00CEC9),
-                    onTap: () => _requestEscort(),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
+                const SizedBox(width: 12),
                 Expanded(
                   child: _buildActionCard(
                     icon: Icons.location_on_rounded,
-                    title: 'Campus Safe Zones',
-                    subtitle: 'Nearby Safe Spots',
+                    title: 'Safe Zones',
+                    subtitle: 'Find nearby safe spots',
                     color: const Color(0xFFE17055),
                     onTap: () => Navigator.push(
                       context,
@@ -514,14 +445,32 @@ class _HomeScreenState extends State<HomeScreen>
                     ),
                   ),
                 ),
-                const SizedBox(width: 16),
+              ],
+            ),
+            
+            const SizedBox(height: 12),
+            
+            // Second row of actions
+            Row(
+              children: [
                 Expanded(
                   child: _buildActionCard(
                     icon: Icons.phone_rounded,
-                    title: 'Emergency',
-                    subtitle: 'Quick Dial 999',
+                    title: 'Emergency Call',
+                    subtitle: 'Instant dial 999',
                     color: const Color(0xFFE84393),
+                    isEmergency: true,
                     onTap: () => _callEmergency(),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildActionCard(
+                    icon: Icons.shield_rounded,
+                    title: 'Check-In',
+                    subtitle: 'Update safety status',
+                    color: const Color(0xFF00B894),
+                    onTap: () => _showSafeStatusDialog(),
                   ),
                 ),
               ],
@@ -529,74 +478,90 @@ class _HomeScreenState extends State<HomeScreen>
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
-  Widget _buildActionCard({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.05),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: Colors.white.withOpacity(0.1),
-            width: 1,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: color.withOpacity(0.1),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
-            ),
+Widget _buildActionCard({
+  required IconData icon,
+  required String title,
+  required String subtitle,
+  required Color color,
+  required VoidCallback onTap,
+  bool isEmergency = false,
+}) {
+  return GestureDetector(
+    onTap: onTap,
+    child: Container(
+      height: 140,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            color.withOpacity(0.1),
+            color.withOpacity(0.03),
+            Colors.white.withOpacity(0.02),
           ],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(
-                icon,
-                color: color,
-                size: 24,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              subtitle,
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.white.withOpacity(0.7),
-                fontWeight: FontWeight.w400,
-              ),
-            ),
-          ],
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.1),
+          width: 1,
         ),
       ),
-    );
-  }
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Icon
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              icon,
+              color: color,
+              size: 22,
+            ),
+          ),
+          
+          const SizedBox(height: 12),
+          
+          // Title
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          
+          const SizedBox(height: 4),
+          
+          // Subtitle
+          Expanded(
+            child: Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.white.withOpacity(0.7),
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
 
   Widget _buildStatusCard() {
     return SlideTransition(
@@ -725,20 +690,6 @@ class _HomeScreenState extends State<HomeScreen>
     });
   }
 
-  void _requestEscort() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Escort request sent successfully'),
-        backgroundColor: const Color(0xFF00CEC9),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        margin: const EdgeInsets.all(16),
-      ),
-    );
-  }
-
   void _callEmergency() {
     // Implement emergency call functionality
     ScaffoldMessenger.of(context).showSnackBar(
@@ -750,6 +701,50 @@ class _HomeScreenState extends State<HomeScreen>
           borderRadius: BorderRadius.circular(12),
         ),
         margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  void _showSafeStatusDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1a1a2e),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Text(
+          'Safe Status Check-In',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: const Text(
+          'Let your contacts know you\'re safe. This will send your location and status to your emergency contacts.',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Safe status sent to emergency contacts'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00B894),
+            ),
+            child: const Text(
+              'Send Safe Status',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
       ),
     );
   }
