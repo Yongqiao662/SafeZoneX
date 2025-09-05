@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'home_screen.dart';
 import 'addfriend_screen.dart';
 import 'walk_with_me.dart';
 import 'profile_screen.dart';
+import 'reports_screen.dart';
 
 class MainDashboardScreen extends StatefulWidget {
   @override
@@ -15,8 +17,9 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
 
   List<Widget> get _pages => [
     HomeScreen(onChatTap: _showChatOverlay),
-    FriendsScreen(),
     WalkWithMeHome(),
+    FriendsScreen(),
+    ReportsScreen(),
     ProfileScreen(),
   ];
 
@@ -185,7 +188,9 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
   }
 
   Widget _buildMainBottomNav() {
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOutCubic,
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           begin: Alignment.topCenter,
@@ -214,6 +219,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
             unselectedItemColor: Colors.white.withOpacity(0.6),
             currentIndex: _selectedIndex,
             elevation: 0,
+            enableFeedback: true,
             selectedLabelStyle: const TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
@@ -223,9 +229,13 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
               fontWeight: FontWeight.w400,
             ),
             onTap: (index) {
-              setState(() {
-                _selectedIndex = index;
-              });
+              if (index != _selectedIndex) {
+                // Add haptic feedback for smoother UX
+                HapticFeedback.lightImpact();
+                setState(() {
+                  _selectedIndex = index;
+                });
+              }
             },
             items: [
               BottomNavigationBarItem(
@@ -233,15 +243,19 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                 label: 'Home',
               ),
               BottomNavigationBarItem(
-                icon: _buildNavIcon(Icons.people_rounded, 1),
-                label: 'Friends',
-              ),
-              BottomNavigationBarItem(
-                icon: _buildNavIcon(Icons.directions_walk_rounded, 2),
+                icon: _buildNavIcon(Icons.directions_walk_rounded, 1),
                 label: 'Walk With Me',
               ),
               BottomNavigationBarItem(
-                icon: _buildNavIcon(Icons.person_rounded, 3),
+                icon: _buildNavIcon(Icons.people_rounded, 2),
+                label: 'Friends',
+              ),
+              BottomNavigationBarItem(
+                icon: _buildNavIcon(Icons.report_problem_rounded, 3),
+                label: 'Reports',
+              ),
+              BottomNavigationBarItem(
+                icon: _buildNavIcon(Icons.person_rounded, 4),
                 label: 'Profile',
               ),
             ],
@@ -255,7 +269,8 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
     bool isSelected = _selectedIndex == index;
     
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeInOutCubic,
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         gradient: isSelected
@@ -267,17 +282,28 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
         boxShadow: isSelected
             ? [
                 BoxShadow(
-                  color: Colors.deepPurple.withOpacity(0.3),
+                  color: Colors.deepPurple.withOpacity(0.4),
+                  blurRadius: 12,
+                  offset: const Offset(0, 6),
+                  spreadRadius: 1,
+                ),
+                BoxShadow(
+                  color: Colors.purpleAccent.withOpacity(0.2),
                   blurRadius: 8,
-                  offset: const Offset(0, 4),
+                  offset: const Offset(0, 2),
                 ),
               ]
             : null,
       ),
-      child: Icon(
-        icon,
-        size: 24,
-        color: isSelected ? Colors.white : Colors.white.withOpacity(0.6),
+      child: AnimatedScale(
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeInOutCubic,
+        scale: isSelected ? 1.1 : 1.0,
+        child: Icon(
+          icon,
+          size: 24,
+          color: isSelected ? Colors.white : Colors.white.withOpacity(0.6),
+        ),
       ),
     );
   }

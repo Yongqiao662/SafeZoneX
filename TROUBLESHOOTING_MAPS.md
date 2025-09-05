@@ -2,7 +2,7 @@
 
 ### Current Status: Empty Map Showing ❌
 
-You've correctly added your API key: `AIzaSyAhVXxYn4NttDrHLzRHy1glc8ukrmkissM`
+You've correctly added your API key: `[YOUR_API_KEY_HERE]` (example format)
 
 ### Most Common Reasons for Empty Maps:
 

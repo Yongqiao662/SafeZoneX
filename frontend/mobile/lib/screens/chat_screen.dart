@@ -68,21 +68,21 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.black.withOpacity(0.9), // Transparent black background
         elevation: 1,
         leading: IconButton(
           onPressed: () => Navigator.pop(context),
-          icon: Icon(Icons.arrow_back, color: Colors.blue[600]),
+          icon: const Icon(Icons.arrow_back, color: Colors.white), // White icon
         ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               'Campus Security',
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
-                color: Colors.grey[900],
+                color: Colors.white, // White text
               ),
             ),
             Row(
@@ -98,9 +98,9 @@ class _ChatScreenState extends State<ChatScreen> {
                 SizedBox(width: 8),
                 Text(
                   'Online',
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 12,
-                    color: Colors.grey[600],
+                    color: Colors.white70, // White text with opacity
                   ),
                 ),
               ],
@@ -108,6 +108,7 @@ class _ChatScreenState extends State<ChatScreen> {
           ],
         ),
       ),
+      backgroundColor: const Color(0xFF121212), // Dark theme background
       body: Column(
         children: [
           Expanded(

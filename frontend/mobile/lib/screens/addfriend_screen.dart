@@ -86,7 +86,10 @@ class _FriendsScreenState extends State<FriendsScreen>
     super.initState();
     filteredFriends = allFriends;
     _initAnimations();
-    _startEntryAnimation();
+    // Remove entry animation - set all animations to completed state immediately
+    _fadeController.value = 1.0;
+    _slideController.value = 1.0;
+    _searchAnimationController.value = 1.0;
     _searchTextController.addListener(_onSearchChanged);
   }
 
@@ -123,14 +126,6 @@ class _FriendsScreenState extends State<FriendsScreen>
       parent: _searchAnimationController,
       curve: Curves.easeInOut,
     );
-  }
-
-  void _startEntryAnimation() async {
-    _fadeController.forward();
-    await Future.delayed(const Duration(milliseconds: 200));
-    _slideController.forward();
-    await Future.delayed(const Duration(milliseconds: 300));
-    _searchAnimationController.forward();
   }
 
   void _onSearchChanged() {
@@ -691,7 +686,7 @@ class _FriendsScreenState extends State<FriendsScreen>
             end: Alignment.bottomCenter,
             colors: [
               Color(0xFF1a1a2e),
-              Color(0xFF16213e),
+              Color(0xFF1e1a3e),
               Color(0xFF0f0f1e),
             ],
           ),
