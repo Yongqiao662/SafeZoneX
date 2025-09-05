@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'home_screen.dart';
+import 'addfriend_screen.dart';
 import 'walk_with_me.dart';
 import 'profile_screen.dart';
 
@@ -11,10 +12,10 @@ class MainDashboardScreen extends StatefulWidget {
 class _MainDashboardScreenState extends State<MainDashboardScreen> {
   int _selectedIndex = 0;
   bool _isChatOverlayVisible = false;
-  Set<int> _hoveredIcons = {}; // Track which icons are being hovered
 
   List<Widget> get _pages => [
     HomeScreen(onChatTap: _showChatOverlay),
+    FriendsScreen(),
     WalkWithMeHome(),
     ProfileScreen(),
   ];
@@ -232,11 +233,15 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                 label: 'Home',
               ),
               BottomNavigationBarItem(
-                icon: _buildNavIcon(Icons.directions_walk_rounded, 1),
+                icon: _buildNavIcon(Icons.people_rounded, 1),
+                label: 'Friends',
+              ),
+              BottomNavigationBarItem(
+                icon: _buildNavIcon(Icons.directions_walk_rounded, 2),
                 label: 'Walk With Me',
               ),
               BottomNavigationBarItem(
-                icon: _buildNavIcon(Icons.person_rounded, 2),
+                icon: _buildNavIcon(Icons.person_rounded, 3),
                 label: 'Profile',
               ),
             ],
@@ -248,71 +253,31 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
 
   Widget _buildNavIcon(IconData icon, int index) {
     bool isSelected = _selectedIndex == index;
-    bool isHovered = _hoveredIcons.contains(index);
     
-    return MouseRegion(
-      onEnter: (_) {
-        setState(() {
-          _hoveredIcons.add(index);
-        });
-      },
-      onExit: (_) {
-        setState(() {
-          _hoveredIcons.remove(index);
-        });
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          gradient: isSelected
-              ? const LinearGradient(
-                  colors: [Colors.deepPurple, Colors.purpleAccent],
-                )
-              : isHovered
-                  ? LinearGradient(
-                      colors: [
-                        Colors.deepPurple.withOpacity(0.3),
-                        Colors.purpleAccent.withOpacity(0.3),
-                      ],
-                    )
-                  : null,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: Colors.deepPurple.withOpacity(0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
-                  ),
-                ]
-              : isHovered
-                  ? [
-                      BoxShadow(
-                        color: Colors.deepPurple.withOpacity(0.15),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
-                      ),
-                    ]
-                  : null,
-        ),
-        child: AnimatedOpacity(
-          duration: const Duration(milliseconds: 150),
-          opacity: isSelected 
-              ? 1.0 
-              : isHovered 
-                  ? 0.8 
-                  : 1.0,
-          child: Icon(
-            icon,
-            size: 24,
-            color: isSelected 
-                ? Colors.white 
-                : isHovered
-                    ? Colors.white.withOpacity(0.9)
-                    : Colors.white.withOpacity(0.6),
-          ),
-        ),
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        gradient: isSelected
+            ? const LinearGradient(
+                colors: [Colors.deepPurple, Colors.purpleAccent],
+              )
+            : null,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: isSelected
+            ? [
+                BoxShadow(
+                  color: Colors.deepPurple.withOpacity(0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ]
+            : null,
+      ),
+      child: Icon(
+        icon,
+        size: 24,
+        color: isSelected ? Colors.white : Colors.white.withOpacity(0.6),
       ),
     );
   }
