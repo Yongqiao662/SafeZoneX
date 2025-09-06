@@ -14,6 +14,11 @@ class MainDashboardScreen extends StatefulWidget {
 class _MainDashboardScreenState extends State<MainDashboardScreen> {
   int _selectedIndex = 0;
   bool _isChatOverlayVisible = false;
+  
+  // Chat functionality
+  final TextEditingController _chatController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  List<ChatMessage> _messages = [];
 
   List<Widget> get _pages => [
     HomeScreen(onChatTap: _showChatOverlay),
@@ -26,6 +31,14 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
   void _showChatOverlay() {
     setState(() {
       _isChatOverlayVisible = true;
+      // Add welcome message if it's the first time opening chat
+      if (_messages.isEmpty) {
+        _messages.add(ChatMessage(
+          text: "Hello! I'm your support assistant. How can I help you today?",
+          isUser: false,
+          timestamp: DateTime.now(),
+        ));
+      }
     });
   }
 
@@ -33,6 +46,107 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
     setState(() {
       _isChatOverlayVisible = false;
     });
+  }
+
+  void _sendMessage() {
+    if (_chatController.text.trim().isEmpty) return;
+
+    String userMessage = _chatController.text.trim();
+    
+    // Add user message
+    setState(() {
+      _messages.add(ChatMessage(
+        text: userMessage,
+        isUser: true,
+        timestamp: DateTime.now(),
+      ));
+    });
+
+    _chatController.clear();
+    
+    // Scroll to bottom
+    Future.delayed(Duration(milliseconds: 100), () {
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    });
+
+    // Generate automated response after a short delay
+    Future.delayed(Duration(milliseconds: 1500), () {
+      String response = _generateResponse(userMessage.toLowerCase());
+      
+      setState(() {
+        _messages.add(ChatMessage(
+          text: response,
+          isUser: false,
+          timestamp: DateTime.now(),
+        ));
+      });
+
+      // Scroll to bottom after response
+      Future.delayed(Duration(milliseconds: 100), () {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      });
+    });
+  }
+
+  String _generateResponse(String message) {
+    // Mock responses based on keywords
+    if (message.contains('lamp') && message.contains('broken')) {
+      return "Thank you for reporting the broken lamp. Our maintenance team has been notified and will fix it soon. Estimated time: 2-4 hours.";
+    }
+    
+    if (message.contains('lift') || message.contains('elevator')) {
+      return "We've received your elevator report. Our technician will check it within the next hour. Thank you for letting us know!";
+    }
+    
+    if (message.contains('emergency')) {
+      return "This seems like an emergency. Please call our emergency hotline at 999 immediately. We're also dispatching someone to assist you.";
+    }
+    
+    if (message.contains('water') && (message.contains('leak') || message.contains('pipe'))) {
+      return "Water leakage reported. Our plumber team will arrive within 30 minutes. Please avoid the area if possible.";
+    }
+    
+    if (message.contains('noise') || message.contains('loud')) {
+      return "We understand noise can be disruptive. Our security team will investigate the noise complaint shortly.";
+    }
+    
+    if (message.contains('parking')) {
+      return "Regarding parking issues, our management team will review your concern. Expected response within 24 hours.";
+    }
+    
+    if (message.contains('security') || message.contains('suspicious')) {
+      return "Security concern noted. Our security personnel will investigate immediately. Stay safe and contact emergency services if needed.";
+    }
+    
+    if (message.contains('help') || message.contains('support')) {
+      return "I'm here to help! You can report maintenance issues, security concerns, or any building-related problems. What specific issue would you like to report?";
+    }
+    
+    if (message.contains('thank')) {
+      return "You're welcome! Is there anything else I can help you with?";
+    }
+    
+    if (message.contains('hi') || message.contains('hello')) {
+      return "Hi there! How can I assist you today? You can report any building or maintenance issues.";
+    }
+    
+    // Default response for unrecognized messages
+    return "Thank you for your message. I've recorded your concern and our relevant team will address it soon. Is there anything else I can help you with?";
+  }
+
+  @override
+  void dispose() {
+    _chatController.dispose();
+    _scrollController.dispose();
+    super.dispose();
   }
 
   @override
@@ -106,6 +220,15 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                       ),
                     ),
                   ),
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: Colors.green,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   GestureDetector(
                     onTap: _hideChatOverlay,
                     child: Container(
@@ -131,15 +254,24 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                           color: Colors.white.withOpacity(0.05),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Center(
-                          child: Text(
-                            'Chat messages will appear here...',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 14,
+                        child: _messages.isEmpty 
+                          ? const Center(
+                              child: Text(
+                                'Start a conversation...',
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            )
+                          : ListView.builder(
+                              controller: _scrollController,
+                              padding: const EdgeInsets.all(12),
+                              itemCount: _messages.length,
+                              itemBuilder: (context, index) {
+                                return _buildMessageBubble(_messages[index]);
+                              },
                             ),
-                          ),
-                        ),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -152,13 +284,15 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                               color: Colors.white.withOpacity(0.1),
                               borderRadius: BorderRadius.circular(20),
                             ),
-                            child: const TextField(
-                              style: TextStyle(color: Colors.white),
-                              decoration: InputDecoration(
+                            child: TextField(
+                              controller: _chatController,
+                              style: const TextStyle(color: Colors.white),
+                              decoration: const InputDecoration(
                                 hintText: 'Type a message...',
                                 hintStyle: TextStyle(color: Colors.white60),
                                 border: InputBorder.none,
                               ),
+                              onSubmitted: (_) => _sendMessage(),
                             ),
                           ),
                         ),
@@ -171,7 +305,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: IconButton(
-                            onPressed: () {},
+                            onPressed: _sendMessage,
                             icon: const Icon(Icons.send, color: Colors.white, size: 20),
                           ),
                         ),
@@ -185,6 +319,99 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
         ),
       ),
     );
+  }
+
+  Widget _buildMessageBubble(ChatMessage message) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        mainAxisAlignment: message.isUser 
+          ? MainAxisAlignment.end 
+          : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (!message.isUser) ...[
+            Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Colors.deepPurple, Colors.purpleAccent],
+                ),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.support_agent,
+                color: Colors.white,
+                size: 14,
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
+          Flexible(
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 200),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: message.isUser 
+                  ? Colors.deepPurple.withOpacity(0.8)
+                  : Colors.white.withOpacity(0.1),
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(12),
+                  topRight: const Radius.circular(12),
+                  bottomLeft: message.isUser 
+                    ? const Radius.circular(12) 
+                    : const Radius.circular(4),
+                  bottomRight: message.isUser 
+                    ? const Radius.circular(4) 
+                    : const Radius.circular(12),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    message.text,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _formatTime(message.timestamp),
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.6),
+                      fontSize: 10,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (message.isUser) ...[
+            const SizedBox(width: 8),
+            Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.person,
+                color: Colors.white,
+                size: 14,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _formatTime(DateTime timestamp) {
+    return "${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}";
   }
 
   Widget _buildMainBottomNav() {
@@ -307,4 +534,17 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
       ),
     );
   }
+}
+
+// ChatMessage class to store chat data
+class ChatMessage {
+  final String text;
+  final bool isUser;
+  final DateTime timestamp;
+
+  ChatMessage({
+    required this.text,
+    required this.isUser,
+    required this.timestamp,
+  });
 }
