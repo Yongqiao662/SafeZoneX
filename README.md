@@ -182,15 +182,17 @@ Before you begin, ensure you have the following installed:
 3. **Install Dependencies**
    ```bash
    cd frontend/mobile
-   flutter pub get
+   C:\flutter\bin\flutter pub get
    ```
 
 4. **Run the App**
    ```bash
-   flutter run
+   C:\flutter\bin\flutter run
    ```
 
 🎉 **That's it!** The app should now be running on your device/emulator.
+
+**Note:** If you haven't installed Flutter properly, see the [detailed setup instructions](#-detailed-setup-instructions) below.
 
 ---
 
@@ -248,12 +250,186 @@ If you plan to build for iOS, add your API key to `ios/Runner/AppDelegate.swift`
 GMSServices.provideAPIKey("YOUR_API_KEY_HERE")
 ```
 
+### 📁 **Local Properties Configuration** (Critical Setup)
+
+The `local.properties` file contains essential configuration for Android builds and Google Maps integration. This file is **required** for the app to compile and function properly.
+
+#### Step 1: Create local.properties File
+```bash
+cd SafeZoneX/frontend/mobile/android
+cp local.properties.example local.properties
+```
+
+#### Step 2: Configure Required Properties
+Edit the `local.properties` file with your system-specific paths and API key:
+
+```properties
+# Android SDK path (required for compilation)
+sdk.dir=C:\\Users\\YourUsername\\AppData\\Local\\Android\\sdk
+
+# Flutter SDK path (must match your Flutter installation)
+flutter.sdk=C:\\flutter
+
+# Build configuration
+flutter.buildMode=debug
+flutter.versionName=1.0.0
+flutter.versionCode=1
+
+# Google Maps API Key (REQUIRED - replace with your actual key)
+GOOGLE_MAPS_API_KEY=AIzaSyBOFGvG-_LPgrYBiy1q1Fc8z47EyWMYlZM
+```
+
+#### Step 3: Find Your SDK Paths
+
+**For Android SDK:**
+- **Windows**: `C:\Users\[Username]\AppData\Local\Android\sdk`
+- **macOS**: `~/Library/Android/sdk`
+- **Linux**: `~/Android/Sdk`
+
+**For Flutter SDK:**
+- **Recommended**: Download and extract to `C:\flutter` from https://docs.flutter.dev/get-started/install/windows
+- **Windows (typical)**: `C:\flutter`
+- **Alternative locations**: `C:\src\flutter`
+- **macOS**: `/usr/local/flutter` or `~/flutter`
+- **Linux**: `/usr/local/flutter` or `~/flutter`
+- **⚠️ DO NOT** install Flutter inside project folders
+
+#### Step 4: Proper Flutter Installation
+If you haven't installed Flutter properly:
+
+1. **Download Flutter SDK:**
+   ```bash
+   # Download from: https://docs.flutter.dev/get-started/install/windows
+   # Extract the ZIP file to C:\flutter (NOT inside any project folder)
+   ```
+
+2. **Add to System PATH (Optional but recommended):**
+   - Search "Environment Variables" in Windows
+   - Edit system PATH variable
+   - Add: `C:\flutter\bin`
+
+3. **Verify Installation:**
+   ```bash
+   C:\flutter\bin\flutter --version
+   C:\flutter\bin\flutter doctor
+   ```
+
+#### Step 5: Verify Configuration
+Run these commands to verify everything is set up correctly:
+
+```bash
+# Check Flutter configuration
+C:\flutter\bin\flutter doctor
+
+# Navigate to project directory
+cd SafeZoneX/frontend/mobile
+
+# Verify dependencies
+C:\flutter\bin\flutter pub get
+
+# Test compilation
+C:\flutter\bin\flutter build apk --debug
+```
+
+#### ⚠️ **Important Notes:**
+
+1. **Never commit `local.properties` to version control** - it contains sensitive information
+2. **Use double backslashes** (`\\`) in Windows paths
+3. **Replace placeholder API key** with your actual Google Maps API key
+4. **Ensure paths exist** on your system before running the app
+5. **Flutter must be in a system location** - NOT inside project folders
+
+#### 🔧 **Troubleshooting:**
+
+**If you see "Target file not found" errors:**
+- Verify your Flutter SDK path is correct in `local.properties`
+- Ensure Flutter is installed at `C:\flutter`, not inside a project folder
+- Run `C:\flutter\bin\flutter clean` and `C:\flutter\bin\flutter pub get`
+
+**If you see "flutter.sdk=E:\AngelGuide\..." path:**
+- This indicates Flutter is incorrectly installed inside another project
+- Download proper Flutter installation and extract to `C:\flutter`
+- Update `local.properties` with `flutter.sdk=C:\\flutter`
+
+**If Google Maps doesn't load or shows blank with Google logo:**
+- Check your Google Maps API key is valid and properly formatted
+- Ensure Maps SDK for Android is enabled in Google Cloud Console
+- Verify your API key has no restrictions that block your app
+- Add your app's package name and SHA-1 fingerprint to API key restrictions
+
+**If map markers/pins don't appear:**
+- Ensure Flutter SDK path is correct (common cause of missing markers)
+- Check console for marker creation debug messages
+- Verify location permissions are granted
+
+**If you see "ImageReader_JNI" warnings:**
+- These are harmless warnings related to camera/image processing
+- App functionality is not affected
+- Warnings may appear when using Google Maps or camera features
+
+**If compilation fails:**
+- Update Android SDK path to match your installation
+- Ensure all required dependencies are installed
+
 #### Step 5: Location Configuration (Important)
 The app currently uses demo coordinates for testing. For production:
 1. Update campus location coordinates in `lib/screens/walk_with_me.dart`
 2. Replace demo coordinates with your actual campus coordinates
 3. Configure campus buildings and landmarks
 4. Test location services work correctly in your area
+
+---
+
+## 🚨 **Common Setup Issues & Solutions**
+
+### Issue 1: "Target file lib\main.dart not found"
+**Cause:** Incorrect Flutter SDK path in `local.properties`
+**Solution:**
+```bash
+# Check your Flutter installation
+C:\flutter\bin\flutter --version
+
+# Update local.properties
+flutter.sdk=C:\\flutter
+
+# Clean and rebuild
+C:\flutter\bin\flutter clean
+C:\flutter\bin\flutter pub get
+```
+
+### Issue 2: Google Maps shows blank with only Google logo
+**Cause:** Missing or invalid Google Maps API key
+**Solution:**
+1. Get API key from Google Cloud Console
+2. Enable Maps SDK for Android
+3. Add key to `local.properties`: `GOOGLE_MAPS_API_KEY=YOUR_KEY_HERE`
+4. Add app package name to API key restrictions
+
+### Issue 3: Map markers/pins not visible
+**Cause:** Flutter compilation issues due to incorrect SDK path
+**Solution:**
+```bash
+# Ensure proper Flutter installation
+flutter.sdk=C:\\flutter  # NOT inside project folders
+
+# Force marker refresh
+C:\flutter\bin\flutter clean
+C:\flutter\bin\flutter pub get
+```
+
+### Issue 4: "ImageReader_JNI" warnings in console
+**Cause:** Normal warnings from camera/image processing
+**Solution:** These are harmless warnings - app functionality is not affected
+
+### Issue 5: Flutter installed in project folder (AngelGuide path)
+**Cause:** Flutter incorrectly installed inside another project
+**Solution:**
+1. Download Flutter from https://docs.flutter.dev/get-started/install/windows
+2. Extract to `C:\flutter` (system location)
+3. Update `local.properties` with correct path
+4. Clean and rebuild project
+
+---
 
 ### 🔒 **Security Best Practices**
 
