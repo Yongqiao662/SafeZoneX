@@ -15,6 +15,12 @@ class ActiveWalkScreen extends StatefulWidget {
 }
 
 class _ActiveWalkScreenState extends State<ActiveWalkScreen> {
+  // University Malaya campus center coordinates (same as safety zone map)
+  static const CameraPosition _universityMalaya = CameraPosition(
+    target: LatLng(3.1225, 101.6532),
+    zoom: 16.0,
+  );
+
   bool isWalkActive = true;
   int walkDuration = 0;
   double totalDistance = 0.0;
@@ -390,50 +396,191 @@ class _ActiveWalkScreenState extends State<ActiveWalkScreen> {
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(20),
-              child: currentPosition != null
-                  ? GoogleMap(
-                      onMapCreated: _onMapCreated,
-                      initialCameraPosition: CameraPosition(
-                        target: LatLng(
-                          currentPosition!.latitude,
-                          currentPosition!.longitude,
-                        ),
-                        zoom: 16.0,
-                      ),
-                      markers: markers,
-                      polylines: polylines,
-                      myLocationEnabled: true,
-                      myLocationButtonEnabled: false, // Disable to reduce processing
-                      mapType: MapType.normal,
-                      zoomControlsEnabled: false,
-                      compassEnabled: false, // Disable to reduce image processing
-                      mapToolbarEnabled: false,
-                      buildingsEnabled: false, // Disable to reduce buffer usage
-                      indoorViewEnabled: false, // Improves performance
-                      trafficEnabled: false, // Reduces lag
-                      liteModeEnabled: false, // Keep full functionality
-                      rotateGesturesEnabled: false, // Disable to reduce processing
-                      scrollGesturesEnabled: true, // Allow panning
-                      zoomGesturesEnabled: true, // Allow pinch zoom
-                      tiltGesturesEnabled: false, // Disable 3D tilt to reduce processing
-                      minMaxZoomPreference: const MinMaxZoomPreference(10.0, 20.0), // Reasonable zoom limits
-                    )
-                  : Container(
-                      color: Colors.white.withOpacity(0.05),
-                      child: const Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            CircularProgressIndicator(color: Colors.white),
-                            SizedBox(height: 16),
-                            Text(
-                              'Loading Map...',
-                              style: TextStyle(color: Colors.white),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+              child: GoogleMap(
+                onMapCreated: _onMapCreated,
+                initialCameraPosition: _universityMalaya, // Use University Malaya coordinates
+                markers: markers,
+                polylines: polylines,
+                myLocationEnabled: true,
+                myLocationButtonEnabled: false, // Disable to reduce processing
+                mapType: MapType.normal,
+                zoomControlsEnabled: false,
+                compassEnabled: false, // Disable to reduce image processing
+                mapToolbarEnabled: false,
+                buildingsEnabled: false, // Disable to reduce buffer usage
+                indoorViewEnabled: false, // Improves performance
+                trafficEnabled: false, // Reduces lag
+                liteModeEnabled: false, // Keep full functionality
+                rotateGesturesEnabled: false, // Disable to reduce processing
+                scrollGesturesEnabled: true, // Allow panning
+                zoomGesturesEnabled: true, // Allow pinch zoom
+                tiltGesturesEnabled: false, // Disable 3D tilt to reduce processing
+                minMaxZoomPreference: const MinMaxZoomPreference(10.0, 20.0), // Reasonable zoom limits
+                // Dark mode styling (same as safety zone map)
+                style: '''
+                [
+                  {
+                    "elementType": "geometry",
+                    "stylers": [
+                      {
+                        "color": "#242f3e"
+                      }
+                    ]
+                  },
+                  {
+                    "elementType": "labels.text.fill",
+                    "stylers": [
+                      {
+                        "color": "#746855"
+                      }
+                    ]
+                  },
+                  {
+                    "elementType": "labels.text.stroke",
+                    "stylers": [
+                      {
+                        "color": "#242f3e"
+                      }
+                    ]
+                  },
+                  {
+                    "featureType": "administrative.locality",
+                    "elementType": "labels.text.fill",
+                    "stylers": [
+                      {
+                        "color": "#d59563"
+                      }
+                    ]
+                  },
+                  {
+                    "featureType": "poi",
+                    "elementType": "labels.text.fill",
+                    "stylers": [
+                      {
+                        "color": "#d59563"
+                      }
+                    ]
+                  },
+                  {
+                    "featureType": "poi.park",
+                    "elementType": "geometry",
+                    "stylers": [
+                      {
+                        "color": "#263c3f"
+                      }
+                    ]
+                  },
+                  {
+                    "featureType": "poi.park",
+                    "elementType": "labels.text.fill",
+                    "stylers": [
+                      {
+                        "color": "#6b9a76"
+                      }
+                    ]
+                  },
+                  {
+                    "featureType": "road",
+                    "elementType": "geometry",
+                    "stylers": [
+                      {
+                        "color": "#38414e"
+                      }
+                    ]
+                  },
+                  {
+                    "featureType": "road",
+                    "elementType": "geometry.stroke",
+                    "stylers": [
+                      {
+                        "color": "#212a37"
+                      }
+                    ]
+                  },
+                  {
+                    "featureType": "road",
+                    "elementType": "labels.text.fill",
+                    "stylers": [
+                      {
+                        "color": "#9ca5b3"
+                      }
+                    ]
+                  },
+                  {
+                    "featureType": "road.highway",
+                    "elementType": "geometry",
+                    "stylers": [
+                      {
+                        "color": "#746855"
+                      }
+                    ]
+                  },
+                  {
+                    "featureType": "road.highway",
+                    "elementType": "geometry.stroke",
+                    "stylers": [
+                      {
+                        "color": "#1f2835"
+                      }
+                    ]
+                  },
+                  {
+                    "featureType": "road.highway",
+                    "elementType": "labels.text.fill",
+                    "stylers": [
+                      {
+                        "color": "#f3d19c"
+                      }
+                    ]
+                  },
+                  {
+                    "featureType": "transit",
+                    "elementType": "geometry",
+                    "stylers": [
+                      {
+                        "color": "#2f3948"
+                      }
+                    ]
+                  },
+                  {
+                    "featureType": "transit.station",
+                    "elementType": "labels.text.fill",
+                    "stylers": [
+                      {
+                        "color": "#d59563"
+                      }
+                    ]
+                  },
+                  {
+                    "featureType": "water",
+                    "elementType": "geometry",
+                    "stylers": [
+                      {
+                        "color": "#17263c"
+                      }
+                    ]
+                  },
+                  {
+                    "featureType": "water",
+                    "elementType": "labels.text.fill",
+                    "stylers": [
+                      {
+                        "color": "#515c6d"
+                      }
+                    ]
+                  },
+                  {
+                    "featureType": "water",
+                    "elementType": "labels.text.stroke",
+                    "stylers": [
+                      {
+                        "color": "#17263c"
+                      }
+                    ]
+                  }
+                ]
+                ''',
+              ),
             ),
           ),
           const SizedBox(height: 20),

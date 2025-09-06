@@ -7,11 +7,22 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Wake lock for background tracking -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Camera and storage permissions for image capture -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    
+    <!-- Optional camera features -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
     
     <application
         android:label="safezonex"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:largeHeap="true"
+        android:hardwareAccelerated="true"
+        android:allowBackup="false">
         
         <!-- Google Maps API Key -->
         <meta-data android:name="com.google.android.geo.API_KEY"

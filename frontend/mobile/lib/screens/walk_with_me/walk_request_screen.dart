@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'models.dart';
-import 'active_walk_screen.dart';
+import 'face_verification_screen.dart';
 
 class WalkRequestScreen extends StatefulWidget {
   final UserProfile partner;
@@ -310,14 +310,14 @@ class _WalkRequestScreenState extends State<WalkRequestScreen> {
               ElevatedButton(
                 onPressed: () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => ActiveWalkScreen(partner: widget.partner)),
+                  MaterialPageRoute(builder: (context) => FaceVerificationScreen(partner: widget.partner)),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.deepPurple,
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                 ),
                 child: const Text(
-                  'Track Walk',
+                  'Start Walk',
                   style: TextStyle(color: Colors.white),
                 ),
               ),
