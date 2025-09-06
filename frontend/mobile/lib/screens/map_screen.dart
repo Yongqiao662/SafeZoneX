@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'dart:async';
 
 class SafeZone {
@@ -40,7 +41,6 @@ class _MapScreenState extends State<MapScreen> {
   );
 
   Set<Marker> _markers = {};
-  SafeZone? _selectedZone;
   final List<SafeZone> safeZones = [
     SafeZone(
       name: 'UM Security Office - Main Campus',
@@ -135,11 +135,21 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void initState() {
     super.initState();
+    _requestLocationPermission();
     _createMarkers();
   }
 
+  Future<void> _requestLocationPermission() async {
+    var status = await Permission.location.status;
+    if (status.isDenied) {
+      await Permission.location.request();
+    }
+  }
+
   void _createMarkers() {
+    print('Creating markers for ${safeZones.length} safe zones');
     _markers = safeZones.map((zone) {
+      print('Creating marker for: ${zone.name} at ${zone.latitude}, ${zone.longitude}');
       return Marker(
         markerId: MarkerId(zone.name),
         position: LatLng(zone.latitude, zone.longitude),
@@ -147,16 +157,15 @@ class _MapScreenState extends State<MapScreen> {
           title: zone.name,
           snippet: '${zone.type} • Safety Score: ${zone.safetyScore}',
         ),
-        icon: BitmapDescriptor.defaultMarkerWithHue(
-          _getMarkerColor(zone.safetyScore),
-        ),
+        // Use color based on safety score
+        icon: BitmapDescriptor.defaultMarkerWithHue(_getMarkerColor(zone.safetyScore)),
         onTap: () {
-          setState(() {
-            _selectedZone = zone;
-          });
+          print('Marker tapped: ${zone.name}');
         },
       );
     }).toSet();
+    print('Created ${_markers.length} markers');
+    setState(() {}); // Force refresh
   }
 
   double _getMarkerColor(double score) {
@@ -293,6 +302,8 @@ class _MapScreenState extends State<MapScreen> {
             // Google Maps Widget
             GoogleMap(
               onMapCreated: (GoogleMapController controller) {
+                print('Map created successfully');
+                print('Markers count: ${_markers.length}');
                 _controller.complete(controller);
               },
               initialCameraPosition: _universityMalaya,
@@ -301,21 +312,19 @@ class _MapScreenState extends State<MapScreen> {
               myLocationEnabled: true,
               myLocationButtonEnabled: false,
               zoomControlsEnabled: false,
-              compassEnabled: true,
+              compassEnabled: false, // Disable to reduce image processing
               mapToolbarEnabled: false,
-              buildingsEnabled: true,
+              buildingsEnabled: false, // Disable to reduce buffer usage
               indoorViewEnabled: false, // Improves performance
               trafficEnabled: false, // Reduces lag
               liteModeEnabled: false, // Keep full functionality
-              rotateGesturesEnabled: true, // Allow rotation
+              rotateGesturesEnabled: false, // Disable to reduce processing
               scrollGesturesEnabled: true, // Allow panning
               zoomGesturesEnabled: true, // Allow pinch zoom
-              tiltGesturesEnabled: true, // Allow 3D tilt
+              tiltGesturesEnabled: false, // Disable 3D tilt to reduce processing
               minMaxZoomPreference: const MinMaxZoomPreference(10.0, 20.0), // Reasonable zoom limits
               onTap: (LatLng position) {
-                setState(() {
-                  _selectedZone = null;
-                });
+                // Map tapped - can add functionality here if needed
               },
               // Dark mode styling
               style: '''

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:geolocator/geolocator.dart';
 import 'dart:io';
 
 class ReportsScreen extends StatefulWidget {
@@ -11,7 +12,54 @@ class _ReportsScreenState extends State<ReportsScreen> {
   final ImagePicker _picker = ImagePicker();
   XFile? _selectedImage;
   String? _selectedActivity;
+  String? _selectedLocation;
+  Position? _currentPosition;
+  String _currentLocationName = "Getting location...";
   final TextEditingController _descriptionController = TextEditingController();
+  
+  // Campus locations for manual selection
+  final List<Map<String, dynamic>> _campusLocations = [
+    {
+      'name': 'UM Security Office - Main Campus',
+      'building': 'Security Complex',
+      'coordinates': {'lat': 3.1220, 'lng': 101.6530},
+    },
+    {
+      'name': 'Perpustakaan Utama UM',
+      'building': 'Main Library Building',
+      'coordinates': {'lat': 3.1235, 'lng': 101.6545},
+    },
+    {
+      'name': 'Faculty of Engineering',
+      'building': 'Engineering Complex',
+      'coordinates': {'lat': 3.1240, 'lng': 101.6555},
+    },
+    {
+      'name': 'Student Affairs Division',
+      'building': 'Administration Complex',
+      'coordinates': {'lat': 3.1250, 'lng': 101.6540},
+    },
+    {
+      'name': 'UM Sports Centre',
+      'building': 'Sports Complex',
+      'coordinates': {'lat': 3.1265, 'lng': 101.6525},
+    },
+    {
+      'name': 'UM Medical Centre',
+      'building': 'Medical Complex',
+      'coordinates': {'lat': 3.1195, 'lng': 101.6485},
+    },
+    {
+      'name': 'Kolej Kediaman 4th College',
+      'building': 'Residential College',
+      'coordinates': {'lat': 3.1180, 'lng': 101.6570},
+    },
+    {
+      'name': 'Dewan Tunku Canselor',
+      'building': 'Event Hall',
+      'coordinates': {'lat': 3.1210, 'lng': 101.6520},
+    },
+  ];
   
   final List<Map<String, dynamic>> _suspiciousActivities = [
     {
@@ -65,18 +113,87 @@ class _ReportsScreenState extends State<ReportsScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _getCurrentLocation();
+  }
+
+  @override
   void dispose() {
     _descriptionController.dispose();
     super.dispose();
+  }
+
+  Future<void> _getCurrentLocation() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        setState(() {
+          _currentLocationName = "Location services disabled";
+        });
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          setState(() {
+            _currentLocationName = "Location permission denied";
+          });
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        setState(() {
+          _currentLocationName = "Location permission permanently denied";
+        });
+        return;
+      }
+
+      Position position = await Geolocator.getCurrentPosition();
+      setState(() {
+        _currentPosition = position;
+        _currentLocationName = _getLocationDescription(position);
+        _selectedLocation = "Current Location: $_currentLocationName";
+      });
+    } catch (e) {
+      setState(() {
+        _currentLocationName = "Unable to get location";
+      });
+    }
+  }
+
+  String _getLocationDescription(Position position) {
+    // Find the closest campus location
+    double minDistance = double.infinity;
+    String closestLocation = "Campus Area";
+
+    for (var location in _campusLocations) {
+      double distance = Geolocator.distanceBetween(
+        position.latitude,
+        position.longitude,
+        location['coordinates']['lat'],
+        location['coordinates']['lng'],
+      );
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestLocation = location['name'];
+      }
+    }
+
+    return "$closestLocation (${minDistance.round()}m away)";
   }
 
   Future<void> _pickImage(ImageSource source) async {
     try {
       final XFile? image = await _picker.pickImage(
         source: source,
-        maxWidth: 1080,
-        maxHeight: 1080,
-        imageQuality: 85,
+        maxWidth: 800, // Reduced from 1080 to prevent buffer issues
+        maxHeight: 800, // Reduced from 1080 to prevent buffer issues
+        imageQuality: 60, // Reduced from 85 to decrease memory usage
+        preferredCameraDevice: CameraDevice.rear, // Use rear camera by default
       );
       
       if (image != null) {
@@ -447,6 +564,74 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
                 SizedBox(height: 24),
 
+                // Location Selection
+                Text(
+                  'Incident Location',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                SizedBox(height: 12),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.white.withOpacity(0.2)),
+                  ),
+                  child: Column(
+                    children: [
+                      // Current Location Option
+                      ListTile(
+                        leading: Icon(Icons.my_location, color: Colors.blue),
+                        title: Text(
+                          'Use Current Location',
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+                        ),
+                        subtitle: Text(
+                          _currentLocationName,
+                          style: TextStyle(color: Colors.white70, fontSize: 12),
+                        ),
+                        trailing: Radio<String>(
+                          value: "Current Location: $_currentLocationName",
+                          groupValue: _selectedLocation,
+                          onChanged: (value) {
+                            setState(() {
+                              _selectedLocation = value;
+                            });
+                          },
+                          activeColor: Colors.blue,
+                        ),
+                        onTap: () {
+                          setState(() {
+                            _selectedLocation = "Current Location: $_currentLocationName";
+                          });
+                        },
+                      ),
+                      Divider(color: Colors.white.withOpacity(0.1), height: 1),
+                      // Manual Location Selection
+                      ListTile(
+                        leading: Icon(Icons.location_on, color: Colors.orange),
+                        title: Text(
+                          'Choose Campus Location',
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+                        ),
+                        subtitle: Text(
+                          _selectedLocation != null && !_selectedLocation!.startsWith("Current Location") 
+                            ? _selectedLocation! 
+                            : 'Select from campus locations',
+                          style: TextStyle(color: Colors.white70, fontSize: 12),
+                        ),
+                        trailing: Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 16),
+                        onTap: _showLocationSelectionDialog,
+                      ),
+                    ],
+                  ),
+                ),
+
+                SizedBox(height: 24),
+
                 // Photo Upload
                 Text(
                   'Photo Evidence (Optional)',
@@ -612,6 +797,110 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 ),
               ],
             ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showLocationSelectionDialog() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.6,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFF1a1a2e),
+              Color(0xFF1e1a3e),
+            ],
+          ),
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              Container(
+                margin: EdgeInsets.only(top: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Padding(
+                padding: EdgeInsets.all(20),
+                child: Text(
+                  'Select Campus Location',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: ListView.separated(
+                  padding: EdgeInsets.symmetric(horizontal: 20),
+                  itemCount: _campusLocations.length,
+                  separatorBuilder: (context, index) => Divider(
+                    color: Colors.white.withOpacity(0.1),
+                    height: 1,
+                  ),
+                  itemBuilder: (context, index) {
+                    final location = _campusLocations[index];
+                    return ListTile(
+                      leading: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          Icons.location_on,
+                          color: Colors.blue,
+                          size: 20,
+                        ),
+                      ),
+                      title: Text(
+                        location['name'],
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      subtitle: Text(
+                        location['building'],
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                        ),
+                      ),
+                      trailing: Icon(
+                        Icons.arrow_forward_ios,
+                        color: Colors.white70,
+                        size: 16,
+                      ),
+                      onTap: () {
+                        setState(() {
+                          _selectedLocation = location['name'];
+                        });
+                        Navigator.pop(context);
+                      },
+                    );
+                  },
                 ),
               ),
             ],

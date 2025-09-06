@@ -403,9 +403,20 @@ class _ActiveWalkScreenState extends State<ActiveWalkScreen> {
                       markers: markers,
                       polylines: polylines,
                       myLocationEnabled: true,
-                      myLocationButtonEnabled: true,
+                      myLocationButtonEnabled: false, // Disable to reduce processing
                       mapType: MapType.normal,
                       zoomControlsEnabled: false,
+                      compassEnabled: false, // Disable to reduce image processing
+                      mapToolbarEnabled: false,
+                      buildingsEnabled: false, // Disable to reduce buffer usage
+                      indoorViewEnabled: false, // Improves performance
+                      trafficEnabled: false, // Reduces lag
+                      liteModeEnabled: false, // Keep full functionality
+                      rotateGesturesEnabled: false, // Disable to reduce processing
+                      scrollGesturesEnabled: true, // Allow panning
+                      zoomGesturesEnabled: true, // Allow pinch zoom
+                      tiltGesturesEnabled: false, // Disable 3D tilt to reduce processing
+                      minMaxZoomPreference: const MinMaxZoomPreference(10.0, 20.0), // Reasonable zoom limits
                     )
                   : Container(
                       color: Colors.white.withOpacity(0.05),
