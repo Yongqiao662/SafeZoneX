@@ -138,73 +138,115 @@ class _FaceVerificationScreenState extends State<FaceVerificationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1a1a2e),
-      appBar: AppBar(
-        title: const Text('Verify Walk Partner'),
-        backgroundColor: const Color(0xFF16213e),
-        foregroundColor: Colors.white,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFF1a1a2e),
+              Color(0xFF16213e),
+              Color(0xFF0f0f1e),
+            ],
+          ),
         ),
-      ),
-      body: Column(
-        children: [
-          // Partner Info Header
-          Container(
-            padding: const EdgeInsets.all(16),
-            color: const Color(0xFF16213e),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 25,
-                  backgroundColor: Colors.deepPurple,
-                  child: widget.partner.profilePicture.startsWith('assets/')
-                    ? ClipOval(child: Image.asset(widget.partner.profilePicture, fit: BoxFit.cover))
-                    : Icon(Icons.person, color: Colors.white, size: 30),
+        child: SafeArea(
+          child: Column(
+            children: [
+              // Title Section - Matching other screens style
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                child: Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Colors.deepPurple, // Single purple color to match walk request
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.arrow_back,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Text(
+                        'Verify Walk Partner',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w300,
+                          color: Colors.white,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Verifying: ${widget.partner.name}',
+              ),
+              // Partner Info Header
+              Container(
+                padding: const EdgeInsets.all(16),
+                color: const Color(0xFF16213e),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 25,
+                      backgroundColor: Colors.deepPurple,
+                      child: widget.partner.profilePicture.startsWith('assets/')
+                        ? ClipOval(child: Image.asset(widget.partner.profilePicture, fit: BoxFit.cover))
+                        : Icon(Icons.person, color: Colors.white, size: 30),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Verifying: ${widget.partner.name}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(
+                            'Safety verification required before walk',
+                            style: TextStyle(
+                              color: Colors.grey[400],
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: widget.partner.isVerified ? Colors.green : Colors.orange,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        widget.partner.isVerified ? 'VERIFIED' : 'PENDING',
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 16,
+                          fontSize: 10,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      Text(
-                        'Safety verification required before walk',
-                        style: TextStyle(
-                          color: Colors.grey[400],
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: widget.partner.isVerified ? Colors.green : Colors.orange,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    widget.partner.isVerified ? 'VERIFIED' : 'PENDING',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
                     ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
-          ),
-
+              ),
+              // Content section
+              Expanded(
+                child: Column(
+                  children: [
           // Camera Preview Placeholder
           Expanded(
             flex: 2, // Reduced from 3 to 2 to give more space for bottom content
@@ -309,7 +351,12 @@ class _FaceVerificationScreenState extends State<FaceVerificationScreen> {
               ),
             ),
           ),
-        ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

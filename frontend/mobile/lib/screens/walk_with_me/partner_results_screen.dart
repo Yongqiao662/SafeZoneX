@@ -105,11 +105,29 @@ class _PartnerResultsScreenState extends State<PartnerResultsScreen> {
         child: SafeArea(
           child: Column(
             children: [
-              // Title Section - Matching Home page style
+              // Title Section - Matching Home page style with back button
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                 child: Row(
                   children: [
+                    // Back Button
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Colors.deepPurple, // Single purple color to match walk request
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.arrow_back,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
                     Container(
                       width: 40,
                       height: 40,

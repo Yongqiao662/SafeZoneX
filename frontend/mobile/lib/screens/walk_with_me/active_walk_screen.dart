@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:http/http.dart' as http;
 import 'models.dart';
 import 'walk_completed_screen.dart';
 
@@ -46,6 +49,11 @@ class _ActiveWalkScreenState extends State<ActiveWalkScreen> {
     _startTimer();
     _initializeLocation();
     _startLocationTracking();
+    
+    // Start navigation after a short delay to allow location initialization
+    Future.delayed(const Duration(seconds: 3), () {
+      _startNavigation();
+    });
   }
 
   @override
@@ -168,6 +176,24 @@ class _ActiveWalkScreenState extends State<ActiveWalkScreen> {
   }
 
   Future<Position> _getCurrentPosition() async {
+    // For testing purposes, return a mock location at University Malaya
+    // Comment out this block and uncomment the real GPS code below when deploying
+    
+    // Mock position at UM campus for testing
+    return Position(
+      latitude: 3.1225, // UM campus center
+      longitude: 101.6532, // UM campus center
+      timestamp: DateTime.now(),
+      accuracy: 10.0,
+      altitude: 0.0,
+      heading: 0.0,
+      speed: 0.0,
+      speedAccuracy: 0.0,
+      altitudeAccuracy: 0.0,
+      headingAccuracy: 0.0,
+    );
+
+    /* Uncomment this for real GPS location:
     bool serviceEnabled;
     LocationPermission permission;
 
@@ -189,6 +215,7 @@ class _ActiveWalkScreenState extends State<ActiveWalkScreen> {
     }
 
     return await Geolocator.getCurrentPosition();
+    */
   }
 
   String _getLocationDescription(Position position) {
@@ -232,6 +259,225 @@ class _ActiveWalkScreenState extends State<ActiveWalkScreen> {
       return '${meters.toStringAsFixed(0)} m';
     } else {
       return '${(meters / 1000).toStringAsFixed(2)} km';
+    }
+  }
+
+  // Route and Navigation functionality
+  Future<void> _getDirections(LatLng origin, LatLng destination) async {
+    print('Getting directions from ${origin.latitude},${origin.longitude} to ${destination.latitude},${destination.longitude}');
+    
+    // Note: Replace 'YOUR_API_KEY' with your actual Google Maps API key
+    const String apiKey = 'AIzaSyBOFGvG-_LPgrYBiy1q1Fc8z47EyWMYlZM';
+    
+    final String url = 'https://maps.googleapis.com/maps/api/directions/json?'
+        'origin=${origin.latitude},${origin.longitude}&'
+        'destination=${destination.latitude},${destination.longitude}&'
+        'mode=walking&'
+        'key=$apiKey';
+
+    try {
+      final http.Response response = await http.get(Uri.parse(url));
+      print('Directions API response status: ${response.statusCode}');
+      
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+        print('API response status: ${data['status']}');
+        
+        if (data['status'] == 'OK' && data['routes'].isNotEmpty) {
+          final route = data['routes'][0];
+          final polylinePoints = route['overview_polyline']['points'];
+          
+          // Decode polyline points
+          List<LatLng> routeCoordinates = _decodePolyline(polylinePoints);
+          print('Route decoded: ${routeCoordinates.length} points');
+          
+          setState(() {
+            _displayRoute(routeCoordinates);
+            
+            // Update route info
+            final leg = route['legs'][0];
+            totalRouteDistance = leg['distance']['value'] / 1000; // Convert to km
+            destination = leg['end_address'];
+          });
+        } else {
+          print('API returned status: ${data['status']} or no routes found');
+          _createSimpleRoute(origin, destination);
+        }
+      } else {
+        print('HTTP error: ${response.statusCode}');
+        _createSimpleRoute(origin, destination);
+      }
+    } catch (e) {
+      print('Error getting directions: $e');
+      // Fallback to simple straight line route
+      _createSimpleRoute(origin, destination);
+    }
+  }
+
+  List<LatLng> _decodePolyline(String polyline) {
+    List<LatLng> points = [];
+    int index = 0;
+    int len = polyline.length;
+    int lat = 0;
+    int lng = 0;
+
+    while (index < len) {
+      int shift = 0;
+      int result = 0;
+      int byte;
+      
+      do {
+        byte = polyline.codeUnitAt(index++) - 63;
+        result |= (byte & 0x1f) << shift;
+        shift += 5;
+      } while (byte >= 0x20);
+      
+      int deltaLat = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
+      lat += deltaLat;
+
+      shift = 0;
+      result = 0;
+      
+      do {
+        byte = polyline.codeUnitAt(index++) - 63;
+        result |= (byte & 0x1f) << shift;
+        shift += 5;
+      } while (byte >= 0x20);
+      
+      int deltaLng = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
+      lng += deltaLng;
+
+      points.add(LatLng(lat / 1e5, lng / 1e5));
+    }
+
+    return points;
+  }
+
+  void _displayRoute(List<LatLng> routeCoordinates) {
+    print('Displaying route with ${routeCoordinates.length} points');
+    polylines.clear();
+    
+    // Add main route polyline (make it more visible)
+    polylines.add(
+      Polyline(
+        polylineId: const PolylineId('main_route'),
+        points: routeCoordinates,
+        color: Colors.blue,
+        width: 6, // Increased width for better visibility
+        patterns: [],
+      ),
+    );
+
+    // Add walking path (current route)
+    if (routePoints.length > 1) {
+      polylines.add(
+        Polyline(
+          polylineId: const PolylineId('walked_route'),
+          points: routePoints,
+          color: Colors.green,
+          width: 4,
+          patterns: [PatternItem.dash(10), PatternItem.gap(5)],
+        ),
+      );
+    }
+    
+    print('Route displayed: ${polylines.length} polylines added');
+  }
+
+  void _createSimpleRoute(LatLng origin, LatLng destination) {
+    // Fallback: Create a more realistic curved route instead of straight line
+    List<LatLng> simpleRoute = [];
+    
+    // Add origin
+    simpleRoute.add(origin);
+    
+    // Create intermediate points for a more realistic walking path
+    double latDiff = destination.latitude - origin.latitude;
+    double lngDiff = destination.longitude - origin.longitude;
+    
+    // Add 3-4 intermediate points to simulate a walking path
+    for (int i = 1; i <= 3; i++) {
+      double progress = i / 4.0;
+      double lat = origin.latitude + (latDiff * progress);
+      double lng = origin.longitude + (lngDiff * progress);
+      
+      // Add slight variation to make it more realistic (simulate walking around buildings)
+      if (i == 2) {
+        lat += 0.0002; // Small detour
+        lng += 0.0001;
+      }
+      
+      simpleRoute.add(LatLng(lat, lng));
+    }
+    
+    // Add destination
+    simpleRoute.add(destination);
+    
+    setState(() {
+      // Clear existing polylines
+      polylines.clear();
+      
+      // Add fallback route polyline (use blue as requested)
+      polylines.add(
+        Polyline(
+          polylineId: const PolylineId('simple_route'),
+          points: simpleRoute,
+          color: Colors.blue, // Changed to blue as requested
+          width: 6,
+          patterns: [], // Solid line instead of dashed
+        ),
+      );
+      
+      // Calculate straight-line distance
+      double distance = Geolocator.distanceBetween(
+        origin.latitude,
+        origin.longitude,
+        destination.latitude,
+        destination.longitude,
+      );
+      totalRouteDistance = distance / 1000; // Convert to km
+      
+      print('Fallback route created: ${simpleRoute.length} points, distance: ${totalRouteDistance.toStringAsFixed(2)} km');
+    });
+  }
+
+  void _addDestinationMarker(LatLng destination, String name) {
+    markers.add(
+      Marker(
+        markerId: const MarkerId('destination'),
+        position: destination,
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+        infoWindow: InfoWindow(
+          title: 'Destination',
+          snippet: name,
+        ),
+      ),
+    );
+  }
+
+  // Call this method to start navigation to a specific destination
+  void _startNavigation() {
+    if (currentPosition != null) {
+      // Example destinations within University Malaya campus
+      LatLng currentPos = LatLng(currentPosition!.latitude, currentPosition!.longitude);
+      
+      // Sample destinations (you can make this dynamic)
+      List<Map<String, dynamic>> destinations = [
+        {'name': 'UM Main Library', 'position': const LatLng(3.1235, 101.6545)},
+        {'name': 'Student Center', 'position': const LatLng(3.1220, 101.6530)},
+        {'name': 'Engineering Faculty', 'position': const LatLng(3.1240, 101.6555)},
+        {'name': 'Sports Complex', 'position': const LatLng(3.1265, 101.6525)},
+      ];
+      
+      // For demo, navigate to the Student Center
+      LatLng destination = destinations[1]['position'];
+      String destinationName = destinations[1]['name'];
+      
+      // Add destination marker
+      _addDestinationMarker(destination, destinationName);
+      
+      // Get directions
+      _getDirections(currentPos, destination);
     }
   }
 
@@ -310,6 +556,14 @@ class _ActiveWalkScreenState extends State<ActiveWalkScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          print('Testing route display...');
+          _startNavigation();
+        },
+        backgroundColor: Colors.orange,
+        child: const Icon(Icons.navigation),
+      ),
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
