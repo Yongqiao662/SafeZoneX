@@ -2,7 +2,15 @@
 
 **Your Campus Safety in One Tap**
 
-SafeZoneX is a comprehensive campus safety application designed to provide students, faculty, and staff with immediate access to emergency services, real-time safety features, and community support systems.
+SafeZoneX is a comprehensive campus safety application designed t#### 📊 **Emergency Command Center**
+- **Live Alert Feed**: Real-time SOS alerts from mobile users with GPS coordinates
+- **Interactive Location Maps**: Visual representation of emergency locations
+- **Campus Safety Heatmap**: Color-coded safety zones with real-time risk assessment
+- **Status Management**: Acknowledge and resolve emergency alerts
+- **Statistics Dashboard**: Track active, acknowledged, and resolved emergencies
+- **Connection Monitoring**: WebSocket connection status indicators
+- **Authority Coordination**: Tools for dispatching and coordinating emergency response
+- **Safe Zone Monitoring**: Track safety zone status and occupancy levelsde students, faculty, and staff with immediate access to emergency services, real-time safety features, and community support systems.
 
 ---
 
@@ -54,30 +62,52 @@ Campus safety is a critical concern for educational institutions worldwide. Trad
 - **Emergency Contacts**: Automatic notification to pre-configured contacts and authorities
 - **Active Emergency Screen**: Real-time status updates during emergencies
 - **Public Safety Dispatch**: Direct alerts to campus security and emergency services
+- **Emergency Safe Zone Routing**: Automatic routing to nearest safe zone during SOS alerts
 
-#### � **Advanced Location Tracking & Monitoring**
+#### � **Safety Zone Mapping & Monitoring**
+- **Interactive Campus Safety Map**: Visual safety zones with color-coded risk levels
+- **Real-Time Safety Scores**: Dynamic safety ratings for different campus areas
+- **Safe Zone Database**: Pre-configured University Malaya safety zones with details
+- **Geofencing Alerts**: Notifications when entering/exiting designated safe areas
+- **Operating Hours Tracking**: Monitor open/closed status of safety zones
+- **Distance Calculations**: Real-time distance to nearest safe zones
+- **Safety Zone Types**: Security offices, libraries, medical centers, academic buildings
+- **Emergency Safe Zone Routing**: Navigate to nearest safe zone during emergencies
+- **Campus Heatmap**: Visual representation of safety levels across campus
+- **Zone Status Monitoring**: Track occupancy and safety status in real-time
+
+#### �🗺️ **Advanced Google Maps Integration**
+- **University Malaya Campus Mapping**: Centered on UM coordinates (3.1225, 101.6532)
+- **Google Directions API**: Real-time route calculation and navigation
+- **Polyline Route Display**: Blue route lines with curved path visualization
+- **Campus Location Database**: Pre-configured UM buildings and facilities
 - **Real-Time GPS Tracking**: Continuous location updates with high accuracy
-- **Emergency Location Broadcasting**: Automatic location sharing during SOS alerts
-- **Background Location Monitoring**: Location tracking continues even when app is backgrounded
-- **Geofencing & Safe Zones**: Monitor entry/exit from designated safe areas
-- **Location History**: Track movement patterns for safety analysis
-- **Multi-Platform Location Sync**: Location data shared across mobile and web platforms
-- **Permission Management**: Granular control over location sharing preferences
+- **Route Navigation**: Turn-by-turn directions with fallback route options
+- **Destination Markers**: Visual indicators for campus buildings and meeting points
+- **Walking Path Optimization**: Routes optimized for pedestrian safety
+- **Mock Location Testing**: Development-friendly location simulation for UM campus
+- **Interactive Map Controls**: Zoom, pan, and marker interaction
 
-#### 🚨 **Campus Security Integration**
-- **Authority Alerting System**: Direct notifications to campus security and police
-- **Suspicious Activity Reporting**: Report and tip off security about concerning behavior
-- **Real-Time Monitoring Dashboard**: Security teams can track all active emergencies
-- **Response Coordination**: Tools for authorities to manage and respond to incidents
-- **Evidence Collection**: Automatic capture of location and time data for investigations
+#### 🔐 **Identity Verification & Safety**
+- **AI-Powered Face Verification**: Camera-based identity confirmation before walks
+- **Partner Safety Ratings**: Community-driven trust scores and verification badges
+- **Mock Verification System**: 85% success rate simulation for development testing
+- **Visual Verification Feedback**: Color-coded borders (green/red) for verification status
+- **Retry Mechanism**: Multiple verification attempts with user-friendly error handling
+- **Profile Picture Integration**: Seamless integration with user profile photos
+- **Verification Progress Indicators**: Real-time feedback during verification process
 
-#### �🚶‍♂️ **Walk With Me Partnership**
-- **Partner Finding**: Search for walking companions by destination
-- **Profile Matching**: View partner profiles with safety ratings
-- **Request System**: Send and receive walking partner requests
-- **Active Tracking**: Real-time location sharing during walks
-- **Completion Confirmation**: Safe arrival notifications
-- **Route Monitoring**: Track walking routes for safety verification
+#### 🚶‍♂️ **Walk With Me Partnership**
+- **Partner Finding**: Search for walking companions by destination and departure time
+- **Profile Matching**: View detailed partner profiles with safety ratings and verification status
+- **Request System**: Send and receive walking partner requests with custom messages
+- **Face Verification**: AI-powered identity verification before walks for enhanced safety
+- **Real-Time Route Navigation**: Google Directions API integration with blue route lines
+- **University Malaya Campus Integration**: Centered on UM coordinates
+- **Active Tracking**: Real-time location sharing during walks with route monitoring
+- **Campus Location Markers**: Pre-configured destinations (Library, Student Center, Engineering Faculty, Sports Complex)
+- **Completion Confirmation**: Safe arrival notifications with walk completion screens
+- **Route Monitoring**: Track walking routes with polyline visualization for safety verification
 
 #### 💬 **Live Chat Support**
 - **Floating Chat Window**: Overlay chat without leaving current screen
@@ -86,13 +116,14 @@ Campus safety is a critical concern for educational institutions worldwide. Trad
 - **Multi-Language Support**: Accessibility support for diverse campus populations
 
 #### 🎨 **Enhanced User Experience & Accessibility**
-- **Dark Theme Design**: Consistent, professional interface
+- **Consistent Dark Theme Design**: Unified gradient backgrounds across all screens
+- **Responsive Layout Management**: Fixed RenderFlex overflow issues with optimized spacing
 - **Smooth Animations**: Polished transitions and micro-interactions
 - **Splash Screen**: Branded loading experience with progress indicators
-- **Intuitive Navigation**: Simplified 3-tab bottom navigation
-- **Text-to-Speech Support**: Accessibility features for visually impaired users
-- **High Contrast Mode**: Enhanced visibility options
-- **Large Text Support**: Adjustable font sizes for better readability
+- **Intuitive Navigation**: Simplified navigation with consistent back button styling
+- **Face Verification UI**: Streamlined camera interface with visual feedback
+- **Campus-Specific Theming**: University Malaya branding and color schemes
+- **Flexible Layout Systems**: Adaptive layouts that prevent overflow on all screen sizes
 
 ### 🖥️ **Web Dashboard (Real-Time Monitoring)**
 
@@ -118,494 +149,116 @@ Campus safety is a critical concern for educational institutions worldwide. Trad
 
 ---
 
-## ⭐ Extra Features
+## 🆕 Latest Updates & New Features
 
-### 🔐 **Security & Privacy**
-- **Data Encryption**: All communications encrypted in transit
-- **Privacy Controls**: User control over location sharing permissions
-- **Secure Authentication**: Protected login and profile management
-- **Anonymous Options**: Anonymous chat and reporting capabilities
+### **Version 2.0 - Enhanced Safety & Navigation** 🎯
 
-### 🌐 **Cross-Platform Synchronization**
-- **Real-Time WebSocket**: Instant communication between mobile and web
-- **Multi-Device Support**: Access from phones, tablets, and computers
-- **Cloud Backup**: Secure profile and preference synchronization
-- **Offline Capabilities**: Core features work without internet connection
+#### **🔐 Face Verification System**
+- **AI-Powered Identity Verification**: Camera-based face verification before walking partnerships
+- **Visual Feedback Interface**: Color-coded verification status (green for success, red for failure)
+- **Retry Mechanism**: User-friendly retry system with error handling
+- **85% Success Rate Simulation**: Realistic verification flow for development and testing
+- **Seamless Integration**: Smooth transition from verification to active walk
 
-### 📈 **Analytics & Insights**
-- **Response Time Tracking**: Monitor emergency response effectiveness
-- **Usage Statistics**: Track feature utilization and user engagement
-- **Safety Reports**: Generate campus safety analytics and trends
-- **Performance Metrics**: System uptime and reliability monitoring
+#### **� Campus Safety Zone System**
+- **Interactive Safety Mapping**: Color-coded campus zones (Green=Safe, Orange=Moderate, Red=High Risk)
+- **Real-Time Safety Scores**: Dynamic ratings for University Malaya campus areas
+- **Safe Zone Database**: Pre-configured safety zones with operating hours and status
+- **Emergency Zone Routing**: Quick navigation to nearest safe zones during emergencies
+- **Safety Heatmap Dashboard**: Visual safety monitoring for campus security teams
+- **Geofencing Capabilities**: Location-based alerts for zone entry/exit monitoring
 
-### 🎨 **Customization**
-- **Campus Branding**: Customizable colors and logos for institutions
-- **Feature Toggles**: Enable/disable features based on campus needs
-- **Language Support**: Multi-language interface options
-- **Accessibility**: Screen reader support and high contrast modes
+#### **�🗺️ Advanced Google Maps & Navigation**
+- **University Malaya Integration**: Precise campus coordinates (3.1225, 101.6532)
+- **Google Directions API**: Real-time route calculation and navigation
+- **Blue Route Visualization**: Professional route display with polyline technology
+- **Campus Location Database**: Pre-configured UM landmarks and buildings
+- **Curved Route Generation**: Realistic walking paths instead of straight lines
+- **Interactive Destinations**: Student Center, Library, Engineering Faculty, Sports Complex
+
+#### **🎨 UI/UX Consistency Improvements**
+- **Unified Header Design**: Consistent navigation across all screens
+- **Gradient Background Theming**: Professional dark theme with purple accents
+- **Responsive Layout Fixes**: Eliminated RenderFlex overflow errors
+- **Optimized Spacing**: Refined padding and margins for better mobile experience
+- **Purple Back Button Consistency**: Matching navigation style across all screens
+
+#### **📱 Layout & Performance Optimizations**
+- **Flexible Container Systems**: Adaptive layouts that prevent UI overflow
+- **Reduced Component Sizes**: Optimized buttons, icons, and spacing for smaller screens
+- **MainAxisSize.min Implementation**: Minimized space usage in column layouts
+- **Font Size Optimization**: Improved readability with appropriate text scaling
+- **Enhanced Touch Targets**: Better accessibility with optimized button sizes
 
 ---
 
-## � Quick Start Guide
+## ⚡ Quick Start
 
-### �📋 Prerequisites
-
-Before you begin, ensure you have the following installed:
-
+### Prerequisites
 - **Flutter SDK** (3.0+) - [Download](https://flutter.dev/docs/get-started/install)
-- **Dart SDK** (included with Flutter)
 - **Android Studio** - [Download](https://developer.android.com/studio)
-- **VS Code** (recommended) - [Download](https://code.visualstudio.com/)
-- **Google Maps API Key** - [Get API Key](#-google-maps-api-setup)
+- **Google Maps API Key** - [Get API Key](https://console.cloud.google.com/)
 
-### ⚡ Quick Setup (5 Minutes)
+### Installation
 
-1. **Clone the Repository**
+1. **Clone Repository**
    ```bash
-   git clone https://github.com/yourusername/SafeZoneX.git
+   git clone https://github.com/Yongqiao662/SafeZoneX.git
    cd SafeZoneX
    ```
 
-2. **Setup Google Maps API Key** 🗺️
+2. **Setup Google Maps API Key**
    ```bash
-   # Step 1: Get your API key from Google Cloud Console
-   # Visit: https://console.cloud.google.com/
+   # Get API key from Google Cloud Console
+   # Enable: Maps SDK for Android, Directions API, Geocoding API
    
-   # Step 2: Copy the API key configuration file
    cd frontend/mobile/android
    cp local.properties.example local.properties
    
-   # Step 3: Edit local.properties and add your API key
-   # Replace 'your_google_maps_api_key_here' with your actual key
+   # Edit local.properties and add:
+   GOOGLE_MAPS_API_KEY=your_actual_api_key_here
    ```
 
-3. **Install Dependencies**
+3. **Install Dependencies & Run**
    ```bash
    cd frontend/mobile
-   C:\flutter\bin\flutter pub get
+   flutter pub get
+   flutter run
    ```
-
-4. **Run the App**
-   ```bash
-   C:\flutter\bin\flutter run
-   ```
-
-🎉 **That's it!** The app should now be running on your device/emulator.
-
-**Note:** If you haven't installed Flutter properly, see the [detailed setup instructions](#-detailed-setup-instructions) below.
 
 ---
 
-## 🔧 Detailed Setup Instructions
-
-### 🗺️ **Google Maps API Setup** (Required)
-
-**⚠️ IMPORTANT: This step is required for the app to work properly**
-
-#### Step 1: Get Your API Key
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select existing one
-3. Enable these APIs:
-   ```
-   ✓ Maps SDK for Android
-   ✓ Maps SDK for iOS
-   ✓ Geocoding API
-   ✓ Directions API
-   ✓ Places API (optional)
-   ```
-4. Go to "Credentials" → "Create Credentials" → "API Key"
-5. Copy your API key (starts with `AIza...`)
-
-#### Step 2: Add API Key to Project
-1. Navigate to the Android configuration:
-   ```bash
-   cd SafeZoneX/frontend/mobile/android
-   ```
-
-2. Copy the example file:
-   ```bash
-   cp local.properties.example local.properties
-   ```
-
-3. Edit `local.properties` and replace the placeholder:
-   ```properties
-   GOOGLE_MAPS_API_KEY=your_actual_api_key_here
-   ```
-
-4. **NEVER commit this file to git** - it contains your secret API key!
-
-#### Step 3: Secure Your API Key
-1. In Google Cloud Console → Credentials
-2. Click on your API key to edit it
-3. Set "Application restrictions" → "Android apps"
-4. Add your app's SHA-1 fingerprint:
-   ```bash
-   # Get SHA-1 fingerprint
-   keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android
-   ```
-
-#### Step 4: For iOS (Optional)
-If you plan to build for iOS, add your API key to `ios/Runner/AppDelegate.swift`:
-```swift
-GMSServices.provideAPIKey("YOUR_API_KEY_HERE")
-```
-
-### 📁 **Local Properties Configuration** (Critical Setup)
-
-The `local.properties` file contains essential configuration for Android builds and Google Maps integration. This file is **required** for the app to compile and function properly.
-
-#### Step 1: Create local.properties File
-```bash
-cd SafeZoneX/frontend/mobile/android
-cp local.properties.example local.properties
-```
-
-#### Step 2: Configure Required Properties
-Edit the `local.properties` file with your system-specific paths and API key:
-
-```properties
-# Android SDK path (required for compilation)
-sdk.dir=C:\\Users\\YourUsername\\AppData\\Local\\Android\\sdk
-
-# Flutter SDK path (must match your Flutter installation)
-flutter.sdk=C:\\flutter
-
-# Build configuration
-flutter.buildMode=debug
-flutter.versionName=1.0.0
-flutter.versionCode=1
-
-# Google Maps API Key (REQUIRED - replace with your actual key)
-GOOGLE_MAPS_API_KEY=''
-```
-
-#### Step 3: Find Your SDK Paths
-
-**For Android SDK:**
-- **Windows**: `C:\Users\[Username]\AppData\Local\Android\sdk`
-- **macOS**: `~/Library/Android/sdk`
-- **Linux**: `~/Android/Sdk`
-
-**For Flutter SDK:**
-- **Recommended**: Download and extract to `C:\flutter` from https://docs.flutter.dev/get-started/install/windows
-- **Windows (typical)**: `C:\flutter`
-- **Alternative locations**: `C:\src\flutter`
-- **macOS**: `/usr/local/flutter` or `~/flutter`
-- **Linux**: `/usr/local/flutter` or `~/flutter`
-- **⚠️ DO NOT** install Flutter inside project folders
-
-#### Step 4: Proper Flutter Installation
-If you haven't installed Flutter properly:
-
-1. **Download Flutter SDK:**
-   ```bash
-   # Download from: https://docs.flutter.dev/get-started/install/windows
-   # Extract the ZIP file to C:\flutter (NOT inside any project folder)
-   ```
-
-2. **Add to System PATH (Optional but recommended):**
-   - Search "Environment Variables" in Windows
-   - Edit system PATH variable
-   - Add: `C:\flutter\bin`
-
-3. **Verify Installation:**
-   ```bash
-   C:\flutter\bin\flutter --version
-   C:\flutter\bin\flutter doctor
-   ```
-
-#### Step 5: Verify Configuration
-Run these commands to verify everything is set up correctly:
-
-```bash
-# Check Flutter configuration
-C:\flutter\bin\flutter doctor
-
-# Navigate to project directory
-cd SafeZoneX/frontend/mobile
-
-# Verify dependencies
-C:\flutter\bin\flutter pub get
-
-# Test compilation
-C:\flutter\bin\flutter build apk --debug
-```
-
-#### ⚠️ **Important Notes:**
-
-1. **Never commit `local.properties` to version control** - it contains sensitive information
-2. **Use double backslashes** (`\\`) in Windows paths
-3. **Replace placeholder API key** with your actual Google Maps API key
-4. **Ensure paths exist** on your system before running the app
-5. **Flutter must be in a system location** - NOT inside project folders
-
-#### 🔧 **Troubleshooting:**
-
-**If you see "Target file not found" errors:**
-- Verify your Flutter SDK path is correct in `local.properties`
-- Ensure Flutter is installed at `C:\flutter`, not inside a project folder
-- Run `C:\flutter\bin\flutter clean` and `C:\flutter\bin\flutter pub get`
-
-**If you see "flutter.sdk=E:\AngelGuide\..." path:**
-- This indicates Flutter is incorrectly installed inside another project
-- Download proper Flutter installation and extract to `C:\flutter`
-- Update `local.properties` with `flutter.sdk=C:\\flutter`
-
-**If Google Maps doesn't load or shows blank with Google logo:**
-- Check your Google Maps API key is valid and properly formatted
-- Ensure Maps SDK for Android is enabled in Google Cloud Console
-- Verify your API key has no restrictions that block your app
-- Add your app's package name and SHA-1 fingerprint to API key restrictions
-
-**If map markers/pins don't appear:**
-- Ensure Flutter SDK path is correct (common cause of missing markers)
-- Check console for marker creation debug messages
-- Verify location permissions are granted
-
-**If you see "ImageReader_JNI" warnings:**
-- These are harmless warnings related to camera/image processing
-- App functionality is not affected
-- Warnings may appear when using Google Maps or camera features
-
-**If compilation fails:**
-- Update Android SDK path to match your installation
-- Ensure all required dependencies are installed
-
-#### Step 5: Location Configuration (Important)
-The app currently uses demo coordinates for testing. For production:
-1. Update campus location coordinates in `lib/screens/walk_with_me.dart`
-2. Replace demo coordinates with your actual campus coordinates
-3. Configure campus buildings and landmarks
-4. Test location services work correctly in your area
-
----
-
-## 🚨 **Common Setup Issues & Solutions**
-
-### Issue 1: "Target file lib\main.dart not found"
-**Cause:** Incorrect Flutter SDK path in `local.properties`
-**Solution:**
-```bash
-# Check your Flutter installation
-C:\flutter\bin\flutter --version
-
-# Update local.properties
-flutter.sdk=C:\\flutter
-
-# Clean and rebuild
-C:\flutter\bin\flutter clean
-C:\flutter\bin\flutter pub get
-```
-
-### Issue 2: Google Maps shows blank with only Google logo
-**Cause:** Missing or invalid Google Maps API key
-**Solution:**
-1. Get API key from Google Cloud Console
-2. Enable Maps SDK for Android
-3. Add key to `local.properties`: `GOOGLE_MAPS_API_KEY=YOUR_KEY_HERE`
-4. Add app package name to API key restrictions
-
-### Issue 3: Map markers/pins not visible
-**Cause:** Flutter compilation issues due to incorrect SDK path
-**Solution:**
-```bash
-# Ensure proper Flutter installation
-flutter.sdk=C:\\flutter  # NOT inside project folders
-
-# Force marker refresh
-C:\flutter\bin\flutter clean
-C:\flutter\bin\flutter pub get
-```
-
-### Issue 4: "ImageReader_JNI" warnings in console
-**Cause:** Normal warnings from camera/image processing
-**Solution:** These are harmless warnings - app functionality is not affected
-
-### Issue 5: Flutter installed in project folder (AngelGuide path)
-**Cause:** Flutter incorrectly installed inside another project
-**Solution:**
-1. Download Flutter from https://docs.flutter.dev/get-started/install/windows
-2. Extract to `C:\flutter` (system location)
-3. Update `local.properties` with correct path
-4. Clean and rebuild project
-
----
-
-### 🔒 **Security Best Practices**
-
-- ✅ **DO**: Keep your API key in `local.properties`
-- ✅ **DO**: Restrict your API key to specific apps and APIs
-- ✅ **DO**: Monitor your API usage in Google Cloud Console
-- ❌ **DON'T**: Commit `local.properties` to version control
-- ❌ **DON'T**: Share your API key publicly
-- ❌ **DON'T**: Use unrestricted API keys
-
----
-
-## 📱 Platform-Specific Setup
-
-### 🛠️ **Development Environment**
-
-#### **Flutter SDK**
-```bash
-# Download from: https://flutter.dev/docs/get-started/install
-# Version: 3.0.0 or higher
-flutter --version
-```
-
-#### **IDE Setup**
-- **Visual Studio Code** with Flutter extension
-- **Android Studio** with Flutter plugin
-- **Xcode** (for iOS development on macOS)
-
-#### **Platform SDKs**
-- **Android SDK** (API level 21+)
-- **iOS SDK** (iOS 11.0+)
-- **Web Browser** (Chrome recommended for development)
-
-#### **Google Maps API Setup** 🗺️
-**Required for location services and mapping features**
-
-1. **Get Google Maps API Key**:
-   ```bash
-   # Visit Google Cloud Console
-   https://console.cloud.google.com/
-   
-   # Create or select a project
-   # Enable these APIs:
-   - Maps SDK for Android
-   - Maps SDK for iOS 
-   - Geocoding API
-   - Directions API
-   - Places API
-   ```
-
-2. **Configure API Key**:
-   ```bash
-   # Copy local.properties.example to local.properties
-   cd SafeZoneX/frontend/mobile/android
-   cp local.properties.example local.properties
-   
-   # Edit local.properties and add your API key:
-   GOOGLE_MAPS_API_KEY=your_actual_api_key_here
-   ```
-
-3. **Security Setup**:
-   ```bash
-   # In Google Cloud Console > Credentials:
-   # 1. Restrict API key by application (Android apps)
-   # 2. Add your app's SHA-1 fingerprint
-   # 3. Restrict APIs to only needed services
-   
-   # Get your SHA-1 fingerprint:
-   keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android
-   ```
-
-4. **iOS Configuration** (if developing for iOS):
-   ```bash
-   # Add API key to ios/Runner/AppDelegate.swift:
-   GMSServices.provideAPIKey("YOUR_API_KEY_HERE")
-   ```
-
-⚠️ **Security Note**: Never commit your actual API key to version control. The app uses placeholders that read from local.properties.
-
-### 📦 **Dependencies**
-
-#### **Mobile App Dependencies**
-```yaml
-dependencies:
-  flutter:
-    sdk: flutter
-  cupertino_icons: ^1.0.2
-  # Location services
-  geolocator: ^9.0.2
-  geocoding: ^2.1.0
-  # State management
-  provider: ^6.0.5
-  # HTTP requests
-  http: ^1.1.0
-  # Local storage
-  shared_preferences: ^2.2.0
-  # Permissions
-  permission_handler: ^10.4.3
-```
-
-#### **Web Dashboard Dependencies**
-```yaml
-dependencies:
-  flutter:
-    sdk: flutter
-  cupertino_icons: ^1.0.2
-  # WebSocket communication
-  web_socket_channel: ^2.4.0
-  # HTTP requests
-  http: ^1.1.0
-```
-
-### 🌐 **Backend Requirements**
-
-#### **WebSocket Server**
-```bash
-# Node.js + Socket.io (Recommended)
-npm install socket.io express cors
-
-# Python + WebSockets
-pip install websockets fastapi uvicorn
-
-# Go + Gorilla WebSocket
-go get github.com/gorilla/websocket
-```
-
-#### **Database Options**
-- **Firebase Realtime Database** (Managed solution)
-- **PostgreSQL** (Self-hosted)
-- **MongoDB** (Document-based)
-- **SQLite** (Local development)
-
----
-
-## 🚀 Quick Start
-
-### 1. **Clone Repository**
-```bash
-git clone https://github.com/Yongqiao662/SafeZoneX.git
-cd SafeZoneX
-```
-
-### 2. **Setup Mobile App**
-```bash
-cd SafeZoneX/frontend/mobile
-flutter pub get
-flutter run
-```
-
-### 3. **Setup Web Dashboard**
-```bash
-cd SafeZoneX/frontend/web
-flutter pub get
-flutter run -d chrome
-```
-
-### 4. **Setup Backend Server**
-```bash
-# Example Node.js WebSocket server
-cd SafeZoneX/backend
-npm install
-npm start
-```
+## 🛠️ Tech Stack
+
+### **Mobile Development**
+- **Flutter 3.0+**: Cross-platform mobile framework
+- **Google Maps Flutter 2.5.0**: Maps and navigation
+- **Geolocator 9.0.2**: Location services
+- **Image Picker 1.0.4**: Camera integration for face verification
+- **HTTP 1.1.0**: API communication for directions
+
+### **Web Dashboard**
+- **Flutter Web**: Responsive web application
+- **WebSocket**: Real-time communication
+- **Socket.io**: Live event handling
+
+### **APIs & Services**
+- **Google Maps SDK**: Mapping and location services
+- **Google Directions API**: Route calculation and navigation
+- **Geocoding API**: Address resolution
+- **WebSocket Server**: Real-time emergency alerts
 
 ---
 
 ## 📱 Platform Support
 
-| Platform | Status | Features |
-|----------|--------|----------|
-| **Android** | ✅ Full Support | All features available |
-| **iOS** | ✅ Full Support | All features available |
-| **Web** | ✅ Dashboard Only | Monitoring & management |
-| **Windows** | 🔄 In Development | Desktop monitoring app |
-| **macOS** | 🔄 In Development | Desktop monitoring app |
-| **Linux** | 🔄 In Development | Desktop monitoring app |
+| Platform | Status | Features Available |
+|----------|--------|-------------------|
+| **Android** | ✅ Full Support | All features including SOS, Walking Partners, Face Verification, Navigation |
+| **iOS** | ✅ Full Support | All features including SOS, Walking Partners, Face Verification, Navigation |
+| **Web** | ✅ Dashboard Only | Emergency monitoring, alerts management, real-time tracking |
+| **Windows** | 🔄 In Development | Desktop monitoring application |
+| **macOS** | 🔄 In Development | Desktop monitoring application |
 
 ---
 
@@ -614,7 +267,11 @@ npm start
 ```
 ┌─────────────────┐    WebSocket    ┌─────────────────┐
 │  Mobile App     │◄──────────────►│  Backend Server │
-│  (Flutter)      │                 │  (Node.js/Python)│
+│  (Flutter)      │                 │  (Node.js)      │
+│  • SOS Alerts   │                 │  • Alert Routing│
+│  • GPS Tracking │                 │  • Data Storage │
+│  • Face Verify  │                 │  • Notifications│
+│  • Navigation   │                 │                 │
 └─────────────────┘                 └─────────────────┘
                                              ▲
                                              │ WebSocket
@@ -622,19 +279,91 @@ npm start
                                     ┌─────────────────┐
                                     │  Web Dashboard  │
                                     │  (Flutter Web)  │
+                                    │  • Live Monitor │
+                                    │  • Alert Mgmt   │
+                                    │  • Analytics    │
                                     └─────────────────┘
 ```
 
 ---
 
+## 🔧 Setup & Configuration
+
+### Google Maps API Setup
+1. Visit [Google Cloud Console](https://console.cloud.google.com/)
+2. Create or select a project
+3. Enable these APIs:
+   - Maps SDK for Android
+   - Maps SDK for iOS
+   - Directions API
+   - Geocoding API
+4. Create API key and restrict to your application
+5. Add to `frontend/mobile/android/local.properties`
+
+### Development Environment
+- **Flutter SDK**: Version 3.0 or higher
+- **Android Studio**: Latest stable version
+- **VS Code**: Recommended with Flutter extension
+- **Physical Device**: Required for camera and location testing
+
+### Dependencies
+```yaml
+dependencies:
+  flutter:
+    sdk: flutter
+  google_maps_flutter: ^2.5.0
+  geolocator: ^9.0.2
+  image_picker: ^1.0.4
+  http: ^1.1.0
+  provider: ^6.0.5
+  shared_preferences: ^2.2.0
+  permission_handler: ^10.4.3
+```
+
+---
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+**Google Maps not loading:**
+- Verify API key is correct in `local.properties`
+- Ensure Maps SDK for Android is enabled
+- Check API quota and billing settings
+
+**Route navigation not working:**
+- Enable Directions API in Google Cloud Console
+- Verify API key has Directions API permissions
+- Check API usage limits
+
+**Face verification camera issues:**
+- Grant camera permissions in device settings
+- Test on physical device (emulator may not work)
+- Verify image_picker dependency is installed
+
+**Flutter compilation errors:**
+- Ensure Flutter SDK is in system location (`C:\flutter`)
+- Run `flutter clean` and `flutter pub get`
+- Check `local.properties` has correct SDK path
+
+---
+
 ## 🤝 Contributing
 
-We welcome contributions to make SafeZoneX even better! Please read our [Contributing Guidelines](CONTRIBUTING.md) for details on:
+We welcome contributions to make SafeZoneX even better! 
 
-- Code of Conduct
-- Development Process
-- Pull Request Process
-- Issue Reporting
+### How to Contribute
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+### Development Guidelines
+- Follow Flutter/Dart style guidelines
+- Write tests for new features
+- Update documentation as needed
+- Ensure all tests pass before submitting
 
 ---
 
@@ -644,12 +373,16 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-## 📞 Support
+## 📞 Support & Community
 
-- **Documentation**: [docs.safezonex.com](https://docs.safezonex.com)
-- **Issues**: [GitHub Issues](https://github.com/your-org/SafeZoneX/issues)
-- **Discord**: [Community Chat](https://discord.gg/safezonex)
-- **Email**: support@safezonex.com
+### Get Help
+- **Documentation**: [Coming Soon]
+- **Issues**: [GitHub Issues](https://github.com/Yongqiao662/SafeZoneX/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/Yongqiao662/SafeZoneX/discussions)
+
+### Contact
+- **Email**: [Coming Soon]
+- **Project Lead**: [Yongqiao662](https://github.com/Yongqiao662)
 
 ---
 
@@ -659,28 +392,40 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [x] SOS Emergency System
 - [x] Real-time Monitoring Dashboard
 - [x] Basic Chat Support
+- [x] Location Tracking
 
 ### **Phase 2: Community Features** ✅
 - [x] Walking Partner System
 - [x] Profile Management
-- [x] Enhanced UI/UX
+- [x] Face Verification System
+- [x] Google Maps Integration
+- [x] Route Navigation with Directions API
+- [x] University Malaya Campus Integration
+- [x] Responsive Layout Optimization
 
 ### **Phase 3: Advanced Features** 🔄
-- [ ] Campus Integration APIs
-- [ ] Advanced Analytics
+- [ ] Multi-campus Support
+- [ ] Advanced Analytics Dashboard
+- [ ] Offline Mode Capabilities
 - [ ] Multi-language Support
-- [ ] Offline Mode
+- [ ] Voice Commands
+- [ ] Smart Watch Integration
 
 ### **Phase 4: Enterprise** 📋
-- [ ] Multi-campus Support
-- [ ] Advanced Admin Controls
-- [ ] Integration with Campus Security
-- [ ] Custom Branding
+- [ ] Campus Security Integration APIs
+- [ ] Administrative Controls
+- [ ] Custom Branding Options
+- [ ] Advanced Reporting
+- [ ] Third-party Integrations
 
 ---
 
-## 🏆 Awards & Recognition
+## 🏆 Recognition
 
 *Built for campus safety, designed for peace of mind.*
 
-**SafeZoneX - Because every second counts in an emergency.**" 
+**SafeZoneX - Because every second counts in an emergency.** 🚨
+
+---
+
+*This project is actively maintained and developed with ❤️ for campus safety.*
