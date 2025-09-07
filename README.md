@@ -276,7 +276,7 @@ flutter.versionName=1.0.0
 flutter.versionCode=1
 
 # Google Maps API Key (REQUIRED - replace with your actual key)
-GOOGLE_MAPS_API_KEY=AIzaSyBOFGvG-_LPgrYBiy1q1Fc8z47EyWMYlZM
+GOOGLE_MAPS_API_KEY=''
 ```
 
 #### Step 3: Find Your SDK Paths
