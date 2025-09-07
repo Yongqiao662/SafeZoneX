@@ -2,15 +2,7 @@
 
 **Your Campus Safety in One Tap**
 
-SafeZoneX is a comprehensive campus safety application designed t#### 📊 **Emergency Command Center**
-- **Live Alert Feed**: Real-time SOS alerts from mobile users with GPS coordinates
-- **Interactive Location Maps**: Visual representation of emergency locations
-- **Campus Safety Heatmap**: Color-coded safety zones with real-time risk assessment
-- **Status Management**: Acknowledge and resolve emergency alerts
-- **Statistics Dashboard**: Track active, acknowledged, and resolved emergencies
-- **Connection Monitoring**: WebSocket connection status indicators
-- **Authority Coordination**: Tools for dispatching and coordinating emergency response
-- **Safe Zone Monitoring**: Track safety zone status and occupancy levelsde students, faculty, and staff with immediate access to emergency services, real-time safety features, and community support systems.
+SafeZoneX is a comprehensive campus safety application designed to provide students, faculty, and staff with immediate access to emergency services, real-time safety features, and community support systems.
 
 ---
 
@@ -157,7 +149,7 @@ Campus safety is a critical concern for educational institutions worldwide. Trad
 - **AI-Powered Identity Verification**: Camera-based face verification before walking partnerships
 - **Visual Feedback Interface**: Color-coded verification status (green for success, red for failure)
 - **Retry Mechanism**: User-friendly retry system with error handling
-- **85% Success Rate Simulation**: Realistic verification flow for development and testing
+- **75% Success Rate Simulation**: Realistic verification flow for development and testing
 - **Seamless Integration**: Smooth transition from verification to active walk
 
 #### **� Campus Safety Zone System**
