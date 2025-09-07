@@ -151,7 +151,7 @@ Campus safety is a critical concern for educational institutions worldwide. Trad
 - **AI-Powered Identity Verification**: Camera-based face verification before walking partnerships
 - **Visual Feedback Interface**: Color-coded verification status (green for success, red for failure)
 - **Retry Mechanism**: User-friendly retry system with error handling
-- **75% Success Rate Simulation**: Realistic verification flow for development and testing
+- **85% Success Rate Simulation**: Realistic verification flow for development and testing
 - **Seamless Integration**: Smooth transition from verification to active walk
 
 #### **� Campus Safety Zone System**
