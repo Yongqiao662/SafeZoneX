@@ -262,29 +262,30 @@ class _FaceVerificationScreenState extends State<FaceVerificationScreen> {
           // Instructions and Controls
           Flexible( // Changed from Expanded to Flexible to prevent overflow
             child: Container(
-              padding: const EdgeInsets.all(16), // Reduced from 20 to 16
+              padding: const EdgeInsets.all(12), // Reduced from 16 to 12
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min, // Add this to minimize space usage
                 children: [
                   if (!_verificationComplete) ...[
                     const Text(
                       'Take a photo to verify your identity',
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: 16,
+                        fontSize: 15, // Reduced from 16 to 15
                       ),
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 6), // Reduced from 8 to 6
+                    const SizedBox(height: 4), // Reduced from 6 to 4
                     Text(
                       'This helps ensure safety for both walking partners',
                       style: TextStyle(
                         color: Colors.grey[400],
-                        fontSize: 14,
+                        fontSize: 13, // Reduced from 14 to 13
                       ),
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 16), // Reduced from 20 to 16
+                    const SizedBox(height: 12), // Reduced from 16 to 12
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
@@ -292,8 +293,8 @@ class _FaceVerificationScreenState extends State<FaceVerificationScreen> {
                         GestureDetector(
                           onTap: _isCapturing || _isVerifying ? null : _captureAndVerifyFace,
                           child: Container(
-                            width: 80,
-                            height: 80,
+                            width: 70, // Reduced from 80 to 70
+                            height: 70, // Reduced from 80 to 70
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: _isCapturing || _isVerifying 
@@ -301,14 +302,14 @@ class _FaceVerificationScreenState extends State<FaceVerificationScreen> {
                                 : Colors.deepPurple,
                               border: Border.all(
                                 color: Colors.white,
-                                width: 3,
+                                width: 2, // Reduced from 3 to 2
                               ),
                             ),
                             child: Icon(
                               _isCapturing 
                                 ? Icons.hourglass_empty 
                                 : Icons.camera_alt,
-                              size: 30,
+                              size: 25, // Reduced from 30 to 25
                               color: Colors.white,
                             ),
                           ),
@@ -322,11 +323,11 @@ class _FaceVerificationScreenState extends State<FaceVerificationScreen> {
                       onPressed: _retryVerification,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.orange,
-                        minimumSize: const Size(200, 50),
+                        minimumSize: const Size(180, 45), // Reduced from Size(200, 50)
                       ),
                       child: const Text('Try Again'),
                     ),
-                    const SizedBox(height: 8), // Reduced from 10 to 8
+                    const SizedBox(height: 6), // Reduced from 8 to 6
                     TextButton(
                       onPressed: () => Navigator.pop(context),
                       child: const Text(
@@ -337,13 +338,14 @@ class _FaceVerificationScreenState extends State<FaceVerificationScreen> {
                   ],
 
                   if (_isVerifying)
-                    const Column(
+                    Column( // Removed const
+                      mainAxisSize: MainAxisSize.min, // Add this to minimize space
                       children: [
-                        CircularProgressIndicator(color: Colors.deepPurple),
-                        SizedBox(height: 8), // Reduced from 10 to 8
-                        Text(
+                        const CircularProgressIndicator(color: Colors.deepPurple),
+                        const SizedBox(height: 6), // Reduced from 8 to 6
+                        const Text(
                           'Verifying identity...',
-                          style: TextStyle(color: Colors.white),
+                          style: TextStyle(color: Colors.white, fontSize: 14), // Reduced font size
                         ),
                       ],
                     ),
@@ -363,7 +365,7 @@ class _FaceVerificationScreenState extends State<FaceVerificationScreen> {
 
   Widget _buildCameraView() {
     return Container(
-      margin: const EdgeInsets.all(20),
+      margin: const EdgeInsets.all(16), // Reduced from 20 to 16
       decoration: BoxDecoration(
         color: Colors.grey[900],
         borderRadius: BorderRadius.circular(20),
@@ -389,10 +391,10 @@ class _FaceVerificationScreenState extends State<FaceVerificationScreen> {
             children: [
               Icon(
                 Icons.person,
-                size: 100,
+                size: 80, // Reduced from 100 to 80
                 color: Colors.grey[600],
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16), // Reduced from 20 to 16
               Text(
                 'Face Verification Required',
                 style: TextStyle(
