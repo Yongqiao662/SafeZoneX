@@ -2,6 +2,8 @@
 
 **Your Campus Safety in One Tap**
 
+_(Track: Campus Management)_ 
+
 SafeZoneX is a comprehensive campus safety application designed to provide students, faculty, and staff with immediate access to emergency services, real-time safety features, and community support systems.
 
 ---
