@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'sos_active_screen.dart';
 import 'chat_screen.dart';
 import 'map_screen.dart';
-import 'profile_screen.dart';
 import '../services/websocket_service.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -192,21 +191,7 @@ class _HomeScreenState extends State<HomeScreen>
               ),
             ),
           ),
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: IconButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => ProfileScreen()),
-                );
-              },
-              icon: const Icon(Icons.person_outline, color: Colors.white),
-            ),
-          ),
+          // Profile button removed as requested
         ],
       ),
     );
@@ -664,7 +649,7 @@ Widget _buildActionCard({
       
       print('🚨 SOS Alert sent with real GPS location to monitoring dashboard!');
     } catch (e) {
-      print('❌ Failed to send SOS alert: $e');
+      print('⚠ Failed to send SOS alert: $e');
       // Fallback to basic alert if location fails
       _wsService.sendSOSAlert(
         userId: 'user_${DateTime.now().millisecondsSinceEpoch}',
