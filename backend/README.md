@@ -1,76 +1,127 @@
-# SafeZoneX Backend Server
+# SafeZoneX AI-Powered Backend Server
 
-## 🚀 Quick Start
+## Overview
+This backend powers the SafeZoneX campus safety application, providing AI-driven safety report processing, real-time alerting, and feedback integration. It is built with Node.js, Express, and MongoDB, and supports machine learning model retraining based on user feedback.
 
-### 1. Install Dependencies
-```bash
+---
+
+## Features
+- **AI Feedback Loop:** Safety reports are processed by an AI model. If the model's confidence is low, user feedback is requested to improve accuracy.
+- **Real-Time Alerts:** Emergency alerts are broadcast instantly to connected clients via WebSocket.
+- **MongoDB Integration:** All data is stored in a scalable document database.
+- **Machine Learning Retraining:** Retained scripts and metadata allow further model training using new feedback data.
+- **Modular Models:** Includes models for users, alerts, feedback, and walk sessions.
+
+---
+
+## Folder Structure
+```
+backend/
+├── .env
+├── feedbackApi.js
+├── logs/
+│   └── [server logs]
+├── models/
+│   ├── Alert.js
+│   ├── Feedback.js
+│   ├── TrainingDataModels.js
+│   ├── User.js
+│   └── WalkSession.js
+├── model_metadata_enhanced.json
+├── model_metadata_high_accuracy.json
+├── node_modules/
+├── package-lock.json
+├── package.json
+├── README.md
+├── safety_report_classifier_enhanced.pkl
+├── safety_report_classifier_high_accuracy.pkl
+├── server.js
+├── tfidf_vectorizer_enhanced.pkl
+├── tfidf_vectorizer_high_accuracy.pkl
+├── train_high_accuracy.py
+├── train_ml_enhanced.py
+```
+
+---
+
+## Setup Instructions
+
+### 1. Clone the Repository
+```sh
+git clone <repository-url>
+```
+
+### 2. Install Dependencies
+```sh
+cd backend
 npm install
 ```
 
-### 2. Start the Server
-```bash
-# Development mode (auto-restart on changes)
-npm run dev
+### 3. Configure Environment Variables
+Create a `.env` file in the `backend` directory with the following content:
+```ini
+# MongoDB Configuration
+MONGODB_URI=mongodb+srv://<username>:<password>@<cluster-url>/<database>?retryWrites=true&w=majority&appName=SafeZoneX
 
-# Production mode
-npm start
+# Server Configuration
+NODE_ENV=development
+PORT=8080
+HOST=localhost
+
+# API Configuration
+API_VERSION=v1
+API_BASE_URL=http://localhost:8080/api
+
+# Security Configuration
+JWT_SECRET=your_jwt_secret
+SESSION_SECRET=your_session_secret
+ENCRYPTION_KEY=your_encryption_key
 ```
+Replace `<username>`, `<password>`, `<cluster-url>`, and `<database>` with your actual MongoDB Atlas credentials.
 
-### 3. Test the Server
-Open your browser and go to: http://localhost:8080
+### 4. Start MongoDB
+Ensure MongoDB is running locally or accessible via the connection string in `.env`.
 
-You should see:
-```json
-{
-  "message": "SafeZoneX WebSocket Server",
-  "status": "running",
-  "activeAlerts": 0,
-  "connectedClients": {
-    "mobile": 0,
-    "web": 0
-  }
-}
+### 5. Run the Backend
+```sh
+node server.js
 ```
+The server will run at `http://localhost:8080`.
 
-## 🔌 WebSocket Endpoints
+---
 
-### Connection URL
-```
-ws://localhost:8080
-```
+## Usage & API
+- **Safety Report Submission:** Send POST requests to `/api/reports` to submit safety reports.
+- **Feedback Loop:** If the AI model's confidence is low, the backend will request user feedback via the frontend widget.
+- **WebSocket Alerts:** Clients can connect to the WebSocket endpoint for real-time emergency alerts.
 
-### Events
+---
 
-#### From Mobile App:
-- `register` - Register as mobile client
-- `sos_alert` - Send emergency alert
-- `walking_partner_request` - Find walking partner
-- `chat_message` - Send chat message
+## Machine Learning & Retraining
+- **Model Files:** `.pkl` files are used for AI predictions.
+- **Training Scripts:** Use `train_high_accuracy.py` and `train_ml_enhanced.py` to retrain models with new feedback data.
+- **Metadata:** JSON files store model metadata for reproducibility and versioning.
 
-#### From Web Dashboard:
-- `register` - Register as web client
-- `acknowledge_alert` - Acknowledge emergency
-- `resolve_alert` - Resolve emergency
+---
 
-#### Server Events:
-- `sos_alert` - New emergency alert
-- `alert_update` - Alert status changed
-- `connection_update` - Client count updated
+## Code Review Checklist
+- `server.js`: Main backend logic, Express setup, MongoDB connection, AI feedback loop.
+- `models/`: Mongoose schemas for core entities.
+- `feedbackApi.js`: Handles feedback-related API endpoints.
+- ML scripts and metadata: For retraining and improving model accuracy.
 
-## 🧪 Testing
+---
 
-### Test SOS Alert
-Send a WebSocket message:
-```javascript
-socket.emit('test_alert');
-```
+## Logs
+- Server logs are stored in the `logs/` directory for debugging and monitoring.
 
-## 📝 Server Logs
+---
 
-The server will show:
-- 🔌 Client connections
-- 📱 Mobile registrations  
-- 🖥️ Web registrations
-- 🚨 SOS alerts received
-- ✅ Alert acknowledgments
-- ❌ Client disconnections
+## Frontend Integration
+- The backend exposes endpoints for the frontend feedback widget.
+- Feedback from users is used to improve AI model accuracy over time.
+
+---
+
+## Contact & Support
+For questions or support, contact the SafeZoneX backend team.

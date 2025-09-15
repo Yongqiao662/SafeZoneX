@@ -17,36 +17,44 @@ class WebSocketService {
 
   Future<void> connect() async {
     try {
-      // For Android Emulator: use 10.0.2.2 instead of localhost
-      // For Physical Device: use your computer's IP address
+      // Auto-detect the correct WebSocket URL based on platform
       String serverUrl;
       
-      // Try Android emulator first (10.0.2.2), then fallback to physical device IP
-      // serverUrl = 'ws://10.0.2.2:8080'; // Android emulator
+      if (Platform.isAndroid) {
+        // Android emulator uses 10.0.2.2 to reach localhost
+        serverUrl = 'ws://10.0.2.2:8080';
+      } else if (Platform.isIOS) {
+        // iOS simulator can use localhost
+        serverUrl = 'ws://localhost:8080';
+      } else {
+        // Physical devices need your computer's IP address
+        // Replace 192.168.1.xxx with your actual IP from ipconfig
+        serverUrl = 'ws://192.168.1.100:8080'; // UPDATE THIS IP!
+      }
       
-      // If you're using a physical device, use this line instead:
-      serverUrl = 'ws://192.168.0.110:8080'; // Physical device
-      
+      print('🔌 Attempting WebSocket connection to $serverUrl');
       _webSocket = await WebSocket.connect(serverUrl);
       
-      print('✅ Mobile WebSocket connected to $serverUrl');
+      print('✅ AI-powered WebSocket connected to SafeZoneX server');
       
-      // Register as mobile client
+      // Register as mobile client for AI notifications
       sendMessage({
         'type': 'register',
         'clientType': 'mobile',
+        'capabilities': ['threat_alerts', 'ai_analysis', 'real_time_updates'],
         'timestamp': DateTime.now().toIso8601String(),
       });
       
       _webSocket!.listen((message) {
         try {
           final data = json.decode(message);
+          print('📨 Received AI notification: ${data['type']}');
           _messageController.add(data);
         } catch (e) {
-          print('Error parsing message: $e');
+          print('❌ Error parsing WebSocket message: $e');
         }
       }, onError: (error) {
-        print('WebSocket error: $error');
+        print('❌ WebSocket error: $error');
         _reconnect();
       }, onDone: () {
         print('WebSocket connection closed');

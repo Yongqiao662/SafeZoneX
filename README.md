@@ -143,7 +143,16 @@ Campus safety is a critical concern for educational institutions worldwide. Trad
 
 ## 🆕 Latest Updates & New Features
 
-### **Version 2.0 - Enhanced Safety & Navigation** 🎯
+### **Version 2.0 - AI-Powered Backend & Enhanced Safety** 🤖
+
+#### **🔗 AI-Powered Real-Time Backend**
+- **Advanced Face Verification**: AI-based identity verification using TensorFlow.js and face-api.js
+- **Image Authenticity Detection**: Detect manipulated or fake images in emergency reports
+- **Report Authenticity Analysis**: AI-driven analysis to identify suspicious or fake emergency reports
+- **Real-Time Synchronization**: WebSocket-based bidirectional communication between mobile and web
+- **Behavioral Pattern Analysis**: Monitor user behavior patterns to detect anomalies
+- **MongoDB Integration**: Scalable database with comprehensive user and alert management
+- **Security & Rate Limiting**: Advanced security measures with request validation and rate limiting
 
 #### **🔐 Face Verification System**
 - **AI-Powered Identity Verification**: Camera-based face verification before walking partnerships
@@ -189,6 +198,8 @@ Campus safety is a critical concern for educational institutions worldwide. Trad
 ### Prerequisites
 - **Flutter SDK** (3.0+) - [Download](https://flutter.dev/docs/get-started/install)
 - **Android Studio** - [Download](https://developer.android.com/studio)
+- **Node.js** (18+) - [Download](https://nodejs.org/)
+- **MongoDB** (5+) - [Download](https://www.mongodb.com/try/download/community)
 - **Google Maps API Key** - [Get API Key](https://console.cloud.google.com/)
 
 ### Installation
@@ -199,7 +210,25 @@ Campus safety is a critical concern for educational institutions worldwide. Trad
    cd SafeZoneX
    ```
 
-2. **Setup Google Maps API Key**
+2. **Setup AI-Powered Backend**
+   ```bash
+   cd backend
+   
+   # Windows
+   install.bat
+   
+   # Linux/Mac
+   chmod +x install.sh
+   ./install.sh
+   
+   # Or manual setup
+   npm install
+   cp .env.example .env
+   # Edit .env with your configuration
+   npm run setup
+   ```
+
+3. **Setup Google Maps API Key**
    ```bash
    # Get API key from Google Cloud Console
    # Enable: Maps SDK for Android, Directions API, Geocoding API
@@ -211,11 +240,24 @@ Campus safety is a critical concern for educational institutions worldwide. Trad
    GOOGLE_MAPS_API_KEY=your_actual_api_key_here
    ```
 
-3. **Install Dependencies & Run**
+4. **Start Backend Server**
+   ```bash
+   cd backend
+   npm run dev  # Development mode with auto-restart
+   # Server will run on http://localhost:8080
+   ```
+
+5. **Install Mobile Dependencies & Run**
    ```bash
    cd frontend/mobile
    flutter pub get
    flutter run
+   ```
+
+6. **Test the System**
+   ```bash
+   cd backend
+   node test/backend-test.js  # Run comprehensive backend tests
    ```
 
 ---
@@ -228,6 +270,18 @@ Campus safety is a critical concern for educational institutions worldwide. Trad
 - **Geolocator 9.0.2**: Location services
 - **Image Picker 1.0.4**: Camera integration for face verification
 - **HTTP 1.1.0**: API communication for directions
+
+### **AI-Powered Backend**
+- **Node.js 18+**: Runtime environment
+- **Express.js**: Web application framework
+- **Socket.io**: Real-time WebSocket communication
+- **MongoDB**: Document database with Mongoose ODM
+- **TensorFlow.js**: Machine learning framework
+- **Face-API.js**: Face detection and recognition
+- **Sharp**: High-performance image processing
+- **Winston**: Comprehensive logging system
+- **Helmet**: Security middleware
+- **Joi**: Input validation and sanitization
 
 ### **Web Dashboard**
 - **Flutter Web**: Responsive web application

@@ -1,0 +1,66 @@
+{
+  "model_name": "Naive Bayes",
+  "training_date": "2025-09-15T22:14:28.121181",
+  "version": "3.0_enhanced",
+  "test_accuracy": 0.7209302325581395,
+  "cv_mean": 0.921153846153846,
+  "cv_std": 0.04873903052633426,
+  "classification_report": {
+    "fake": {
+      "precision": 0.5555555555555556,
+      "recall": 0.38461538461538464,
+      "f1-score": 0.45454545454545453,
+      "support": 13.0
+    },
+    "real": {
+      "precision": 0.7647058823529411,
+      "recall": 0.8666666666666667,
+      "f1-score": 0.8125,
+      "support": 30.0
+    },
+    "accuracy": 0.7209302325581395,
+    "macro avg": {
+      "precision": 0.6601307189542484,
+      "recall": 0.6256410256410256,
+      "f1-score": 0.6335227272727273,
+      "support": 43.0
+    },
+    "weighted avg": {
+      "precision": 0.7014743882048943,
+      "recall": 0.7209302325581395,
+      "f1-score": 0.7042811839323467,
+      "support": 43.0
+    }
+  },
+  "confusion_matrix": [
+    [
+      5,
+      8
+    ],
+    [
+      4,
+      26
+    ]
+  ],
+  "flutter_category_accuracy": {
+    "Suspicious Person": 1.0,
+    "Theft/Robbery": 1.0,
+    "Vandalism": 1.0,
+    "Drug Activity": 1.0,
+    "Harassment": 1.0,
+    "Safety Hazard": 1.0,
+    "Unauthorized Access": 1.0,
+    "Other": 1.0
+  },
+  "notes": "Enhanced model with comprehensive dataset matching Flutter app categories",
+  "flutter_categories": [
+    "Suspicious Person",
+    "Theft/Robbery",
+    "Vandalism",
+    "Drug Activity",
+    "Harassment",
+    "Safety Hazard",
+    "Unauthorized Access",
+    "Other"
+  ]
+}

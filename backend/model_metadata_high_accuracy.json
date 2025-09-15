@@ -1,0 +1,45 @@
+{
+  "model_name": "Ensemble",
+  "training_date": "2025-09-15T23:31:27.276004",
+  "version": "4.0_high_accuracy",
+  "cv_mean": 0.9119999999999999,
+  "cv_std": 0.032496153618543834,
+  "test_accuracy": 0.9365079365079365,
+  "dataset_size": 275,
+  "real_examples_per_category": 25,
+  "total_categories": 8,
+  "features": "Advanced TF-IDF with 1-3 grams, 5000 features",
+  "algorithm": "Ensemble",
+  "all_model_results": {
+    "Naive Bayes": {
+      "cv_mean": 0.8400000000000001,
+      "cv_std": 0.04560701700396553,
+      "test_accuracy": 0.873015873015873
+    },
+    "Logistic Regression": {
+      "cv_mean": 0.908,
+      "cv_std": 0.041182520563948,
+      "test_accuracy": 0.9365079365079365
+    },
+    "Random Forest": {
+      "cv_mean": 0.844,
+      "cv_std": 0.05571355310873645,
+      "test_accuracy": 0.7936507936507936
+    },
+    "Gradient Boosting": {
+      "cv_mean": 0.8480000000000001,
+      "cv_std": 0.02039607805437116,
+      "test_accuracy": 0.8095238095238095
+    },
+    "SVM": {
+      "cv_mean": 0.8640000000000001,
+      "cv_std": 0.023323807579381222,
+      "test_accuracy": 0.8571428571428571
+    },
+    "Ensemble": {
+      "cv_mean": 0.9119999999999999,
+      "cv_std": 0.032496153618543834,
+      "test_accuracy": 0.9365079365079365
+    }
+  }
+}

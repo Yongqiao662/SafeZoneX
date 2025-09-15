@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'backend_test_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   @override
@@ -155,13 +156,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _buildSettingsTile(Icons.credit_card, 'Verify Credit Score'),
           _buildSettingsTile(Icons.notifications, 'Notifications'),
           _buildSettingsTile(Icons.help, 'Help & Support'),
+          _buildSettingsTile(Icons.developer_mode, 'AI Backend Test', onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const BackendTestScreen()),
+            );
+          }),
           _buildSettingsTile(Icons.logout, 'Sign Out', isDestructive: true),
         ],
       ),
     );
   }
 
-  Widget _buildSettingsTile(IconData icon, String title, {bool isDestructive = false}) {
+  Widget _buildSettingsTile(IconData icon, String title, {bool isDestructive = false, VoidCallback? onTap}) {
     return Container(
       decoration: BoxDecoration(
         border: Border(
@@ -187,7 +194,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Icons.chevron_right,
           color: Colors.white.withOpacity(0.5),
         ),
-        onTap: () {
+        onTap: onTap ?? () {
           // Handle settings tap
         },
       ),
