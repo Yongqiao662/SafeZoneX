@@ -9,6 +9,8 @@ class Friend {
   final bool isOnline;
   final String lastSeen;
   final String profileColor;
+  final String location;
+  final String locationUpdated;
 
   Friend({
     required this.id,
@@ -18,6 +20,24 @@ class Friend {
     required this.isOnline,
     required this.lastSeen,
     required this.profileColor,
+    required this.location,
+    required this.locationUpdated,
+  });
+}
+
+class ChatMessage {
+  final String id;
+  final String message;
+  final bool isMe;
+  final DateTime timestamp;
+  final String status; // sent, delivered, read
+
+  ChatMessage({
+    required this.id,
+    required this.message,
+    required this.isMe,
+    required this.timestamp,
+    this.status = 'delivered',
   });
 }
 
@@ -46,6 +66,8 @@ class _FriendsScreenState extends State<FriendsScreen>
       isOnline: true,
       lastSeen: 'Online',
       profileColor: 'purple',
+      location: 'Library - Level 3',
+      locationUpdated: '2 min ago',
     ),
     Friend(
       id: '2',
@@ -55,6 +77,8 @@ class _FriendsScreenState extends State<FriendsScreen>
       isOnline: false,
       lastSeen: '2 minutes ago',
       profileColor: 'blue',
+      location: 'Engineering Building',
+      locationUpdated: '15 min ago',
     ),
     Friend(
       id: '3',
@@ -64,6 +88,8 @@ class _FriendsScreenState extends State<FriendsScreen>
       isOnline: true,
       lastSeen: 'Online',
       profileColor: 'green',
+      location: 'Student Center',
+      locationUpdated: '1 min ago',
     ),
     Friend(
       id: '4',
@@ -73,6 +99,8 @@ class _FriendsScreenState extends State<FriendsScreen>
       isOnline: false,
       lastSeen: '1 hour ago',
       profileColor: 'orange',
+      location: 'Dormitory Block A',
+      locationUpdated: '1 hour ago',
     ),
   ];
 
@@ -81,12 +109,107 @@ class _FriendsScreenState extends State<FriendsScreen>
   String searchQuery = '';
   bool isSearching = false;
 
+  // Mock chat data for different friends
+  Map<String, List<ChatMessage>> chatHistory = {
+    '1': [
+      ChatMessage(
+        id: '1',
+        message: 'Hey! Are you free to walk to the dining hall together?',
+        isMe: false,
+        timestamp: DateTime.now().subtract(Duration(minutes: 30)),
+      ),
+      ChatMessage(
+        id: '2',
+        message: 'Sure! I\'m at the library right now. Give me 5 minutes?',
+        isMe: true,
+        timestamp: DateTime.now().subtract(Duration(minutes: 28)),
+      ),
+      ChatMessage(
+        id: '3',
+        message: 'Perfect! I\'ll wait for you at the main entrance',
+        isMe: false,
+        timestamp: DateTime.now().subtract(Duration(minutes: 25)),
+      ),
+      ChatMessage(
+        id: '4',
+        message: 'On my way! Thanks for walking with me 😊',
+        isMe: true,
+        timestamp: DateTime.now().subtract(Duration(minutes: 20)),
+      ),
+    ],
+    '2': [
+      ChatMessage(
+        id: '1',
+        message: 'Did you finish the assignment for Prof. Martinez?',
+        isMe: false,
+        timestamp: DateTime.now().subtract(Duration(hours: 2)),
+      ),
+      ChatMessage(
+        id: '2',
+        message: 'Yes! Want to study together for the exam next week?',
+        isMe: true,
+        timestamp: DateTime.now().subtract(Duration(hours: 1, minutes: 45)),
+      ),
+      ChatMessage(
+        id: '3',
+        message: 'Definitely! Library tomorrow at 3 PM?',
+        isMe: false,
+        timestamp: DateTime.now().subtract(Duration(hours: 1, minutes: 30)),
+      ),
+    ],
+    '3': [
+      ChatMessage(
+        id: '1',
+        message: 'Emergency! Lost my keys somewhere on campus',
+        isMe: false,
+        timestamp: DateTime.now().subtract(Duration(minutes: 45)),
+      ),
+      ChatMessage(
+        id: '2',
+        message: 'Oh no! Did you check the student center lost & found?',
+        isMe: true,
+        timestamp: DateTime.now().subtract(Duration(minutes: 40)),
+      ),
+      ChatMessage(
+        id: '3',
+        message: 'Found them! They were in my backpack pocket all along 🤦‍♀️',
+        isMe: false,
+        timestamp: DateTime.now().subtract(Duration(minutes: 35)),
+      ),
+      ChatMessage(
+        id: '4',
+        message: 'Haha classic! Glad you found them. Want to grab coffee?',
+        isMe: true,
+        timestamp: DateTime.now().subtract(Duration(minutes: 30)),
+      ),
+    ],
+    '4': [
+      ChatMessage(
+        id: '1',
+        message: 'Hey! Are you planning to attend the campus safety workshop tomorrow?',
+        isMe: true,
+        timestamp: DateTime.now().subtract(Duration(hours: 3)),
+      ),
+      ChatMessage(
+        id: '2',
+        message: 'I completely forgot about it! What time was it again?',
+        isMe: false,
+        timestamp: DateTime.now().subtract(Duration(hours: 2, minutes: 30)),
+      ),
+      ChatMessage(
+        id: '3',
+        message: '2 PM at the main auditorium. It\'s about the new SafeZoneX app!',
+        isMe: true,
+        timestamp: DateTime.now().subtract(Duration(hours: 2)),
+      ),
+    ],
+  };
+
   @override
   void initState() {
     super.initState();
     filteredFriends = allFriends;
     _initAnimations();
-    // Remove entry animation - set all animations to completed state immediately
     _fadeController.value = 1.0;
     _slideController.value = 1.0;
     _searchAnimationController.value = 1.0;
@@ -137,9 +260,7 @@ class _FriendsScreenState extends State<FriendsScreen>
         filteredFriends = allFriends;
         searchResults = [];
       } else {
-        // Search through all users (simulated database)
         searchResults = _simulateUserSearch(searchQuery);
-        // Filter existing friends
         filteredFriends = allFriends.where((friend) =>
           friend.name.toLowerCase().contains(searchQuery) ||
           friend.username.toLowerCase().contains(searchQuery) ||
@@ -150,7 +271,6 @@ class _FriendsScreenState extends State<FriendsScreen>
   }
 
   List<Friend> _simulateUserSearch(String query) {
-    // Simulate searching through a larger user database
     List<Friend> allUsers = [
       ...allFriends,
       Friend(
@@ -161,6 +281,8 @@ class _FriendsScreenState extends State<FriendsScreen>
         isOnline: false,
         lastSeen: 'Not added',
         profileColor: 'pink',
+        location: 'Unknown',
+        locationUpdated: 'Never',
       ),
       Friend(
         id: '6',
@@ -170,6 +292,8 @@ class _FriendsScreenState extends State<FriendsScreen>
         isOnline: true,
         lastSeen: 'Not added',
         profileColor: 'cyan',
+        location: 'Unknown',
+        locationUpdated: 'Never',
       ),
     ];
 
@@ -571,6 +695,35 @@ class _FriendsScreenState extends State<FriendsScreen>
                     ),
                   ],
                 ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.location_on,
+                      size: 12,
+                      color: Colors.blue.withOpacity(0.7),
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        friend.location,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.blue.withOpacity(0.8),
+                          fontWeight: FontWeight.w500,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Text(
+                      ' • ${friend.locationUpdated}',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.white.withOpacity(0.5),
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 4),
                 Text(
                   '@${friend.username}',
@@ -590,8 +743,8 @@ class _FriendsScreenState extends State<FriendsScreen>
               borderRadius: BorderRadius.circular(12),
             ),
             child: IconButton(
-              onPressed: () => _callFriend(friend),
-              icon: const Icon(Icons.call, color: Colors.white, size: 20),
+              onPressed: () => _openChat(friend),
+              icon: const Icon(Icons.chat_bubble_outline, color: Colors.white, size: 20),
             ),
           ),
         ],
@@ -742,8 +895,10 @@ class _FriendsScreenState extends State<FriendsScreen>
         isOnline: user.isOnline,
         lastSeen: user.isOnline ? 'Online' : 'Just added',
         profileColor: user.profileColor,
+        location: user.isOnline ? 'Campus Area' : 'Unknown',
+        locationUpdated: user.isOnline ? 'Just now' : 'Never',
       ));
-      _onSearchChanged(); // Refresh search results
+      _onSearchChanged();
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -759,61 +914,372 @@ class _FriendsScreenState extends State<FriendsScreen>
     );
   }
 
-  void _callFriend(Friend friend) {
-    HapticFeedback.mediumImpact();
+  void _openChat(Friend friend) {
+    HapticFeedback.lightImpact();
     
-    if (!friend.isOnline) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${friend.name} is currently offline'),
-          backgroundColor: Colors.orange,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          margin: const EdgeInsets.all(16),
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ChatScreen(
+          friend: friend,
+          messages: chatHistory[friend.id] ?? [],
         ),
-      );
-      return;
+      ),
+    );
+  }
+}
+
+// New Chat Screen
+class ChatScreen extends StatefulWidget {
+  final Friend friend;
+  final List<ChatMessage> messages;
+
+  const ChatScreen({
+    Key? key,
+    required this.friend,
+    required this.messages,
+  }) : super(key: key);
+
+  @override
+  _ChatScreenState createState() => _ChatScreenState();
+}
+
+class _ChatScreenState extends State<ChatScreen> {
+  final TextEditingController _messageController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  late List<ChatMessage> messages;
+
+  @override
+  void initState() {
+    super.initState();
+    messages = List.from(widget.messages);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFF1a1a2e),
+              Color(0xFF16213e),
+              Color(0xFF0f0f1e),
+            ],
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              _buildChatHeader(),
+              Expanded(
+                child: _buildMessagesList(),
+              ),
+              _buildMessageInput(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChatHeader() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        border: Border(
+          bottom: BorderSide(
+            color: Colors.white.withOpacity(0.1),
+            width: 1,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(Icons.arrow_back, color: Colors.white),
+          ),
+          _buildProfileAvatar(widget.friend, 40),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.friend.name,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+                Row(
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: widget.friend.isOnline ? Colors.green : Colors.grey,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      widget.friend.isOnline ? 'Online' : widget.friend.lastSeen,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: widget.friend.isOnline 
+                            ? Colors.green 
+                            : Colors.white.withOpacity(0.6),
+                      ),
+                    ),
+                    Text(
+                      ' • ${widget.friend.location}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.blue.withOpacity(0.7),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            onPressed: () => _showFriendOptions(),
+            icon: const Icon(Icons.more_vert, color: Colors.white),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfileAvatar(Friend friend, double size) {
+    Color avatarColor;
+    switch (friend.profileColor) {
+      case 'purple':
+        avatarColor = Colors.deepPurple;
+        break;
+      case 'blue':
+        avatarColor = Colors.blue;
+        break;
+      case 'green':
+        avatarColor = Colors.green;
+        break;
+      case 'orange':
+        avatarColor = Colors.orange;
+        break;
+      case 'pink':
+        avatarColor = Colors.pink;
+        break;
+      case 'cyan':
+        avatarColor = Colors.cyan;
+        break;
+      default:
+        avatarColor = Colors.deepPurple;
     }
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1a1a2e),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [avatarColor, avatarColor.withOpacity(0.7)],
         ),
-        title: Text(
-          'Call ${friend.name}',
-          style: const TextStyle(color: Colors.white),
-        ),
-        content: Text(
-          'Would you like to start a safety call with ${friend.name}?',
-          style: TextStyle(color: Colors.white.withOpacity(0.8)),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(
-              'Cancel',
-              style: TextStyle(color: Colors.white.withOpacity(0.7)),
-            ),
+        shape: BoxShape.circle,
+      ),
+      child: Center(
+        child: Text(
+          friend.name.split(' ').map((name) => name[0]).take(2).join(),
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: size * 0.35,
+            fontWeight: FontWeight.bold,
           ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _initiateCall(friend);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF6C5CE7),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMessagesList() {
+    return ListView.builder(
+      controller: _scrollController,
+      padding: const EdgeInsets.all(16),
+      itemCount: messages.length,
+      itemBuilder: (context, index) {
+        final message = messages[index];
+        return _buildMessageBubble(message);
+      },
+    );
+  }
+
+  Widget _buildMessageBubble(ChatMessage message) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        mainAxisAlignment: message.isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (!message.isMe) ...[
+            _buildProfileAvatar(widget.friend, 32),
+            const SizedBox(width: 8),
+          ],
+          Flexible(
+            child: Container(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.7,
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                gradient: message.isMe
+                    ? const LinearGradient(
+                        colors: [Color(0xFF6C5CE7), Color(0xFFA29BFE)],
+                      )
+                    : null,
+                color: message.isMe ? null : Colors.white.withOpacity(0.1),
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(16),
+                  topRight: const Radius.circular(16),
+                  bottomLeft: Radius.circular(message.isMe ? 16 : 4),
+                  bottomRight: Radius.circular(message.isMe ? 4 : 16),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    message.message,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _formatTime(message.timestamp),
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.6),
+                          fontSize: 11,
+                        ),
+                      ),
+                      if (message.isMe) ...[
+                        const SizedBox(width: 4),
+                        Icon(
+                          message.status == 'read' 
+                              ? Icons.done_all 
+                              : message.status == 'delivered'
+                                  ? Icons.done_all
+                                  : Icons.done,
+                          size: 14,
+                          color: message.status == 'read' 
+                              ? Colors.blue 
+                              : Colors.white.withOpacity(0.6),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
               ),
             ),
-            child: const Text(
-              'Call',
-              style: TextStyle(color: Colors.white),
+          ),
+          if (message.isMe) ...[
+            const SizedBox(width: 8),
+            Container(
+              width: 32,
+              height: 32,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.deepPurple, Colors.purpleAccent],
+                ),
+                shape: BoxShape.circle,
+              ),
+              child: const Center(
+                child: Text(
+                  'Me',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMessageInput() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        border: Border(
+          top: BorderSide(
+            color: Colors.white.withOpacity(0.1),
+            width: 1,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: TextField(
+                controller: _messageController,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  hintText: 'Type a message...',
+                  hintStyle: TextStyle(
+                    color: Colors.white.withOpacity(0.5),
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(24),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
+                  prefixIcon: IconButton(
+                    onPressed: () {
+                      // Emoji picker or attachment
+                    },
+                    icon: Icon(
+                      Icons.attach_file,
+                      color: Colors.white.withOpacity(0.6),
+                    ),
+                  ),
+                ),
+                maxLines: null,
+                textInputAction: TextInputAction.send,
+                onSubmitted: (text) => _sendMessage(),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF6C5CE7), Color(0xFFA29BFE)],
+              ),
+              shape: BoxShape.circle,
+            ),
+            child: IconButton(
+              onPressed: _sendMessage,
+              icon: const Icon(Icons.send, color: Colors.white),
             ),
           ),
         ],
@@ -821,17 +1287,159 @@ class _FriendsScreenState extends State<FriendsScreen>
     );
   }
 
-  void _initiateCall(Friend friend) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Calling ${friend.name}...'),
-        backgroundColor: const Color(0xFF6C5CE7),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+  void _sendMessage() {
+    if (_messageController.text.trim().isNotEmpty) {
+      setState(() {
+        messages.add(ChatMessage(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          message: _messageController.text.trim(),
+          isMe: true,
+          timestamp: DateTime.now(),
+          status: 'sent',
+        ));
+      });
+      
+      _messageController.clear();
+      
+      // Auto scroll to bottom
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollController.hasClients) {
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+
+      // Simulate friend response after 2 seconds
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) {
+          setState(() {
+            messages.add(ChatMessage(
+              id: DateTime.now().millisecondsSinceEpoch.toString(),
+              message: _getAutoResponse(),
+              isMe: false,
+              timestamp: DateTime.now(),
+            ));
+          });
+          
+          // Auto scroll to bottom for response
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (_scrollController.hasClients) {
+              _scrollController.animateTo(
+                _scrollController.position.maxScrollExtent,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOut,
+              );
+            }
+          });
+        }
+      });
+    }
+  }
+
+  String _getAutoResponse() {
+    final responses = [
+      "Thanks for the message! I'm currently busy but will get back to you soon.",
+      "Hey! Just saw your message. What's up?",
+      "I'm at ${widget.friend.location} right now. Want to meet up?",
+      "Sure thing! Let me know when you're free.",
+      "That sounds great! I'll check my schedule and let you know.",
+      "Thanks for checking in! I'm doing well, how about you?",
+    ];
+    
+    return responses[DateTime.now().millisecond % responses.length];
+  }
+
+  String _formatTime(DateTime timestamp) {
+    final now = DateTime.now();
+    final difference = now.difference(timestamp);
+    
+    if (difference.inMinutes < 1) {
+      return 'now';
+    } else if (difference.inHours < 1) {
+      return '${difference.inMinutes}m ago';
+    } else if (difference.inDays < 1) {
+      return '${difference.inHours}h ago';
+    } else {
+      return '${timestamp.day}/${timestamp.month}';
+    }
+  }
+
+  void _showFriendOptions() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFF1a1a2e),
+              Color(0xFF1e1a3e),
+              Color(0xFF0f0f1e),
+            ],
+          ),
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
+          ),
         ),
-        margin: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            ListTile(
+              leading: const Icon(Icons.location_on, color: Colors.blue),
+              title: const Text('Share Location', style: TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Location shared with friend')),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.directions_walk, color: Colors.green),
+              title: const Text('Walk Together', style: TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Walk request sent')),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.warning, color: Colors.red),
+              title: const Text('Emergency Alert', style: TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Emergency alert sent to friend')),
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _messageController.dispose();
+    _scrollController.dispose();
+    super.dispose();
   }
 }

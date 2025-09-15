@@ -2,6 +2,8 @@
 
 **Your Campus Safety in One Tap**
 
+_(Track: Campus Management)_ 
+
 SafeZoneX is a comprehensive campus safety application designed to provide students, faculty, and staff with immediate access to emergency services, real-time safety features, and community support systems.
 
 ---
@@ -158,7 +160,7 @@ Campus safety is a critical concern for educational institutions worldwide. Trad
 - **AI-Powered Identity Verification**: Camera-based face verification before walking partnerships
 - **Visual Feedback Interface**: Color-coded verification status (green for success, red for failure)
 - **Retry Mechanism**: User-friendly retry system with error handling
-- **75% Success Rate Simulation**: Realistic verification flow for development and testing
+- **85% Success Rate Simulation**: Realistic verification flow for development and testing
 - **Seamless Integration**: Smooth transition from verification to active walk
 
 #### **� Campus Safety Zone System**
