@@ -639,6 +639,90 @@ def test_high_accuracy_model():
         print(f"   {status} {category}: {prediction.upper()} ({confidence:.3f})")
         print(f"      '{text[:60]}...'")
 
+# Ensure vectorizer is loaded before usage
+vectorizer = joblib.load("tfidf_vectorizer_high_accuracy.pkl")
+
+# Ensure best_model is loaded before usage
+best_model = joblib.load("safety_report_classifier_high_accuracy.pkl")
+
+# Initialize metadata if not already defined
+try:
+    with open("model_metadata.json", "r") as f:
+        metadata = json.load(f)
+except FileNotFoundError:
+    metadata = {}
+
+# === CATEGORY-SPECIFIC VALIDATION (SafeZoneX) ===
+category_tests = {
+    "Suspicious Person": [
+        "A stranger is loitering near the dorm.",
+        "Someone is following me around campus."
+    ],
+    "Harassment": [
+        "A student is being verbally harassed.",
+        "Someone is making inappropriate comments."
+    ],
+    "Safety Hazard": [
+        "There is broken glass on the walkway.",
+        "The fire exit is blocked."
+    ],
+    "Theft": [
+        "My laptop was stolen from the library.",
+        "Someone snatched my bag in the cafeteria."
+    ],
+    "Vandalism": [
+        "Graffiti was found on the wall.",
+        "Someone broke a classroom window."
+    ],
+    "Lost Item": [
+        "I lost my phone near the sports hall.",
+        "My ID card is missing."
+    ],
+    "Fake/Spam": [
+        "Click this link to win a prize!",
+        "Get free money by signing up now."
+    ]
+}
+
+category_results = {}
+for category, examples in category_tests.items():
+    results = []
+    for text in examples:
+        X_input = vectorizer.transform([text])
+        probs = best_model.predict_proba(X_input)[0]
+        pred = best_model.predict(X_input)[0]
+        confidence = max(probs) * 100
+        results.append({
+            "input": text,
+            "predicted": pred,
+            "confidence": round(confidence, 2)
+        })
+    category_results[category] = results
+
+# Log results to console
+print("\n=== Category-Specific Validation ===")
+for category, results in category_results.items():
+    print(f"\n{category}:")
+    for r in results:
+        print(f"  Input: {r['input']}")
+        print(f"  Predicted: {r['predicted']} (Confidence: {r['confidence']}%)")
+
+# Update metadata file with category validation results
+metadata["category_validation"] = category_results
+with open("model_metadata.json", "w") as f:
+    json.dump(metadata, f, indent=4)
+
+# Load vectorizer and best_model
+vectorizer = joblib.load("tfidf_vectorizer_high_accuracy.pkl")
+best_model = joblib.load("safety_report_classifier_high_accuracy.pkl")
+
+# Initialize metadata if not already defined
+try:
+    with open("model_metadata.json", "r") as f:
+        metadata = json.load(f)
+except FileNotFoundError:
+    metadata = {}
+
 if __name__ == "__main__":
     print("🚀 SafeZoneX High-Accuracy ML Training")
     print("=" * 50)

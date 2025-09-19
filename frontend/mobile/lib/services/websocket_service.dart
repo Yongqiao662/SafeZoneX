@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'location_tracking_service.dart';
 
 class WebSocketService {
@@ -8,78 +9,67 @@ class WebSocketService {
   factory WebSocketService() => _instance;
   WebSocketService._internal();
 
-  WebSocket? _webSocket;
-  final StreamController<Map<String, dynamic>> _messageController = 
-      StreamController<Map<String, dynamic>>.broadcast();
-  
+  IO.Socket? _socket;
+  String? _jwtToken;
+  final StreamController<Map<String, dynamic>> _messageController = StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get messageStream => _messageController.stream;
-  bool get isConnected => _webSocket != null;
+  bool get isConnected => _socket != null && _socket!.connected;
 
-  Future<void> connect() async {
-    try {
-      // Auto-detect the correct WebSocket URL based on platform
-      String serverUrl;
-      
-      if (Platform.isAndroid) {
-        // Android emulator uses 10.0.2.2 to reach localhost
-        serverUrl = 'ws://10.0.2.2:8080';
-      } else if (Platform.isIOS) {
-        // iOS simulator can use localhost
-        serverUrl = 'ws://localhost:8080';
-      } else {
-        // Physical devices need your computer's IP address
-        // Replace 192.168.1.xxx with your actual IP from ipconfig
-        serverUrl = 'ws://192.168.1.100:8080'; // UPDATE THIS IP!
-      }
-      
-      print('🔌 Attempting WebSocket connection to $serverUrl');
-      _webSocket = await WebSocket.connect(serverUrl);
-      
-      print('✅ AI-powered WebSocket connected to SafeZoneX server');
-      
-      // Register as mobile client for AI notifications
+  /// Connect to Socket.IO server with JWT token for authentication
+  void connect(String token) {
+  _jwtToken = token;
+    String serverUrl;
+    if (Platform.isAndroid) {
+      serverUrl = 'http://10.0.2.2:8080';
+    } else if (Platform.isIOS) {
+      serverUrl = 'http://localhost:8080';
+    } else {
+      serverUrl = 'http://192.168.1.100:8080'; // UPDATE THIS IP!
+    }
+    print('🔌 Attempting Socket.IO connection to $serverUrl');
+    _socket = IO.io(serverUrl, <String, dynamic>{
+      'transports': ['websocket'],
+      'autoConnect': true,
+      'auth': {
+        'token': token,
+      },
+    });
+    _socket!.on('connect', (_) {
+      print('✅ Socket.IO connected to SafeZoneX server');
       sendMessage({
         'type': 'register',
         'clientType': 'mobile',
         'capabilities': ['threat_alerts', 'ai_analysis', 'real_time_updates'],
         'timestamp': DateTime.now().toIso8601String(),
       });
-      
-      _webSocket!.listen((message) {
-        try {
-          final data = json.decode(message);
-          print('📨 Received AI notification: ${data['type']}');
-          _messageController.add(data);
-        } catch (e) {
-          print('❌ Error parsing WebSocket message: $e');
-        }
-      }, onError: (error) {
-        print('❌ WebSocket error: $error');
-        _reconnect();
-      }, onDone: () {
-        print('WebSocket connection closed');
-        _reconnect();
-      });
-      
-    } catch (e) {
-      print('Failed to connect: $e');
+    });
+    _socket!.on('report_update', (data) {
+      print('📨 Received report_update: $data');
+      _messageController.add(Map<String, dynamic>.from(data));
+    });
+    _socket!.on('disconnect', (_) {
+      print('Socket.IO disconnected');
       _reconnect();
-    }
+    });
+    _socket!.on('error', (error) {
+      print('❌ Socket.IO error: $error');
+      _reconnect();
+    });
   }
 
   void _reconnect() {
     Future.delayed(const Duration(seconds: 5), () {
-      if (!isConnected) {
-        connect();
+      if (!isConnected && _jwtToken != null) {
+        connect(_jwtToken!);
       }
     });
   }
 
   void sendMessage(Map<String, dynamic> message) {
     if (isConnected) {
-      _webSocket!.add(json.encode(message));
+      _socket!.emit('message', message);
     } else {
-      print('WebSocket not connected, cannot send message');
+      print('Socket.IO not connected, cannot send message');
     }
   }
 
@@ -199,8 +189,8 @@ class WebSocketService {
   }
 
   void disconnect() {
-    _webSocket?.close();
-    _webSocket = null;
+    _socket?.disconnect();
+    _socket = null;
   }
 
   void dispose() {

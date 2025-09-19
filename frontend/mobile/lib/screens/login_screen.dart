@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import '../services/auth_service.dart'; // Make sure this exists and is implemented
 import 'main_dashboard_screen.dart';
 import 'signup_screen.dart';
 
@@ -9,25 +11,29 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> 
+class _LoginScreenState extends State<LoginScreen>
     with TickerProviderStateMixin {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
-  
+
   late AnimationController _fadeController;
   late AnimationController _slideController;
   late AnimationController _buttonController;
-  
+
   late Animation<double> _fadeAnim;
   late Animation<Offset> _slideAnim;
   late Animation<double> _logoScaleAnim;
   late Animation<double> _buttonScaleAnim;
-  
+
   bool _isLoading = false;
   bool _isPasswordVisible = false;
   bool _hasEmailError = false;
   bool _hasPasswordError = false;
+
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+  scopes: ['email', 'profile'],
+);
 
   @override
   void initState() {
@@ -41,12 +47,12 @@ class _LoginScreenState extends State<LoginScreen>
       vsync: this,
       duration: const Duration(milliseconds: 800),
     );
-    
+
     _slideController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1000),
     );
-    
+
     _buttonController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 200),
@@ -56,7 +62,7 @@ class _LoginScreenState extends State<LoginScreen>
       parent: _fadeController,
       curve: Curves.easeOut,
     );
-    
+
     _slideAnim = Tween<Offset>(
       begin: const Offset(0, 0.5),
       end: Offset.zero,
@@ -64,7 +70,7 @@ class _LoginScreenState extends State<LoginScreen>
       parent: _slideController,
       curve: Curves.easeOutCubic,
     ));
-    
+
     _logoScaleAnim = Tween<double>(
       begin: 0.5,
       end: 1.0,
@@ -72,7 +78,7 @@ class _LoginScreenState extends State<LoginScreen>
       parent: _fadeController,
       curve: Curves.elasticOut,
     ));
-    
+
     _buttonScaleAnim = Tween<double>(
       begin: 1.0,
       end: 0.95,
@@ -115,9 +121,9 @@ class _LoginScreenState extends State<LoginScreen>
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 32.0),
             child: SizedBox(
-              height: MediaQuery.of(context).size.height - 
-                     MediaQuery.of(context).padding.top - 
-                     MediaQuery.of(context).padding.bottom,
+              height: MediaQuery.of(context).size.height -
+                  MediaQuery.of(context).padding.top -
+                  MediaQuery.of(context).padding.bottom,
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -126,6 +132,8 @@ class _LoginScreenState extends State<LoginScreen>
                   _buildLoginForm(),
                   const SizedBox(height: 32),
                   _buildLoginButton(),
+                  const SizedBox(height: 16),
+                  _buildGoogleSignInButton(),
                   const SizedBox(height: 24),
                   _buildSignUpLink(),
                   const SizedBox(height: 40),
@@ -246,6 +254,10 @@ class _LoginScreenState extends State<LoginScreen>
           if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
             setState(() => _hasEmailError = true);
             return 'Please enter a valid email';
+          }
+          if (!value.toLowerCase().endsWith('.siswa.um.edu.my')) {
+            setState(() => _hasEmailError = true);
+            return 'Only .siswa.um.edu.my email addresses are allowed';
           }
           return null;
         },
@@ -420,6 +432,91 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
+  Widget _buildGoogleSignInButton() {
+    return SlideTransition(
+      position: _slideAnim,
+      child: SizedBox(
+        width: double.infinity,
+        child: ElevatedButton.icon(
+          icon: Image.asset(
+            'assets/google_logo.png', // Make sure this asset exists
+            height: 24,
+            width: 24,
+          ),
+          label: const Text(
+            'Sign in with Google',
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.redAccent,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 14),
+          ),
+          onPressed: _isLoading ? null : _handleGoogleSignIn,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleGoogleSignIn() async {
+    try {
+      setState(() => _isLoading = true);
+      
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signInSilently();
+      // If not signed in, try interactive sign-in
+      if (googleUser == null) {
+        final GoogleSignInAccount? interactiveUser = await _googleSignIn.signIn();
+        if (interactiveUser != null) {
+          await _processGoogleUser(interactiveUser);
+        }
+      } else {
+        await _processGoogleUser(googleUser);
+      }
+    } catch (error) {
+      print('Error during Google Sign-In: $error');
+      _showErrorSnackBar('Google Sign-In failed: $error');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _processGoogleUser(GoogleSignInAccount googleUser) async {
+    // Check if the email is from the allowed domain
+    if (!googleUser.email.toLowerCase().endsWith('.siswa.um.edu.my')) {
+      _showErrorSnackBar('Only .siswa.um.edu.my email addresses are allowed');
+      await _googleSignIn.signOut(); // Sign out the user
+      return;
+    }
+
+    final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+    final String? idToken = googleAuth.idToken;
+    final String? accessToken = googleAuth.accessToken;
+    
+    if (idToken != null && accessToken != null) {
+      print('Google ID Token: $idToken');
+      
+      // Use AuthService to handle the Google sign-in
+      final authService = AuthService();
+      final result = await authService.signInWithGoogle(idToken, accessToken);
+      
+      if (result['success']) {
+        _showSuccessSnackBar('Welcome, ${result['user']['name']}!');
+        await _exitAnimation();
+        _navigateToHome();
+      } else {
+        _showErrorSnackBar(result['message']);
+      }
+    } else {
+      _showErrorSnackBar('Failed to get authentication tokens');
+    }
+  }
+
   Widget _buildSignUpLink() {
     return SlideTransition(
       position: _slideAnim,
@@ -458,7 +555,7 @@ class _LoginScreenState extends State<LoginScreen>
 
   Future<void> _login(BuildContext context) async {
     if (_isLoading) return;
-    
+
     if (!_formKey.currentState!.validate()) {
       _shakeForm();
       return;
@@ -467,15 +564,23 @@ class _LoginScreenState extends State<LoginScreen>
     setState(() => _isLoading = true);
 
     try {
-      // Simulate network delay
-      await Future.delayed(const Duration(seconds: 2));
-      await _exitAnimation();
-      _navigateToHome();
-    } catch (e) {
-      if (mounted) {
-        _showErrorSnackBar('Login failed: ${e.toString()}');
-        setState(() => _isLoading = false);
+      final authService = AuthService();
+      final result = await authService.signInWithEmail(
+        _emailController.text.trim(),
+        _passwordController.text,
+      );
+
+      if (result['success']) {
+        _showSuccessSnackBar('Welcome back, ${result['user']['name']}!');
+        await _exitAnimation();
+        _navigateToHome();
+      } else {
+        _showErrorSnackBar(result['message']);
       }
+    } catch (e) {
+      _showErrorSnackBar('Login failed: $e');
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
@@ -505,12 +610,28 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green.shade600,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
   void _navigateToHome() {
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 800),
-        pageBuilder: (context, animation, secondaryAnimation) => MainDashboardScreen(),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            MainDashboardScreen(),
+        transitionsBuilder:
+            (context, animation, secondaryAnimation, child) {
           final slideAnimation = Tween<Offset>(
             begin: const Offset(1.0, 0.0),
             end: Offset.zero,
@@ -518,12 +639,12 @@ class _LoginScreenState extends State<LoginScreen>
             parent: animation,
             curve: Curves.easeOutCubic,
           ));
-          
+
           final fadeAnimation = CurvedAnimation(
             parent: animation,
             curve: const Interval(0.3, 1.0, curve: Curves.easeOut),
           );
-          
+
           return SlideTransition(
             position: slideAnimation,
             child: FadeTransition(

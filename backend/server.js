@@ -2,41 +2,18 @@
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 
-// Debugging dotenv configuration
-console.log('Environment Variables:', process.env);
-
-// Check if MONGODB_URI is loaded
-if (!process.env.MONGODB_URI) {
-  console.error('❌ MONGODB_URI is not defined in environment variables');
-} else {
-  console.log('✅ MONGODB_URI:', process.env.MONGODB_URI);
-}
-
-// Explicitly log the path to the .env file
-const fs = require('fs');
-const envPath = path.resolve(__dirname, '.env');
-if (fs.existsSync(envPath)) {
-  console.log('✅ .env file found at:', envPath);
-} else {
-  console.error('❌ .env file not found at:', envPath);
-}
-
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
-const cors = require('cors');
-const helmet = require('helmet');
-const compression = require('compression');
-const rateLimit = require('express-rate-limit');
 const mongoose = require('mongoose');
-const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 const winston = require('winston');
+const jwt = require('jsonwebtoken');
 
 // Import models
 const Alert = require('./models/Alert');
+const Feedback = require('./models/Feedback');
 const User = require('./models/User');
-const WalkSession = require('./models/WalkSession');
 
 // Configure logging
 const logger = winston.createLogger({
@@ -47,8 +24,6 @@ const logger = winston.createLogger({
     winston.format.json()
   ),
   transports: [
-    new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
-    new winston.transports.File({ filename: 'logs/combined.log' }),
     new winston.transports.Console({
       format: winston.format.simple()
     })
@@ -57,50 +32,12 @@ const logger = winston.createLogger({
 
 const app = express();
 const server = http.createServer(app);
+const io = socketIo(server);
 
-// Security middleware
-app.use(helmet());
-app.use(compression());
-
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again later.'
-});
-app.use('/api/', limiter);
-
-// Configure CORS for Socket.IO
-const io = socketIo(server, {
-  cors: {
-    origin: process.env.ALLOWED_ORIGINS?.split(',') || "*",
-    methods: ["GET", "POST"],
-    credentials: true
-  }
-});
-
-app.use(cors());
 app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Configure multer for file uploads
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB limit
-  },
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only image files are allowed'), false);
-    }
-  }
-});
-
-// Updated MongoDB connection string
+// MongoDB connection
 const mongoURI = process.env.MONGODB_URI;
-
 mongoose.connect(mongoURI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
@@ -111,679 +48,359 @@ mongoose.connect(mongoURI, {
   process.exit(1);
 });
 
-// Store active connections
-let connectedClients = {
-  mobile: new Map(),
-  web: new Map()
-};
-
 // Active alerts cache
 let alertsCache = new Map();
 
-// Initialize AI services
-async function initializeAIServices() {
+// API to submit a report
+app.post('/api/report', async (req, res) => {
   try {
-    logger.info('🤖 Initializing AI services...');
-    logger.info('✅ AI services initialized successfully');
+    // Extract and validate required fields
+    const {
+      userId,
+      userName,
+      userPhone,
+      location,
+      description,
+      evidenceImages,
+      alertType,
+      priority
+    } = req.body;
+
+    // Re-enable validation for userId, userName, and userPhone
+    if (!userId || !userName || !userPhone) {
+      return res.status(400).json({ error: 'Missing required user fields (userId, userName, userPhone)' });
+    }
+    if (!location || typeof location.latitude !== 'number' || typeof location.longitude !== 'number') {
+      return res.status(400).json({ error: 'Missing or invalid location (latitude, longitude required)' });
+    }
+
+    const reportId = uuidv4();
+    let initialConfidence = 50;
+    if (description && description.length > 20) initialConfidence += 10;
+    if (description && /theft|robbery|vandalism|harassment|drug/i.test(description)) initialConfidence += 10;
+    if (evidenceImages && evidenceImages.length > 0) initialConfidence += 10;
+    if (initialConfidence > 90) initialConfidence = 90;
+
+    let status = 'pending';
+    let aiAnalysis = null;
+
+    // Build alert object for MongoDB
+    const alertData = {
+      alertId: reportId,
+      userId,
+      userName,
+      userPhone,
+      location: {
+        latitude: location.latitude,
+        longitude: location.longitude,
+        address: location.address || '',
+        campus: location.campus || 'University Malaya'
+      },
+      description: description || '',
+      evidenceImages: Array.isArray(evidenceImages) ? evidenceImages : [],
+      alertType: alertType || 'emergency',
+      priority: priority || 'high',
+      status,
+      createdAt: new Date()
+    };
+
+    // If confidence > 70%, skip AI analysis
+    if (initialConfidence > 70) {
+      status = 'real';
+      aiAnalysis = {
+        confidence: initialConfidence,
+        details: 'High confidence (auto-classified as real)'
+      };
+      alertData.status = status;
+      alertData.aiAnalysis = aiAnalysis;
+      logger.info(`🚨 New report submitted: ${reportId} (auto-classified as real)`);
+      const newAlert = new Alert(alertData);
+      await newAlert.save();
+      alertsCache.set(reportId, newAlert);
+      res.json({ success: true, reportId });
+      io.emit('report_update', {
+        alertId: reportId,
+        status,
+        aiAnalysis
+      });
+    } else if (initialConfidence >= 50 && initialConfidence <= 70) {
+      logger.info(`🚨 New report submitted: ${reportId} (pending AI analysis)`);
+      const newAlert = new Alert(alertData);
+      await newAlert.save();
+      alertsCache.set(reportId, newAlert);
+      res.json({ success: true, reportId });
+      analyzeReport(newAlert);
+    } else {
+      status = 'pending_review';
+      aiAnalysis = {
+        confidence: initialConfidence,
+        details: 'Low confidence, pending manual review'
+      };
+      alertData.status = status;
+      alertData.aiAnalysis = aiAnalysis;
+      logger.info(`🚨 New report submitted: ${reportId} (pending manual review)`);
+      const newAlert = new Alert(alertData);
+      await newAlert.save();
+      alertsCache.set(reportId, newAlert);
+      res.json({ success: true, reportId });
+      io.emit('report_update', {
+        alertId: reportId,
+        status,
+        aiAnalysis
+      });
+    }
   } catch (error) {
-    logger.error('❌ Failed to initialize AI services:', error);
+    logger.error('Error submitting report:', error && error.stack ? error.stack : error);
+    res.status(500).json({ error: 'Failed to submit report' });
+  }
+});
+
+// Signup or profile update endpoint
+app.post('/api/user/signup', async (req, res) => {
+  try {
+    const {
+      userId,
+      email,
+      name,
+      phone,
+      studentId,
+      profilePicture,
+      faceDescriptors,
+      emergencyContacts,
+      location,
+      isVerified,
+      verificationScore,
+      safetyRating,
+      totalWalks,
+      isActive,
+      joinedAt,
+      lastSeen
+    } = req.body;
+
+    let user = await User.findOne({ email });
+    if (user) {
+      // Update profile if exists
+      user.userId = userId || user.userId;
+      user.name = name || user.name;
+      user.phone = phone || user.phone;
+      user.studentId = studentId || user.studentId;
+      user.profilePicture = profilePicture || user.profilePicture;
+      user.faceDescriptors = faceDescriptors || user.faceDescriptors;
+      user.emergencyContacts = emergencyContacts || user.emergencyContacts;
+      user.location = location || user.location;
+      user.isVerified = isVerified !== undefined ? isVerified : user.isVerified;
+      user.verificationScore = verificationScore !== undefined ? verificationScore : user.verificationScore;
+      user.safetyRating = safetyRating !== undefined ? safetyRating : user.safetyRating;
+      user.totalWalks = totalWalks !== undefined ? totalWalks : user.totalWalks;
+      user.isActive = isActive !== undefined ? isActive : user.isActive;
+      user.joinedAt = joinedAt || user.joinedAt;
+      user.lastSeen = lastSeen || user.lastSeen;
+      user.updatedAt = new Date();
+      await user.save();
+      return res.json({ success: true, user, message: 'Profile updated.' });
+    }
+
+    // Create new user
+    user = new User({
+      userId,
+      email,
+      name,
+      phone,
+      studentId,
+      profilePicture,
+      faceDescriptors,
+      emergencyContacts,
+      location,
+      isVerified,
+      verificationScore,
+      safetyRating,
+      totalWalks,
+      isActive,
+      joinedAt,
+      lastSeen
+    });
+    await user.save();
+    res.json({ success: true, user, message: 'User created.' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'User creation failed.', error: error.message });
+  }
+});
+
+// Import required modules for AI analysis
+const fs = require('fs');
+const { spawn } = require('child_process');
+
+// AI analysis function
+async function analyzeReport(alert) {
+  try {
+    logger.info(`🤖 Analyzing report: ${alert.alertId}`);
+
+    // Use high accuracy model and vectorizer
+    const scriptPath = path.resolve(__dirname, 'models', 'quick_test.py');
+    const modelPath = path.resolve(__dirname, 'safety_report_classifier_high_accuracy.pkl');
+    const vectorizerPath = path.resolve(__dirname, 'tfidf_vectorizer_high_accuracy.pkl');
+
+    // Prepare input data for the Python script
+    const inputData = JSON.stringify({
+      description: alert.description,
+      location: alert.location,
+      evidenceImages: alert.evidenceImages
+    });
+
+    // Spawn a Python process to run the analysis
+    const pythonProcess = spawn('python', [scriptPath, modelPath, vectorizerPath]);
+
+    let result = '';
+    pythonProcess.stdout.on('data', (data) => {
+      result += data.toString();
+    });
+
+    pythonProcess.stderr.on('data', (data) => {
+      logger.error(`Python error: ${data.toString()}`);
+    });
+
+    pythonProcess.on('close', async (code) => {
+      if (code === 0) {
+        const analysisResult = JSON.parse(result);
+        const confidence = analysisResult.confidence;
+        let status = 'pending_review';
+        let sendToDashboard = false;
+        let details = analysisResult.details;
+
+        if (confidence > 70) {
+          status = 'real';
+          sendToDashboard = true;
+          details = 'High confidence: classified as real';
+        } else if (confidence >= 50 && confidence <= 70) {
+          status = 'likely_real';
+          sendToDashboard = true;
+          details = `Confidence ${confidence}%: likely to be real`;
+        } else {
+          status = 'filtered';
+          sendToDashboard = false;
+          details = 'Low confidence: filtered out';
+        }
+
+        alert.status = status;
+        alert.aiAnalysis = {
+          confidence,
+          details
+        };
+        await alert.save();
+
+        logger.info(`✅ Report analysis complete: ${alert.alertId} (${status})`);
+
+        // Only send to dashboard if confidence >= 50%
+        if (sendToDashboard) {
+          io.emit('report_update', {
+            alertId: alert.alertId,
+            status,
+            aiAnalysis: alert.aiAnalysis
+          });
+        }
+
+        // Feedback loop for likely_real
+        if (status === 'likely_real') {
+          requestFeedback(alert);
+        }
+      } else {
+        logger.error(`Python script exited with code ${code}`);
+
+        // Graceful fallback
+        alert.status = 'pending_review';
+        await alert.save();
+        io.emit('report_update', {
+          alertId: alert.alertId,
+          status: 'pending_review'
+        });
+      }
+    });
+
+    // Send input data to the Python process
+    pythonProcess.stdin.write(inputData);
+    pythonProcess.stdin.end();
+  } catch (error) {
+    logger.error('Error analyzing report:', error);
+
+    // Graceful fallback
+    alert.status = 'pending_review';
+    await alert.save();
+    io.emit('report_update', {
+      alertId: alert.alertId,
+      status: 'pending_review'
+    });
   }
 }
 
-// Call initialization
-initializeAIServices();
-
-// API Routes
-
-// Health check endpoint
-app.get('/', (req, res) => {
-  res.json({
-    message: 'SafeZoneX AI-Powered Backend Server',
-    version: '2.0.0',
-    status: 'running',
-    services: {
-      database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
-      faceVerification: 'disabled'
-    },
-    statistics: {
-      activeAlerts: alertsCache.size,
-      connectedClients: {
-        mobile: connectedClients.mobile.size,
-        web: connectedClients.web.size
-      }
-    },
-    timestamp: new Date().toISOString()
+// Feedback loop function
+function requestFeedback(alert) {
+  logger.info(`🔄 Requesting feedback for report: ${alert.alertId}`);
+  io.emit('feedback_request', {
+    alertId: alert.alertId,
+    message: 'Please provide feedback on this report.'
   });
+}
+
+// Implemented Socket.IO authentication
+// DEVELOPMENT ONLY: Disable JWT authentication for Socket.IO
+// WARNING: Remove this in production!
+io.use((socket, next) => {
+  // Allow all connections without authentication
+  next();
 });
 
-// Get all alerts with pagination
-app.get('/api/alerts', async (req, res) => {
-  try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
-    const status = req.query.status;
-
-    const query = status ? { status } : {};
-    
-    const alerts = await Alert.find(query)
-      .sort({ createdAt: -1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
-
-    const total = await Alert.countDocuments(query);
-
-    res.json({
-      alerts,
-      pagination: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit)
-      }
-    });
-  } catch (error) {
-    logger.error('Error fetching alerts:', error);
-    res.status(500).json({ error: 'Failed to fetch alerts' });
-  }
-});
-
-// Register face descriptors for new user
-app.post('/api/register-face', upload.single('profileImage'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'Profile image is required' });
-    }
-
-    const { userId, email, name, phone, studentId } = req.body;
-    
-    if (!userId || !email || !name || !phone || !studentId) {
-      return res.status(400).json({ error: 'All user details are required' });
-    }
-
-    // Convert image to base64 for storage
-    const profilePictureBase64 = req.file.buffer.toString('base64');
-
-    // Create or update user
-    const user = await User.findOneAndUpdate(
-      { userId },
-      {
-        userId,
-        email,
-        name,
-        phone,
-        studentId,
-        profilePicture: profilePictureBase64,
-        isVerified: true,
-        verificationScore: 100,
-        lastSeen: new Date()
-      },
-      { upsert: true, new: true }
-    );
-
-    logger.info(`👤 User face registered: ${userId} (${name})`);
-
-    res.json({
-      success: true,
-      message: 'Face registered successfully',
-      user: {
-        userId: user.userId,
-        name: user.name,
-        email: user.email,
-        isVerified: user.isVerified,
-        verificationScore: user.verificationScore
-      },
-      faceAnalysis: {
-        confidence: 100,
-        quality: 'good'
-      }
-    });
-
-  } catch (error) {
-    logger.error('Face registration error:', error);
-    res.status(500).json({ 
-      error: 'Face registration failed',
-      details: error.message 
-    });
-  }
-});
-
-// WebSocket connection handling
 io.on('connection', (socket) => {
-  logger.info(`🔌 Client connected: ${socket.id}`);
-  
-  // Handle client type registration
-  socket.on('register', async (data) => {
-    try {
-      const { type, userId, userInfo } = data;
-      socket.clientType = type;
-      socket.userId = userId;
-      
-      if (type === 'mobile') {
-        connectedClients.mobile.set(socket.id, {
-          userId,
-          userInfo,
-          connectedAt: new Date(),
-          lastActivity: new Date()
-        });
-        
-        logger.info(`📱 Mobile client registered: ${socket.id} (User: ${userId})`);
-        
-        // Update user last seen
-        if (userId) {
-          await User.updateOne(
-            { userId },
-            { 
-              $set: { 
-                lastSeen: new Date(),
-                isActive: true 
-              } 
-            }
-          );
-        }
-      } else if (type === 'web') {
-        connectedClients.web.set(socket.id, {
-          connectedAt: new Date(),
-          lastActivity: new Date()
-        });
-        
-        logger.info(`🖥️ Web dashboard registered: ${socket.id}`);
-        
-        // Send existing active alerts to web dashboard
-        const activeAlerts = await Alert.find({ status: 'active' })
-          .sort({ createdAt: -1 })
-          .limit(50);
-        
-        socket.emit('existing_alerts', activeAlerts);
-      }
-      
-      // Broadcast updated connection count
-      io.emit('connection_update', {
-        mobile: connectedClients.mobile.size,
-        web: connectedClients.web.size,
-        timestamp: new Date().toISOString()
-      });
-      
-    } catch (error) {
-      logger.error('Registration error:', error);
-      socket.emit('error', { message: 'Registration failed' });
-    }
-  });
-  
-  // Handle SOS alerts with AI analysis
-  socket.on('sos_alert', async (alertData) => {
-    try {
-      logger.info('🚨 SOS ALERT RECEIVED:', alertData);
-      
-      const alertId = alertData.id || uuidv4();
-      
-      // Get user history for authenticity analysis
-      const userHistory = await User.findOne({ userId: alertData.userId });
-      
-      // Analyze report authenticity
-      const authenticityAnalysis = await ReportAuthenticityService.analyzeReportAuthenticity(
-        alertData,
-        userHistory
-      );
-      
-      // Analyze evidence images if provided
-      let imageAnalysis = null;
-      if (alertData.evidenceImages && alertData.evidenceImages.length > 0) {
-        const imageBuffer = Buffer.from(alertData.evidenceImages[0].imageData, 'base64');
-        imageAnalysis = await ReportAuthenticityService.analyzeImageAuthenticity(imageBuffer);
-      }
-      
-      // Create alert with AI analysis
-      const alert = new Alert({
-        alertId,
-        userId: alertData.userId,
-        userName: alertData.userName,
-        userPhone: alertData.userPhone,
-        alertType: alertData.alertType || 'emergency',
-        status: 'active',
-        priority: authenticityAnalysis.riskLevel === 'low' ? 'high' : 
-                 authenticityAnalysis.riskLevel === 'medium' ? 'critical' : 'medium',
-        location: {
-          latitude: alertData.latitude,
-          longitude: alertData.longitude,
-          address: alertData.address,
-          campus: 'University Malaya'
-        },
-        description: alertData.additionalInfo || alertData.description,
-        evidenceImages: alertData.evidenceImages?.map(img => ({
-          imageData: img.imageData,
-          timestamp: new Date(),
-          verified: imageAnalysis?.genuine || false,
-          aiAnalysis: imageAnalysis ? {
-            genuineScore: imageAnalysis.score,
-            manipulationDetected: imageAnalysis.manipulationDetected,
-            analysisDetails: imageAnalysis.details?.summary
-          } : null
-        })),
-        aiAnalysis: {
-          reportGenuineness: {
-            score: authenticityAnalysis.score,
-            factors: authenticityAnalysis.flags,
-            riskLevel: authenticityAnalysis.riskLevel
-          },
-          locationVerification: authenticityAnalysis.analyses?.locationAnalysis || {},
-          behaviorAnalysis: authenticityAnalysis.analyses?.behaviorAnalysis || {}
-        },
-        timeline: [{
-          action: 'Alert Created',
-          timestamp: new Date(),
-          performer: 'System',
-          details: `Alert received with ${authenticityAnalysis.score}% authenticity score`
-        }],
-        metadata: alertData.metadata || {}
-      });
-      
-      // Save to database
-      await alert.save();
-      
-      // Cache for quick access
-      alertsCache.set(alertId, alert);
-      
-      // Prepare alert for broadcast
-      const alertForBroadcast = {
-        ...alert.toObject(),
-        serverTimestamp: new Date().toISOString(),
-        aiFlags: authenticityAnalysis.riskLevel !== 'low' ? {
-          riskLevel: authenticityAnalysis.riskLevel,
-          flags: authenticityAnalysis.flags.slice(0, 3), // Limit flags for UI
-          recommendations: authenticityAnalysis.recommendations.slice(0, 2)
-        } : null
-      };
-      
-      // Broadcast to all web dashboards with AI analysis
-      io.emit('sos_alert', {
-        type: 'sos_alert',
-        payload: alertForBroadcast
-      });
-      
-      // Send SMS/notifications to emergency contacts if high confidence
-      if (authenticityAnalysis.score > 70) {
-        // Implement emergency notifications here
-        logger.info(`📞 High confidence alert - triggering emergency notifications`);
-      }
-      
-      logger.info(`📡 Alert ${alertId} broadcasted to ${connectedClients.web.size} web clients (Authenticity: ${authenticityAnalysis.score}%)`);
-      
-    } catch (error) {
-      logger.error('SOS alert processing error:', error);
-      socket.emit('error', { 
-        message: 'Failed to process SOS alert',
-        details: error.message 
-      });
-    }
-  });
-  
-  // Handle alert acknowledgment
-  socket.on('acknowledge_alert', async (data) => {
-    try {
-      logger.info('✅ Alert acknowledged:', data.alertId);
-      
-      const update = {
-        status: 'acknowledged',
-        acknowledgedAt: new Date(),
-        acknowledgedBy: data.acknowledgedBy || 'Security Team',
-        $push: {
-          timeline: {
-            action: 'Alert Acknowledged',
-            timestamp: new Date(),
-            performer: data.acknowledgedBy || 'Security Team',
-            details: data.notes || 'Alert acknowledged by security team'
-          }
-        }
-      };
-      
-      await Alert.updateOne({ alertId: data.alertId }, update);
-      
-      // Update cache
-      const cachedAlert = alertsCache.get(data.alertId);
-      if (cachedAlert) {
-        Object.assign(cachedAlert, update);
-      }
-      
-      // Broadcast update
-      io.emit('alert_update', {
-        type: 'acknowledge_alert',
-        alertId: data.alertId,
-        status: 'acknowledged',
-        timestamp: new Date().toISOString(),
-        acknowledgedBy: data.acknowledgedBy
-      });
-      
-    } catch (error) {
-      logger.error('Alert acknowledgment error:', error);
-      socket.emit('error', { message: 'Failed to acknowledge alert' });
-    }
-  });
-  
-  // Handle alert resolution
-  socket.on('resolve_alert', async (data) => {
-    try {
-      logger.info('✅ Alert resolved:', data.alertId);
-      
-      const resolvedAt = new Date();
-      const alert = await Alert.findOne({ alertId: data.alertId });
-      
-      if (alert) {
-        const responseTime = Math.floor((resolvedAt - alert.createdAt) / 1000);
-        
-        const update = {
-          status: 'resolved',
-          resolvedAt,
-          resolvedBy: data.resolvedBy || 'Security Team',
-          responseTime,
-          $push: {
-            timeline: {
-              action: 'Alert Resolved',
-              timestamp: resolvedAt,
-              performer: data.resolvedBy || 'Security Team',
-              details: data.resolution || 'Alert resolved successfully'
-            }
-          }
-        };
-        
-        await Alert.updateOne({ alertId: data.alertId }, update);
-        
-        // Remove from cache
-        alertsCache.delete(data.alertId);
-        
-        // Broadcast update
-        io.emit('alert_update', {
-          type: 'resolve_alert',
-          alertId: data.alertId,
-          status: 'resolved',
-          timestamp: resolvedAt.toISOString(),
-          resolvedBy: data.resolvedBy,
-          responseTime
-        });
-      }
-      
-    } catch (error) {
-      logger.error('Alert resolution error:', error);
-      socket.emit('error', { message: 'Failed to resolve alert' });
-    }
-  });
-  
-  // Handle face verification requests
-  socket.on('verify_face_for_walk', async (data) => {
-    try {
-      const { userId, partnerId, imageData, sessionId } = data;
-      
-      if (!userId || !imageData) {
-        socket.emit('verification_error', { message: 'Missing required data' });
-        return;
-      }
-      
-      // Get user's face descriptors
-      const user = await User.findOne({ userId });
-      if (!user || !user.faceDescriptors) {
-        socket.emit('verification_error', { message: 'User face data not found' });
-        return;
-      }
-      
-      // Convert base64 to buffer
-      const imageBuffer = Buffer.from(imageData, 'base64');
-      
-      // Update walk session if provided
-      if (sessionId) {
-        await WalkSession.updateOne(
-          { sessionId },
-          {
-            $set: {
-              [`faceVerification.${userId === partnerId ? 'partner' : 'requester'}Verified`]: true,
-              [`faceVerification.${userId === partnerId ? 'partner' : 'requester'}Confidence`]: 100,
-              'faceVerification.verificationTimestamp': new Date()
-            }
-          }
-        );
-      }
-      
-      socket.emit('face_verification_result', {
-        userId,
-        sessionId,
-        verified: true,
-        confidence: 100
-      });
-      
-      // Notify partner if verification successful
-      if (partnerId) {
-        const partnerSocket = Array.from(connectedClients.mobile.entries())
-          .find(([_, client]) => client.userId === partnerId)?.[0];
-          
-        if (partnerSocket) {
-          io.to(partnerSocket).emit('partner_verified', {
-            userId,
-            sessionId,
-            verified: true
-          });
-        }
-      }
-      
-      logger.info(`🎭 Walk verification for ${userId}: SUCCESS`);
-      
-    } catch (error) {
-      logger.error('Face verification error:', error);
-      socket.emit('verification_error', { 
-        message: 'Verification failed',
-        details: error.message 
-      });
-    }
-  });
-  
-  // Handle walking partner requests
-  socket.on('walking_partner_request', async (data) => {
-    try {
-      logger.info('👥 Walking partner request:', data);
-      
-      // Create walk session
-      const session = new WalkSession({
-        sessionId: data.sessionId || uuidv4(),
-        requesterId: data.requesterId,
-        status: 'pending',
-        startLocation: data.startLocation,
-        endLocation: data.endLocation,
-        plannedRoute: data.plannedRoute
-      });
-      
-      await session.save();
-      
-      // Broadcast to nearby mobile clients
-      const nearbyClients = Array.from(connectedClients.mobile.entries())
-        .filter(([socketId, client]) => {
-          // Filter by proximity logic here
-          return client.userId !== data.requesterId;
-        });
-      
-      nearbyClients.forEach(([socketId]) => {
-        io.to(socketId).emit('partner_request_notification', {
-          ...data,
-          sessionId: session.sessionId
-        });
-      });
-      
-    } catch (error) {
-      logger.error('Walking partner request error:', error);
-      socket.emit('error', { message: 'Failed to process partner request' });
-    }
-  });
-  
-  // Handle real-time location updates
-  socket.on('location_update', async (data) => {
-    try {
-      const { userId, latitude, longitude, sessionId } = data;
-      
-      // Update user location
-      if (userId) {
-        await User.updateOne(
-          { userId },
-          {
-            $set: {
-              'location.latitude': latitude,
-              'location.longitude': longitude,
-              'location.lastUpdated': new Date(),
-              lastActivity: new Date()
-            }
-          }
-        );
-      }
-      
-      // Update walk session if applicable
-      if (sessionId) {
-        await WalkSession.updateOne(
-          { sessionId },
-          {
-            $set: {
-              'realTimeTracking.lastUpdated': new Date(),
-              'realTimeTracking.currentLocation': {
-                latitude,
-                longitude
-              }
-            }
-          }
-        );
-        
-        // Broadcast to partner
-        const session = await WalkSession.findOne({ sessionId });
-        if (session) {
-          const partnerId = session.requesterId === userId ? session.partnerId : session.requesterId;
-          if (partnerId) {
-            const partnerSocket = Array.from(connectedClients.mobile.entries())
-              .find(([_, client]) => client.userId === partnerId)?.[0];
-              
-            if (partnerSocket) {
-              io.to(partnerSocket).emit('partner_location_update', {
-                userId,
-                latitude,
-                longitude,
-                timestamp: new Date().toISOString()
-              });
-            }
-          }
-        }
-      }
-      
-    } catch (error) {
-      logger.error('Location update error:', error);
-    }
-  });
-  
-  // Handle chat messages
-  socket.on('chat_message', async (data) => {
-    try {
-      logger.info('💬 Chat message:', data);
-      
-      // Broadcast to web dashboards and relevant mobile clients
-      io.emit('chat_message', {
-        ...data,
-        timestamp: new Date().toISOString(),
-        serverId: uuidv4()
-      });
-      
-    } catch (error) {
-      logger.error('Chat message error:', error);
-    }
-  });
-  
-  // Handle disconnection
-  socket.on('disconnect', async () => {
-    try {
-      logger.info(`❌ Client disconnected: ${socket.id}`);
-      
-      // Update user status if mobile client
-      if (socket.clientType === 'mobile' && socket.userId) {
-        await User.updateOne(
-          { userId: socket.userId },
-          { 
-            $set: { 
-              isActive: false,
-              lastSeen: new Date()
-            } 
-          }
-        );
-      }
-      
-      // Remove from connected clients
-      connectedClients.mobile.delete(socket.id);
-      connectedClients.web.delete(socket.id);
-      
-      // Broadcast updated connection count
-      io.emit('connection_update', {
-        mobile: connectedClients.mobile.size,
-        web: connectedClients.web.size,
-        timestamp: new Date().toISOString()
-      });
-      
-    } catch (error) {
-      logger.error('Disconnection handling error:', error);
-    }
-  });
-  
-  // Send connection confirmation
-  socket.emit('connected', {
-    message: 'Connected to SafeZoneX AI-Powered Server',
-    clientId: socket.id,
-    timestamp: new Date().toISOString(),
-    features: {
-      faceVerification: false,
-      imageAnalysis: true,
-      realTimeSync: true,
-      authenticityDetection: true
-    }
-  });
-});
+  logger.info(`🔌 Client connected: ${socket.id} (User: ${socket.user.id})`);
 
-// Error handling middleware
-app.use((error, req, res, next) => {
-  logger.error('Unhandled error:', error);
-  res.status(500).json({ 
-    error: 'Internal server error',
-    message: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
+  // Join rooms based on user role
+  if (socket.user.role === 'student') {
+    socket.join(`student_${socket.user.id}`);
+  } else if (socket.user.role === 'security') {
+    socket.join('security_dashboard');
+  }
+
+  // Emit updates to specific rooms
+  socket.on('report_update', (data) => {
+    if (socket.user.role === 'student') {
+      io.to(`student_${socket.user.id}`).emit('report_update', data);
+    } else if (socket.user.role === 'security') {
+      io.to('security_dashboard').emit('report_update', data);
+    }
+  });
+
+  // Added feedback_response socket event
+  socket.on('feedback_response', async ({ alertId, confirmed }) => {
+    try {
+      // Save feedback to the database
+      await Feedback.create({
+        report_id: alertId,
+        feedback: confirmed ? 'real' : 'fake',
+        user_id: socket.user.id,
+        timestamp: new Date()
+      });
+
+      // Update alert status
+      const newStatus = confirmed ? 'real' : 'false_alarm';
+      await Alert.updateOne(
+        { alertId },
+        { $set: { status: newStatus } }
+      );
+
+      // Notify relevant rooms
+      if (socket.user.role === 'student') {
+        io.to(`student_${socket.user.id}`).emit('report_update', { alertId, status: newStatus });
+      } else if (socket.user.role === 'security') {
+        io.to('security_dashboard').emit('report_update', { alertId, status: newStatus });
+      }
+    } catch (error) {
+      logger.error('Error handling feedback_response:', error);
+    }
   });
 });
 
 const PORT = process.env.PORT || 8080;
-
 server.listen(PORT, () => {
-  console.log('\n🚀 SafeZoneX AI-Powered Backend Server Started');
-  console.log(`📡 Server running on http://localhost:${PORT}`);
-  console.log(`🔌 WebSocket endpoint: ws://localhost:${PORT}`);
-  console.log('🤖 AI Services: Report Authenticity Detection');
-  console.log('🛡️ Ready to handle emergency alerts with AI analysis...\n');
-  
-  logger.info('SafeZoneX server started successfully', {
-    port: PORT,
-    environment: process.env.NODE_ENV || 'development',
-    features: ['Image Analysis', 'Report Authenticity', 'Real-time Sync']
-  });
+  logger.info(`🚀 Server running on http://localhost:${PORT}`);
 });
 
-// Graceful shutdown
-process.on('SIGINT', () => {
-  console.log('\n🛑 Shutting down server...');
-  
-  server.close(async () => {
-    try {
-      await mongoose.connection.close();
-      logger.info('Database connection closed');
-      console.log('✅ Server shut down gracefully');
-      process.exit(0);
-    } catch (error) {
-      logger.error('Error during shutdown:', error);
-      process.exit(1);
-    }
-  });
-});
 
-// Handle uncaught exceptions
-process.on('uncaughtException', (error) => {
-  logger.error('Uncaught Exception:', error);
-  process.exit(1);
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
-  process.exit(1);
-});

@@ -1,0 +1,88 @@
+{
+    "category_validation": {
+        "Suspicious Person": [
+            {
+                "input": "A stranger is loitering near the dorm.",
+                "predicted": "real",
+                "confidence": 65.91
+            },
+            {
+                "input": "Someone is following me around campus.",
+                "predicted": "real",
+                "confidence": 61.6
+            }
+        ],
+        "Harassment": [
+            {
+                "input": "A student is being verbally harassed.",
+                "predicted": "real",
+                "confidence": 69.17
+            },
+            {
+                "input": "Someone is making inappropriate comments.",
+                "predicted": "real",
+                "confidence": 71.53
+            }
+        ],
+        "Safety Hazard": [
+            {
+                "input": "There is broken glass on the walkway.",
+                "predicted": "real",
+                "confidence": 79.35
+            },
+            {
+                "input": "The fire exit is blocked.",
+                "predicted": "real",
+                "confidence": 67.45
+            }
+        ],
+        "Theft": [
+            {
+                "input": "My laptop was stolen from the library.",
+                "predicted": "real",
+                "confidence": 74.52
+            },
+            {
+                "input": "Someone snatched my bag in the cafeteria.",
+                "predicted": "fake",
+                "confidence": 56.27
+            }
+        ],
+        "Vandalism": [
+            {
+                "input": "Graffiti was found on the wall.",
+                "predicted": "fake",
+                "confidence": 56.27
+            },
+            {
+                "input": "Someone broke a classroom window.",
+                "predicted": "real",
+                "confidence": 63.59
+            }
+        ],
+        "Lost Item": [
+            {
+                "input": "I lost my phone near the sports hall.",
+                "predicted": "real",
+                "confidence": 60.93
+            },
+            {
+                "input": "My ID card is missing.",
+                "predicted": "real",
+                "confidence": 66.92
+            }
+        ],
+        "Fake/Spam": [
+            {
+                "input": "Click this link to win a prize!",
+                "predicted": "fake",
+                "confidence": 86.8
+            },
+            {
+                "input": "Get free money by signing up now.",
+                "predicted": "fake",
+                "confidence": 91.03
+            }
+        ]
+    }
+}

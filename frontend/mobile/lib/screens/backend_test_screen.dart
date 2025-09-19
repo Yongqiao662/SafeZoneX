@@ -63,15 +63,15 @@ class _BackendTestScreenState extends State<BackendTestScreen> {
 
   Future<void> _initializeWebSocket() async {
     try {
-      await _wsService.connect();
-      
+      // TODO: Replace with actual JWT token retrieval logic
+      final token = 'your_jwt_token_here';
+      _wsService.connect(token);
       _wsSubscription = _wsService.messageStream.listen((message) {
         setState(() {
           _notifications.insert(0, '${DateTime.now().toString().substring(11, 19)}: ${message['type']} - ${message.toString()}');
           if (_notifications.length > 10) _notifications.removeLast();
         });
       });
-      
       setState(() => _connectionStatus += ' + WebSocket');
     } catch (e) {
       setState(() => _lastResult = 'WebSocket failed: $e');
@@ -110,7 +110,7 @@ class _BackendTestScreenState extends State<BackendTestScreen> {
     try {
       final result = await _apiService.submitSecurityReport(
         text: reportText,
-        location: {'lat': 40.7128, 'lng': -74.0060}, // NYC coordinates
+        location: {'latitude': 40.7128, 'longitude': -74.0060}, // NYC coordinates
         metadata: {'test': true, 'source': 'flutter_test'},
       );
       

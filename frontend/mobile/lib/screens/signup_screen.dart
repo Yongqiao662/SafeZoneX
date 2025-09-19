@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'verification_screen.dart';
+import 'main_dashboard_screen.dart';
+import '../services/auth_service.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({Key? key}) : super(key: key);
@@ -24,6 +27,10 @@ class _SignUpScreenState extends State<SignUpScreen>
   
   bool _isLoading = false;
   bool _hasEmailError = false;
+
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+  scopes: ['email', 'profile'],
+);
 
   @override
   void initState() {
@@ -120,6 +127,8 @@ class _SignUpScreenState extends State<SignUpScreen>
                         _buildSignUpButton(),
                         const SizedBox(height: 24),
                         _buildSignInLink(),
+                        const SizedBox(height: 24),
+                        _buildGoogleSignInButton(),
                       ],
                     ),
                   ),
@@ -232,7 +241,7 @@ class _SignUpScreenState extends State<SignUpScreen>
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Please use your university student email address (.siswa.um.edu.my)',
+                      'Only .siswa.um.edu.my email addresses are allowed',
                       style: TextStyle(
                         color: Colors.blue,
                         fontSize: 12,
@@ -288,11 +297,9 @@ class _SignUpScreenState extends State<SignUpScreen>
             setState(() => _hasEmailError = true);
             return 'Please enter a valid email address';
           }
-          if (!value.toLowerCase().contains('.edu') && 
-              !value.toLowerCase().contains('student') &&
-              !value.toLowerCase().contains('siswa')) {
+          if (!value.toLowerCase().endsWith('.siswa.um.edu.my')) {
             setState(() => _hasEmailError = true);
-            return 'Please use your student email address';
+            return 'Only .siswa.um.edu.my email addresses are allowed';
           }
           return null;
         },
@@ -416,6 +423,21 @@ class _SignUpScreenState extends State<SignUpScreen>
     );
   }
 
+  Widget _buildGoogleSignInButton() {
+    return SlideTransition(
+      position: _slideAnim,
+      child: ElevatedButton.icon(
+        onPressed: _handleGoogleSignIn,
+        icon: const Icon(Icons.login),
+        label: const Text('Sign in with Google'),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black,
+        ),
+      ),
+    );
+  }
+
   Future<void> _signUp(BuildContext context) async {
     if (_isLoading) return;
     
@@ -483,5 +505,51 @@ class _SignUpScreenState extends State<SignUpScreen>
         margin: const EdgeInsets.all(16),
       ),
     );
+  }
+
+  Future<void> _handleGoogleSignIn() async {
+    try {
+      setState(() => _isLoading = true);
+      
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+      if (googleUser != null) {
+        // Check if the email is from the allowed domain
+        if (!googleUser.email.toLowerCase().endsWith('.siswa.um.edu.my')) {
+          _showErrorSnackBar('Only .siswa.um.edu.my email addresses are allowed');
+          await _googleSignIn.signOut(); // Sign out the user
+          return;
+        }
+
+        final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+        final String? idToken = googleAuth.idToken;
+        final String? accessToken = googleAuth.accessToken;
+        
+        if (idToken != null && accessToken != null) {
+          print('Google ID Token: $idToken');
+          
+          // Use AuthService to handle the Google sign-in
+          final authService = AuthService();
+          final result = await authService.signInWithGoogle(idToken, accessToken);
+          
+          if (result['success']) {
+            _showSuccessSnackBar('Welcome, ${result['user']['name']}!');
+            // Navigate to main dashboard
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => MainDashboardScreen()),
+            );
+          } else {
+            _showErrorSnackBar(result['message']);
+          }
+        } else {
+          _showErrorSnackBar('Failed to get authentication tokens');
+        }
+      }
+    } catch (error) {
+      print('Error during Google Sign-In: $error');
+      _showErrorSnackBar('Google Sign-In failed: $error');
+    } finally {
+      setState(() => _isLoading = false);
+    }
   }
 }

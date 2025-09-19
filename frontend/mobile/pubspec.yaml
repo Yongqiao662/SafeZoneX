@@ -21,13 +21,16 @@ dependencies:
   # HTTP requests
   http: ^1.1.0
   # Local storage
-  shared_preferences: ^2.2.0
+  shared_preferences: ^2.2.2
   # Image picker for camera/gallery
   image_picker: ^1.0.4
   # Camera for face verification
   camera: ^0.10.5+5
   # Image processing
   image: ^4.1.3
+  # Socket.IO client for real-time updates
+  socket_io_client: ^2.0.0
+  google_sign_in: ^6.2.1
 
 dev_dependencies:
   flutter_test:
@@ -37,6 +40,6 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - ../../assets/
+    - assets/google_logo.png
 
 

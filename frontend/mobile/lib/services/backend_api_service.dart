@@ -6,7 +6,7 @@ class BackendApiService {
   // AI-Powered SafeZoneX Backend URL
   static const String _baseUrl = 'http://localhost:8080';
   static const String _mobileUrl = 'http://10.0.2.2:8080'; // For Android emulator
-  
+
   // Auto-detect the correct URL based on platform
   String get baseUrl {
     if (Platform.isAndroid) {
@@ -21,27 +21,6 @@ class BackendApiService {
     'Accept': 'application/json',
   };
 
-  /// Check if the AI server is running
-  Future<Map<String, dynamic>> checkServerStatus() async {
-    try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/'),
-        headers: _headers,
-      ).timeout(const Duration(seconds: 5));
-
-      if (response.statusCode == 200) {
-        return {
-          'success': true,
-          'data': json.decode(response.body),
-          'message': 'AI server is operational'
-        };
-      }
-      return {'success': false, 'message': 'Server not responding'};
-    } catch (e) {
-      return {'success': false, 'message': 'Connection failed: $e'};
-    }
-  }
-
   /// Submit a security report for AI analysis
   Future<Map<String, dynamic>> submitSecurityReport({
     required String text,
@@ -51,128 +30,73 @@ class BackendApiService {
     Map<String, dynamic>? metadata,
   }) async {
     try {
-      // Create multipart request for file uploads
-      var request = http.MultipartRequest(
-        'POST',
-        Uri.parse('$baseUrl/api/ai/analyze-report'),
-      );
+      // Use multipart request for image upload
+      var request = http.MultipartRequest('POST', Uri.parse('${baseUrl}/api/report'));
 
-      // Add text data
-      request.fields['text'] = text;
-      request.fields['location'] = json.encode(location);
-      request.fields['userProfile'] = json.encode(userProfile ?? {});
-      request.fields['metadata'] = json.encode(metadata ?? {
-        'timestamp': DateTime.now().toIso8601String(),
-        'source': 'mobile_app',
-        'version': '2.0.0'
-      });
-
-      // Add image files if provided
-      if (images != null) {
-        for (int i = 0; i < images.length && i < 5; i++) {
-          request.files.add(await http.MultipartFile.fromPath(
-            'images',
-            images[i].path,
-          ));
+      // Add images if available
+      if (images != null && images.isNotEmpty) {
+        for (var image in images) {
+          request.files.add(await http.MultipartFile.fromPath('images', image.path));
         }
       }
 
-      print('🚀 Submitting report to AI analysis...');
-      
-      final streamedResponse = await request.send().timeout(
-        const Duration(seconds: 60), // Increased timeout for ML processing
-      );
-      
-      final response = await http.Response.fromStream(streamedResponse);
+      // Add other fields
+      request.fields['description'] = text;
+      request.fields['location'] = json.encode({
+        'latitude': location['latitude'] ?? location['lat'],
+        'longitude': location['longitude'] ?? location['lng'],
+        'address': metadata?['locationName'] ?? '',
+        'campus': 'University Malaya',
+      });
+      request.fields['alertType'] = metadata?['activityType'] ?? 'emergency';
+      request.fields['priority'] = 'high';
+      request.fields['userId'] = userProfile?['userId'] ?? '';
+      request.fields['userName'] = userProfile?['userName'] ?? '';
+      request.fields['userPhone'] = userProfile?['userPhone'] ?? '';
 
+      // Send the request
+      var response = await request.send();
+
+      // Handle the response
       if (response.statusCode == 200) {
-        final result = json.decode(response.body);
-        print('✅ AI analysis completed: ${result['analysis']['verification']['isAuthentic']}');
-        return {
-          'success': true,
-          'analysis': result['analysis'],
-          'message': 'AI analysis completed successfully'
-        };
+        final responseBody = await response.stream.bytesToString();
+        return json.decode(responseBody);
       } else {
-        return {
-          'success': false,
-          'message': 'AI analysis failed: ${response.body}'
-        };
+        return {'success': false, 'message': 'Failed to submit report: ${response.reasonPhrase}'};
       }
     } catch (e) {
-      print('❌ Report submission error: $e');
-      return {
-        'success': false,
-        'message': 'Failed to submit report: $e'
-      };
+      return {'success': false, 'message': 'Error: $e'};
     }
   }
 
-  /// Get safety predictions for a location
-  Future<Map<String, dynamic>> getSafetyPredictions({
-    required Map<String, double> location,
-    int timeRange = 7,
-  }) async {
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/ai/predict-safety'),
-        headers: _headers,
-        body: json.encode({
-          'location': location,
-          'timeRange': timeRange,
-        }),
-      ).timeout(const Duration(seconds: 10));
-
-      if (response.statusCode == 200) {
-        final result = json.decode(response.body);
-        return {
-          'success': true,
-          'predictions': result['predictions'],
-          'message': 'Safety predictions retrieved'
-        };
-      }
-      return {'success': false, 'message': 'Failed to get predictions'};
-    } catch (e) {
-      return {'success': false, 'message': 'Prediction request failed: $e'};
-    }
-  }
-
-  /// Get active threats from the AI system
-  Future<Map<String, dynamic>> getActiveThreats() async {
+  /// Check if the AI server is running
+  Future<Map<String, dynamic>> checkServerStatus() async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/api/ai/threats/active'),
+        Uri.parse('${baseUrl}/api/status'),
         headers: _headers,
       ).timeout(const Duration(seconds: 10));
-
       if (response.statusCode == 200) {
-        final result = json.decode(response.body);
-        return {
-          'success': true,
-          'threats': result['activeThreats'],
-          'statistics': result['statistics'],
-          'message': 'Active threats retrieved'
-        };
+        return {'success': true, 'message': 'Server is running'};
       }
-      return {'success': false, 'message': 'Failed to get threats'};
+      return {'success': false, 'message': 'Server is down'};
     } catch (e) {
-      return {'success': false, 'message': 'Threats request failed: $e'};
+      return {'success': false, 'message': 'Error: $e'};
     }
   }
 
-  /// Get ML training status
+  /// Get ML model status
   Future<Map<String, dynamic>> getMLStatus() async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/api/ml/status'),
+        Uri.parse('${baseUrl}/api/ml/status'),
         headers: _headers,
-      ).timeout(const Duration(seconds: 5));
-
+      ).timeout(const Duration(seconds: 10));
       if (response.statusCode == 200) {
         final result = json.decode(response.body);
         return {
           'success': true,
-          'status': result,
+          'status': result['status'],
           'message': 'ML status retrieved'
         };
       }
@@ -182,14 +106,13 @@ class BackendApiService {
     }
   }
 
-  /// Trigger ML model training (admin function)
+  /// Train ML models
   Future<Map<String, dynamic>> trainMLModels() async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/api/ml/train'),
+        Uri.parse('${baseUrl}/api/ml/train'),
         headers: _headers,
-      ).timeout(const Duration(seconds: 60));
-
+      ).timeout(const Duration(seconds: 30));
       if (response.statusCode == 200) {
         final result = json.decode(response.body);
         return {
@@ -204,55 +127,153 @@ class BackendApiService {
     }
   }
 
-  /// Test ML prediction with sample data
-  Future<Map<String, dynamic>> testMLPrediction({
-    required Map<String, dynamic> reportData,
-    required String predictionType, // 'authenticity' or 'threat'
-  }) async {
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/ml/predict'),
-        headers: _headers,
-        body: json.encode({
-          'reportData': reportData,
-          'predictionType': predictionType,
-        }),
-      ).timeout(const Duration(seconds: 10));
-
-      if (response.statusCode == 200) {
-        final result = json.decode(response.body);
-        return {
-          'success': true,
-          'prediction': result['prediction'],
-          'modelInfo': result['modelInfo'],
-          'message': 'ML prediction completed'
-        };
-      }
-      return {'success': false, 'message': 'Failed to get prediction'};
-    } catch (e) {
-      return {'success': false, 'message': 'ML prediction failed: $e'};
-    }
-  }
-
-  /// Get model performance metrics
-  Future<Map<String, dynamic>> getModelMetrics() async {
+  /// Get active threats
+  Future<Map<String, dynamic>> getActiveThreats() async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/api/ml/metrics'),
+        Uri.parse('${baseUrl}/api/threats/active'),
         headers: _headers,
-      ).timeout(const Duration(seconds: 5));
-
+      ).timeout(const Duration(seconds: 10));
       if (response.statusCode == 200) {
         final result = json.decode(response.body);
         return {
           'success': true,
-          'metrics': result['metrics'],
-          'message': 'Model metrics retrieved'
+          'threats': result['threats'],
+          'message': 'Active threats retrieved'
         };
       }
-      return {'success': false, 'message': 'Failed to get metrics'};
+      return {'success': false, 'message': 'Failed to get active threats'};
     } catch (e) {
-      return {'success': false, 'message': 'Metrics request failed: $e'};
+      return {'success': false, 'message': 'Threats request failed: $e'};
     }
   }
+
+  /// Authenticate user with Google token
+     /// Authenticate user with Google token
+Future<Map<String, dynamic>> authenticateWithGoogle({
+  required String idToken,
+  required String accessToken,
+}) async {
+  final payload = {
+    'idToken': idToken,
+    'accessToken': accessToken,
+    'authProvider': 'google',
+  };
+
+  try {
+    final response = await http.post(
+      Uri.parse('${baseUrl}/api/auth/google'),
+      headers: _headers,
+      body: json.encode(payload),
+    );
+
+    print('🔐 Authenticating with Google...');
+    if (response.statusCode == 200) {
+      final result = json.decode(response.body);
+      return {
+        'success': true,
+        'user': result['user'],
+        'token': result['token'],
+        'message': 'Google authentication successful'
+      };
+    } else {
+      final error = json.decode(response.body);
+      return {
+        'success': false,
+        'message': error['message'] ?? 'Google authentication failed'
+      };
+    }
+  } catch (e) {
+    return {
+      'success': false,
+      'message': 'Google authentication error: $e'
+    };
+  }
+}
+
+/// Create new user account with email verification
+Future<Map<String, dynamic>> createUserAccount({
+  required String email,
+  String? password,
+  Map<String, dynamic>? googleData,
+}) async {
+  final payload = {
+    'email': email,
+    'password': password,
+    'authProvider': googleData != null ? 'google' : 'email',
+    'googleData': googleData,
+    'university': 'University Malaya', // Set default university
+  };
+
+  try {
+    final response = await http.post(
+      Uri.parse('${baseUrl}/api/auth/register'),
+      headers: _headers,
+      body: json.encode(payload),
+    );
+
+    print('👤 Creating user account...');
+    if (response.statusCode == 201) {
+      final result = json.decode(response.body);
+      return {
+        'success': true,
+        'user': result['user'],
+        'requiresVerification': result['requiresVerification'] ?? false,
+        'message': 'Account created successfully'
+      };
+    } else {
+      final error = json.decode(response.body);
+      return {
+        'success': false,
+        'message': error['message'] ?? 'Account creation failed'
+      };
+    }
+  } catch (e) {
+    return {
+      'success': false,
+      'message': 'Account creation error: $e'
+    };
+  }
+}
+
+/// Login with email and password
+Future<Map<String, dynamic>> loginWithEmail({
+  required String email,
+  required String password,
+}) async {
+  final payload = {
+    'email': email,
+    'password': password,
+  };
+
+  try {
+    final response = await http.post(
+      Uri.parse('${baseUrl}/api/auth/login'),
+      headers: _headers,
+      body: json.encode(payload),
+    );
+
+    print('🔑 Logging in with email...');
+    if (response.statusCode == 200) {
+      final result = json.decode(response.body);
+      return {
+        'success': true,
+        'user': result['user'],
+        'token': result['token'],
+        'message': 'Login successful'
+      };
+    } else {
+      final error = json.decode(response.body);
+      return {
+        'success': false,
+        'message': error['message'] ?? 'Login failed'
+      };
+    }
+  } catch (e) {
+    return {
+      'success': false,
+      'message': 'Login error: $e'
+    };
+  }
+}
 }

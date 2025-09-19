@@ -1,7 +1,11 @@
+import '../services/websocket_service.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:io';
+import '../services/backend_api_service.dart';
+import '../services/location_tracking_service.dart';
+import '../services/auth_service.dart'; // Import AuthService
 
 class ReportsScreen extends StatefulWidget {
   @override
@@ -9,6 +13,10 @@ class ReportsScreen extends StatefulWidget {
 }
 
 class _ReportsScreenState extends State<ReportsScreen> {
+  late final WebSocketService _webSocketService;
+  String? _reportStatus;
+  double? _reportConfidence;
+  String? _reportDetails;
   final ImagePicker _picker = ImagePicker();
   XFile? _selectedImage;
   String? _selectedActivity;
@@ -114,13 +122,36 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   @override
   void initState() {
-    super.initState();
-    _getCurrentLocation();
+  super.initState();
+  _getCurrentLocation();
+
+  // Initialize and connect WebSocketService
+  _webSocketService = WebSocketService();
+  // TODO: Replace with actual JWT token retrieval logic
+  final token = 'your_jwt_token_here';
+  _webSocketService.connect(token);
+  _webSocketService.messageStream.listen((message) {
+      if (message['type'] == 'report_update') {
+        setState(() {
+          _reportStatus = message['status'];
+          _reportConfidence = message['aiAnalysis']?['confidence']?.toDouble();
+          _reportDetails = message['aiAnalysis']?['details'];
+        });
+        // Optionally show a notification/snackbar
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Report update: $_reportStatus ($_reportConfidence%)'),
+            backgroundColor: Colors.blue,
+          ),
+        );
+      }
+    });
   }
 
   @override
   void dispose() {
     _descriptionController.dispose();
+    _webSocketService.dispose();
     super.dispose();
   }
 
@@ -344,47 +375,89 @@ class _ReportsScreenState extends State<ReportsScreen> {
       return;
     }
 
-    // Here you would submit the report to your backend
-    // For now, we'll show a success message
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Color(0xFF1a1a2e),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Icon(Icons.check_circle, color: Colors.green, size: 28),
-            SizedBox(width: 12),
-            Text(
-              'Report Submitted',
-              style: TextStyle(color: Colors.white, fontSize: 18),
+    // Get user profile from AuthService
+    final authService = AuthService();
+    final userProfile = authService.getUserProfile();
+
+    // Use LocationTrackingService for location data
+    final locationService = LocationTrackingService();
+    final locationData = _currentPosition != null
+        ? {
+            'latitude': _currentPosition!.latitude,
+            'longitude': _currentPosition!.longitude,
+          }
+        : locationService.getEmergencyLocationData();
+
+    // Prepare image file
+    final imageFile = _selectedImage != null ? File(_selectedImage!.path) : null;
+
+    // Submit report using BackendApiService with user data
+    final apiService = BackendApiService();
+    apiService.submitSecurityReport(
+      text: _descriptionController.text.trim(),
+      location: Map<String, double>.from(locationData),
+      userProfile: userProfile, // Now passing actual user data
+      images: imageFile != null ? [imageFile] : [],
+      metadata: {
+        'activityType': _selectedActivity,
+        'locationName': _selectedLocation,
+      },
+    ).then((result) {
+      if (result['success'] == true) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            backgroundColor: Color(0xFF1a1a2e),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.green, size: 28),
+                SizedBox(width: 12),
+                Text(
+                  'Report Submitted',
+                  style: TextStyle(color: Colors.white, fontSize: 18),
+                ),
+              ],
             ),
-          ],
-        ),
-        content: Text(
-          'Thank you for keeping our campus safe. Security has been notified and will investigate.',
-          style: TextStyle(color: Colors.white70),
-        ),
-        actions: [
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              // Clear form
-              setState(() {
-                _selectedImage = null;
-                _selectedActivity = null;
-                _descriptionController.clear();
-              });
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            content: Text(
+              'Thank you for keeping our campus safe. Security has been notified and will investigate.',
+              style: TextStyle(color: Colors.white70),
             ),
-            child: Text('OK', style: TextStyle(color: Colors.white)),
+            actions: [
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  setState(() {
+                    _selectedImage = null;
+                    _selectedActivity = null;
+                    _descriptionController.clear();
+                  });
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                child: Text('OK', style: TextStyle(color: Colors.white)),
+              ),
+            ],
           ),
-        ],
-      ),
-    );
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to submit report. Please try again.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }).catchError((e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error submitting report: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    });
   }
 
   @override
@@ -406,6 +479,25 @@ class _ReportsScreenState extends State<ReportsScreen> {
         child: SafeArea(
           child: Column(
             children: [
+              if (_reportStatus != null)
+                Container(
+                  width: double.infinity,
+                  color: Colors.blue.withOpacity(0.1),
+                  padding: EdgeInsets.all(12),
+                  margin: EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info, color: Colors.blue),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Status: $_reportStatus | Confidence: ${_reportConfidence?.toStringAsFixed(1) ?? '-'}%\n${_reportDetails ?? ''}',
+                          style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               // Title Section - Matching Friends page style
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),

@@ -58,10 +58,11 @@ npm install
 ```
 
 ### 3. Configure Environment Variables
-Create a `.env` file in the `backend` directory with the following content:
+
+Your `.env` file should look like this:
 ```ini
 # MongoDB Configuration
-MONGODB_URI=mongodb+srv://<username>:<password>@<cluster-url>/<database>?retryWrites=true&w=majority&appName=SafeZoneX
+MONGODB_URI=mongodb+srv://YongQiao:<db_password>@safezonex.s70xg0u.mongodb.net/?retryWrites=true&w=majority&appName=SafeZoneX
 
 # Server Configuration
 NODE_ENV=development
@@ -73,11 +74,11 @@ API_VERSION=v1
 API_BASE_URL=http://localhost:8080/api
 
 # Security Configuration
-JWT_SECRET=your_jwt_secret
-SESSION_SECRET=your_session_secret
-ENCRYPTION_KEY=your_encryption_key
+JWT_SECRET=safezonex_super_secret_key_2025_ml_training_system
+SESSION_SECRET=safezonex_session_secret_ml_ai_powered_security
+ENCRYPTION_KEY=safezonex_encryption_key_for_sensitive_data_2025
 ```
-Replace `<username>`, `<password>`, `<cluster-url>`, and `<database>` with your actual MongoDB Atlas credentials.
+Replace `<db_password>` with your actual database password.
 
 ### 4. Start MongoDB
 Ensure MongoDB is running locally or accessible via the connection string in `.env`.
@@ -91,9 +92,14 @@ The server will run at `http://localhost:8080`.
 ---
 
 ## Usage & API
-- **Safety Report Submission:** Send POST requests to `/api/reports` to submit safety reports.
-- **Feedback Loop:** If the AI model's confidence is low, the backend will request user feedback via the frontend widget.
-- **WebSocket Alerts:** Clients can connect to the WebSocket endpoint for real-time emergency alerts.
+- **Safety Report Submission:** Send POST requests to `/api/report` to submit safety reports from the mobile app or other clients.
+- **AI Analysis Flow:**
+	- Reports are analyzed by the AI model.
+	- If confidence > 70%, the report is sent to the dashboard as real.
+	- If confidence is 50-70%, the report is sent as likely real with confidence level.
+	- If confidence < 50%, the report is filtered and not sent to the dashboard.
+- **Feedback Loop:** If the AI model's confidence is in the 50-70% range, the backend will request user feedback via the frontend widget.
+- **WebSocket Alerts:** Clients can connect to the WebSocket endpoint for real-time emergency alerts and report updates.
 
 ---
 
@@ -118,7 +124,9 @@ The server will run at `http://localhost:8080`.
 ---
 
 ## Frontend Integration
-- The backend exposes endpoints for the frontend feedback widget.
+- The backend exposes endpoints for the mobile app and web dashboard.
+- Mobile app submits reports via `/api/report`.
+- Web dashboard receives real-time updates via Socket.IO.
 - Feedback from users is used to improve AI model accuracy over time.
 
 ---
