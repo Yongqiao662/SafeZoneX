@@ -348,6 +348,17 @@ Campus safety is a critical concern for educational institutions worldwide. Trad
 4. Create API key and restrict to your application
 5. Add to `frontend/mobile/android/local.properties`
 
+### Google Sign-In Setup
+For Google Sign-In authentication, follow the detailed guide:
+- **📖 [Google Sign-In Setup Guide](frontend/mobile/README_GOOGLE_SIGNIN.md)**
+
+**Quick Setup for Teammates:**
+1. Get `google-services.json` from project maintainer
+2. Place file in `frontend/mobile/android/app/`
+3. Test Google Sign-In functionality
+
+**Note**: OAuth client IDs and SHA-1 fingerprints are already configured - teammates just need the `google-services.json` file.
+
 ### Development Environment
 - **Flutter SDK**: Version 3.0 or higher
 - **Android Studio**: Latest stable version

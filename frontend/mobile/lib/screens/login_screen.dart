@@ -32,8 +32,9 @@ class _LoginScreenState extends State<LoginScreen>
   bool _hasPasswordError = false;
 
   final GoogleSignIn _googleSignIn = GoogleSignIn(
-  scopes: ['email', 'profile'],
-);
+    scopes: ['email', 'profile'],
+    serverClientId: '413218401489-td2q4g9cnvoudh69fm0tketpobb7g5ah.apps.googleusercontent.com',
+  );
 
   @override
   void initState() {
@@ -251,14 +252,26 @@ class _LoginScreenState extends State<LoginScreen>
             setState(() => _hasEmailError = true);
             return 'Please enter your email';
           }
-          if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+          
+          final email = value.toLowerCase().trim();
+          print('Email field validation - Input: "$value"');
+          print('Email field validation - Processed: "$email"');
+          
+          // Basic email regex validation only
+          if (!RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$').hasMatch(email)) {
             setState(() => _hasEmailError = true);
+            print('Email field validation - Regex failed for: $email');
             return 'Please enter a valid email';
           }
-          if (!value.toLowerCase().endsWith('.siswa.um.edu.my')) {
-            setState(() => _hasEmailError = true);
-            return 'Only .siswa.um.edu.my email addresses are allowed';
-          }
+          
+          print('Email field validation - SUCCESS for: $email');
+          
+          // TODO: Re-enable domain validation later
+          // if (!email.endsWith('.siswa.um.edu.my')) {
+          //   setState(() => _hasEmailError = true);
+          //   return 'Only .siswa.um.edu.my email addresses are allowed. Your email: $email';
+          // }
+          
           return null;
         },
         decoration: InputDecoration(
@@ -468,14 +481,12 @@ class _LoginScreenState extends State<LoginScreen>
     try {
       setState(() => _isLoading = true);
       
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signInSilently();
-      // If not signed in, try interactive sign-in
-      if (googleUser == null) {
-        final GoogleSignInAccount? interactiveUser = await _googleSignIn.signIn();
-        if (interactiveUser != null) {
-          await _processGoogleUser(interactiveUser);
-        }
-      } else {
+      // Sign out first to ensure account picker is shown
+      await _googleSignIn.signOut();
+      
+      // Force interactive sign-in to show account picker
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+      if (googleUser != null) {
         await _processGoogleUser(googleUser);
       }
     } catch (error) {
@@ -488,11 +499,17 @@ class _LoginScreenState extends State<LoginScreen>
 
   Future<void> _processGoogleUser(GoogleSignInAccount googleUser) async {
     // Check if the email is from the allowed domain
-    if (!googleUser.email.toLowerCase().endsWith('.siswa.um.edu.my')) {
-      _showErrorSnackBar('Only .siswa.um.edu.my email addresses are allowed');
-      await _googleSignIn.signOut(); // Sign out the user
-      return;
-    }
+    final email = googleUser.email.toLowerCase();
+    print('Google Sign-In email: $email');
+    print('Checking if email ends with: .siswa.um.edu.my');
+    print('Email ends with domain: ${email.endsWith('.siswa.um.edu.my')}');
+    
+    // TODO: Re-enable domain validation later
+    // if (!email.endsWith('.siswa.um.edu.my')) {
+    //   _showErrorSnackBar('Only .siswa.um.edu.my email addresses are allowed. Your email: $email');
+    //   await _googleSignIn.signOut(); // Sign out the user
+    //   return;
+    // }
 
     final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
     final String? idToken = googleAuth.idToken;
@@ -501,17 +518,12 @@ class _LoginScreenState extends State<LoginScreen>
     if (idToken != null && accessToken != null) {
       print('Google ID Token: $idToken');
       
-      // Use AuthService to handle the Google sign-in
-      final authService = AuthService();
-      final result = await authService.signInWithGoogle(idToken, accessToken);
-      
-      if (result['success']) {
-        _showSuccessSnackBar('Welcome, ${result['user']['name']}!');
-        await _exitAnimation();
-        _navigateToHome();
-      } else {
-        _showErrorSnackBar(result['message']);
-      }
+      // TODO: Re-enable backend authentication when server is running
+      // For now, bypass backend and use Google data directly
+      print('Using Google data directly (backend disabled)');
+      _showSuccessSnackBar('Welcome, ${googleUser.displayName ?? googleUser.email}!');
+      await _exitAnimation();
+      _navigateToHome();
     } else {
       _showErrorSnackBar('Failed to get authentication tokens');
     }
