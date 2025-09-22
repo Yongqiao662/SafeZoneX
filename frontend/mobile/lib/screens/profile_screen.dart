@@ -1,7 +1,28 @@
 import 'package:flutter/material.dart';
+import '../services/auth_service.dart';
 import 'backend_test_screen.dart';
+import 'login_screen.dart';
+import 'dart:io';
 
 class ProfileScreen extends StatefulWidget {
+  final String? userName;
+  final String? userEmail;
+  final String? studentId;
+  final String? year;
+  final String? faculty;
+  final String? course;
+  final File? studentIdImage;
+
+  ProfileScreen({
+    this.userName,
+    this.userEmail,
+    this.studentId,
+    this.year,
+    this.faculty,
+    this.course,
+    this.studentIdImage,
+  });
+
   @override
   _ProfileScreenState createState() => _ProfileScreenState();
 }
@@ -54,7 +75,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         width: 100,
                         height: 100,
                         decoration: BoxDecoration(
-                          color: Colors.deepPurple, // Single purple color instead of gradient
+                          color: Colors.deepPurple,
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
@@ -64,16 +85,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ),
                           ],
                         ),
-                        child: const Icon(
-                          Icons.person,
-                          size: 50,
-                          color: Colors.white,
-                        ),
+                        child: widget.studentIdImage != null
+                          ? ClipOval(
+                              child: Image.file(
+                                widget.studentIdImage!,
+                                width: 100,
+                                height: 100,
+                                fit: BoxFit.cover,
+                              ),
+                            )
+                          : const Icon(
+                              Icons.person,
+                              size: 50,
+                              color: Colors.white,
+                            ),
                       ),
                       const SizedBox(height: 20),
-                      const Text(
-                        'John Doe',
-                        style: TextStyle(
+                      Text(
+                        widget.userName ?? 'No Name',
+                        style: const TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
@@ -81,19 +111,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Computer Science • Senior',
-                        style: TextStyle(
+                        widget.faculty ?? '',
+                        style: const TextStyle(
                           fontSize: 16,
-                          color: Colors.white.withOpacity(0.7),
+                          color: Colors.white70,
+                          fontFamily: 'Montserrat', // modern readable font
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: 0.2,
                         ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        widget.year ?? '',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          color: Color.fromARGB(255, 82, 248, 118),
+                          fontFamily: 'RobotoMono', // distinct font for year
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.5,
+                        ),
+                        textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 24),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 32,
+                        runSpacing: 12,
                         children: [
-                          _buildStatItem('Credit Score', '785', Colors.green),
-                          _buildStatItem('Rating', '4.8', Colors.amber),
-                          _buildStatItem('Walks', '12', Colors.blue),
+                          _buildStatItem('Student ID', widget.studentId ?? '-', const Color.fromARGB(255, 82, 248, 118)),
+                          _buildStatItem('Email', widget.userEmail ?? '-', const Color.fromARGB(255, 82, 248, 118)),
+                          _buildStatItem('Program', widget.course ?? '-', const Color.fromARGB(255, 82, 248, 118)),
                         ],
                       ),
                     ],
@@ -113,19 +161,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Column(
       children: [
         Text(
-          value,
-          style: TextStyle(
-            fontSize: 20,
+          label,
+          style: const TextStyle(
+            fontSize: 22,
             fontWeight: FontWeight.bold,
-            color: color,
+            color: Colors.white,
           ),
         ),
         const SizedBox(height: 4),
         Text(
-          label,
+          value,
           style: TextStyle(
-            fontSize: 14,
-            color: Colors.white.withOpacity(0.7),
+            fontSize: 16,
+            fontWeight: FontWeight.normal,
+            color: color,
           ),
         ),
       ],
@@ -162,7 +211,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
               MaterialPageRoute(builder: (context) => const BackendTestScreen()),
             );
           }),
-          _buildSettingsTile(Icons.logout, 'Sign Out', isDestructive: true),
+            _buildSettingsTile(
+            Icons.logout,
+            'Sign Out',
+            isDestructive: true,
+              onTap: () async {
+                // Sign out logic
+                final authService = AuthService();
+                await authService.signOut();
+                // Navigate to LoginScreen directly
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(builder: (context) => LoginScreen()),
+                );
+              },
+          ),
         ],
       ),
     );

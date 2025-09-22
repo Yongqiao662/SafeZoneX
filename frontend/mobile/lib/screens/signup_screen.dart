@@ -15,6 +15,7 @@ class SignUpScreen extends StatefulWidget {
 class _SignUpScreenState extends State<SignUpScreen> 
     with TickerProviderStateMixin {
   final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _nameController = TextEditingController(); // Added name controller
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   
   late AnimationController _fadeController;
@@ -27,6 +28,7 @@ class _SignUpScreenState extends State<SignUpScreen>
   
   bool _isLoading = false;
   bool _hasEmailError = false;
+  bool _hasNameError = false;
 
   final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: ['email', 'profile'],
@@ -88,6 +90,7 @@ class _SignUpScreenState extends State<SignUpScreen>
     _slideController.dispose();
     _buttonController.dispose();
     _emailController.dispose();
+    _nameController.dispose();
     super.dispose();
   }
 
@@ -201,7 +204,7 @@ class _SignUpScreenState extends State<SignUpScreen>
           ),
           const SizedBox(height: 8),
           Text(
-            'Enter your student email to get started',
+            'Enter your details to get started',
             style: TextStyle(
               fontSize: 14,
               color: Colors.white.withOpacity(0.7),
@@ -220,6 +223,8 @@ class _SignUpScreenState extends State<SignUpScreen>
         key: _formKey,
         child: Column(
           children: [
+            _buildNameField(),
+            const SizedBox(height: 20),
             _buildEmailField(),
             const SizedBox(height: 16),
             Container(
@@ -254,6 +259,78 @@ class _SignUpScreenState extends State<SignUpScreen>
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNameField() {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: _hasNameError
+            ? [
+                BoxShadow(
+                  color: Colors.red.withOpacity(0.3),
+                  blurRadius: 10,
+                  offset: const Offset(0, 5),
+                ),
+              ]
+            : [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 10,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+      ),
+      child: TextFormField(
+        controller: _nameController,
+        keyboardType: TextInputType.name,
+        textCapitalization: TextCapitalization.words,
+        style: const TextStyle(color: Colors.white, fontSize: 16),
+        onChanged: (value) {
+          setState(() {
+            _hasNameError = false;
+          });
+        },
+        validator: (value) {
+          if (value == null || value.trim().isEmpty) {
+            setState(() => _hasNameError = true);
+            return 'Please enter your full name';
+          }
+          if (value.trim().length < 2) {
+            setState(() => _hasNameError = true);
+            return 'Name must be at least 2 characters long';
+          }
+          return null;
+        },
+        decoration: InputDecoration(
+          hintText: 'Full Name',
+          hintStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
+          prefixIcon: Icon(
+            Icons.person_outline,
+            color: _hasNameError ? Colors.red : Colors.white.withOpacity(0.7),
+          ),
+          filled: true,
+          fillColor: Colors.white.withOpacity(0.1),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide.none,
+          ),
+          errorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: Colors.red, width: 1),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: Colors.deepPurple, width: 2),
+          ),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 20,
+          ),
         ),
       ),
     );
@@ -440,12 +517,16 @@ class _SignUpScreenState extends State<SignUpScreen>
     return SlideTransition(
       position: _slideAnim,
       child: ElevatedButton.icon(
-        onPressed: _handleGoogleSignIn,
+        onPressed: _isLoading ? null : _handleGoogleSignIn,
         icon: const Icon(Icons.login),
         label: const Text('Sign in with Google'),
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.white,
           foregroundColor: Colors.black,
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       ),
     );
@@ -473,7 +554,8 @@ class _SignUpScreenState extends State<SignUpScreen>
         context,
         MaterialPageRoute(
           builder: (context) => VerificationScreen(
-            email: _emailController.text,
+            name: _nameController.text.trim(),
+            email: _emailController.text.trim(),
           ),
         ),
       );
@@ -532,8 +614,8 @@ class _SignUpScreenState extends State<SignUpScreen>
         // Check if the email is from the allowed domain
         final email = googleUser.email.toLowerCase();
         print('Google Sign-In email: $email');
-        print('Checking if email ends with: .siswa.um.edu.my');
-        print('Email ends with domain: ${email.endsWith('.siswa.um.edu.my')}');
+        print('Checking if email ends with: @siswa.um.edu.my');
+        print('Email ends with domain: ${email.endsWith('@siswa.um.edu.my')}');
         
         // TODO: Re-enable domain validation later
         // if (!email.endsWith('.siswa.um.edu.my')) {

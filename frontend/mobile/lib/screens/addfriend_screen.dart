@@ -696,34 +696,28 @@ class _FriendsScreenState extends State<FriendsScreen>
                   ],
                 ),
                 const SizedBox(height: 2),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.location_on,
-                      size: 12,
-                      color: Colors.blue.withOpacity(0.7),
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        friend.location,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.blue.withOpacity(0.8),
-                          fontWeight: FontWeight.w500,
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.location_on,
+                        size: 12,
+                        color: Colors.blue.withOpacity(0.7),
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          friend.location,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.blue.withOpacity(0.8),
+                            fontWeight: FontWeight.w500,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                    Text(
-                      ' • ${friend.locationUpdated}',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: Colors.white.withOpacity(0.5),
-                      ),
-                    ),
-                  ],
-                ),
+                      // Removed minutes/locationUpdated text here
+                    ],
+                  ),
                 const SizedBox(height: 4),
                 Text(
                   '@${friend.username}',

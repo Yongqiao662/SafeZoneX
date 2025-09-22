@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:io';
+import 'package:image_picker/image_picker.dart';
 import 'main_dashboard_screen.dart';
+import 'package:dropdown_button2/dropdown_button2.dart';
 
 class PersonalDetailsScreen extends StatefulWidget {
+  final String name;
   final String email;
-  
-  const PersonalDetailsScreen({Key? key, required this.email}) : super(key: key);
+
+  const PersonalDetailsScreen({Key? key, required this.name, required this.email}) : super(key: key);
 
   @override
   State<PersonalDetailsScreen> createState() => _PersonalDetailsScreenState();
@@ -15,11 +18,26 @@ class PersonalDetailsScreen extends StatefulWidget {
 class _PersonalDetailsScreenState extends State<PersonalDetailsScreen> 
     with TickerProviderStateMixin {
   final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
   final TextEditingController _yearController = TextEditingController();
   final TextEditingController _courseController = TextEditingController();
-  final TextEditingController _usernameController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _confirmPasswordController = TextEditingController();
+  final TextEditingController _studentIdController = TextEditingController();
+  String _selectedFaculty = '';
+  final List<String> _facultyOptions = [
+    'Faculty of Arts and Social Sciences',
+    'Faculty of Built Environment',
+    'Faculty of Business and Economics',
+    'Faculty of Computer Science and Information Technology',
+    'Faculty of Creative Arts',
+    'Faculty of Dentistry',
+    'Faculty of Education',
+    'Faculty of Engineering',
+    'Faculty of Languages and Linguistics',
+    'Faculty of Law',
+    'Faculty of Medicine',
+    'Faculty of Pharmacy',
+    'Faculty of Science',
+  ];
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   
   late AnimationController _fadeController;
@@ -50,6 +68,15 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen>
     super.initState();
     _initAnimations();
     _startEntryAnimation();
+    // Autofill name and email
+    _nameController.text = widget.name;
+    _emailController.text = widget.email;
+    // Autofill student ID as first 8 characters of email
+    if (widget.email.length >= 8) {
+      _studentIdController.text = widget.email.substring(0, 8);
+    } else {
+      _studentIdController.text = widget.email;
+    }
   }
 
   void _initAnimations() {
@@ -100,11 +127,10 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen>
     _slideController.dispose();
     _buttonController.dispose();
     _nameController.dispose();
+    _emailController.dispose();
     _yearController.dispose();
     _courseController.dispose();
-    _usernameController.dispose();
-    _passwordController.dispose();
-    _confirmPasswordController.dispose();
+    _studentIdController.dispose();
     super.dispose();
   }
 
@@ -243,7 +269,40 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen>
               },
             ),
             const SizedBox(height: 20),
+            _buildTextField(
+              controller: _emailController,
+              hintText: 'Email',
+              icon: Icons.email_outlined,
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Please enter your email';
+                }
+                // Basic email validation
+                if (!RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$').hasMatch(value)) {
+                  return 'Please enter a valid email';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 20),
+            _buildTextField(
+              controller: _studentIdController,
+              hintText: 'Student ID',
+              icon: Icons.badge_outlined,
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Please enter your student ID';
+                }
+                if (value.length != 8) {
+                  return 'ID must be 8 characters long';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 20),
             _buildYearDropdown(),
+            const SizedBox(height: 20),
+            _buildFacultyDropdown(),
             const SizedBox(height: 20),
             _buildTextField(
               controller: _courseController,
@@ -258,53 +317,6 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen>
             ),
             const SizedBox(height: 20),
             _buildStudentIdUpload(),
-            const SizedBox(height: 20),
-            _buildTextField(
-              controller: _usernameController,
-              hintText: 'Username',
-              icon: Icons.alternate_email,
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please enter a username';
-                }
-                if (value.length < 3) {
-                  return 'Username must be at least 3 characters';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 20),
-            _buildPasswordField(
-              controller: _passwordController,
-              hintText: 'Password',
-              isVisible: _isPasswordVisible,
-              onVisibilityChanged: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please enter a password';
-                }
-                if (value.length < 6) {
-                  return 'Password must be at least 6 characters';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 20),
-            _buildPasswordField(
-              controller: _confirmPasswordController,
-              hintText: 'Confirm Password',
-              isVisible: _isConfirmPasswordVisible,
-              onVisibilityChanged: () => setState(() => _isConfirmPasswordVisible = !_isConfirmPasswordVisible),
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please confirm your password';
-                }
-                if (value != _passwordController.text) {
-                  return 'Passwords do not match';
-                }
-                return null;
-              },
-            ),
           ],
         ),
       ),
@@ -374,11 +386,13 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen>
           ),
         ],
       ),
-      child: DropdownButtonFormField<String>(
-        value: _selectedYear.isEmpty ? null : _selectedYear,
+        child: DropdownButtonFormField<String>(
+          value: _selectedYear.isEmpty ? null : _selectedYear,
+          hint: Text(
+          'Year of Study',
+          style: TextStyle(color: Colors.white.withOpacity(0.6)),
+        ),
         decoration: InputDecoration(
-          hintText: 'Year of Study',
-          hintStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
           prefixIcon: Icon(
             Icons.calendar_today_outlined,
             color: Colors.white.withOpacity(0.7),
@@ -386,41 +400,125 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen>
           filled: true,
           fillColor: Colors.white.withOpacity(0.1),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide.none,
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
           ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Colors.deepPurple, width: 2),
-          ),
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 20,
-            vertical: 20,
-          ),
-        ),
-        dropdownColor: const Color(0xFF16213e),
-        style: const TextStyle(color: Colors.white, fontSize: 16),
-        icon: Icon(Icons.arrow_drop_down, color: Colors.white.withOpacity(0.7)),
-        items: _studyYears.map((String year) {
-          return DropdownMenuItem<String>(
-            value: year,
-            child: Text(year),
-          );
-        }).toList(),
-        onChanged: (String? newValue) {
-          setState(() {
-            _selectedYear = newValue ?? '';
-          });
-        },
-        validator: (value) {
-          if (value == null || value.isEmpty) {
-            return 'Please select your year of study';
-          }
-          return null;
-        },
-      ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(16),
+      borderSide: const BorderSide(color: Colors.deepPurple, width: 2),
+    ),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+  ),
+  dropdownColor: const Color(0xFF16213e),
+  style: TextStyle(
+    color: _selectedYear.isEmpty
+        ? Colors.white.withOpacity(0.6)
+        : Colors.white,
+    fontSize: 16,
+  ),
+  icon: Icon(Icons.arrow_drop_down, color: Colors.white.withOpacity(0.7)),
+  items: _studyYears.map((String year) {
+    return DropdownMenuItem<String>(
+      value: year,
+      child: Text(year, style: const TextStyle(color: Colors.white)),
+    );
+  }).toList(),
+  onChanged: (String? newValue) {
+    setState(() {
+      _selectedYear = newValue ?? '';
+    });
+  },
+  validator: (value) {
+    if (value == null || value.isEmpty) {
+      return 'Please select your year of study';
+    }
+    return null;
+  },
+),
     );
   }
+
+  Widget _buildFacultyDropdown() {
+  return Container(
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(16),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.1),
+          blurRadius: 10,
+          offset: const Offset(0, 5),
+        ),
+      ],
+    ),
+    child: DropdownButtonFormField2<String>(
+      alignment: Alignment.topLeft,
+      value: _selectedFaculty.isEmpty ? null : _selectedFaculty,
+      decoration: InputDecoration(
+        hintText: 'Faculty',
+        hintStyle: TextStyle(
+          color: Colors.white.withOpacity(0.6),
+          height: 3, // Adjust text height to align with icon
+        ),
+        prefixIcon: Icon(
+          Icons.account_balance_outlined,
+          color: Colors.white.withOpacity(0.7),
+          size: 22,
+        ),
+        filled: true,
+        fillColor: Colors.white.withOpacity(0.1),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Colors.deepPurple, width: 2),
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 18,
+          vertical: 16,
+        ),
+      ),
+      dropdownStyleData: DropdownStyleData(
+        direction: DropdownDirection.textDirection,
+        maxHeight: 300, // scrollable list if items exceed 300px
+        decoration: BoxDecoration(
+          color: const Color(0xFF16213e),
+          borderRadius: BorderRadius.circular(16),
+        ),
+      ),
+      style: const TextStyle(color: Colors.white, fontSize: 16),
+      iconStyleData: IconStyleData(
+        icon: Icon(Icons.arrow_drop_down, color: Colors.white.withOpacity(0.7)),
+      ),
+      items: _facultyOptions.map((String faculty) {
+        return DropdownMenuItem<String>(
+          value: faculty,
+          child: SizedBox(
+            width: 200,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Text(faculty, style: const TextStyle(color: Colors.white)),
+            ),
+          ),
+        );
+      }).toList(),
+      onChanged: (String? newValue) {
+        setState(() {
+          _selectedFaculty = newValue ?? '';
+        });
+      },
+      validator: (value) {
+        if (value == null || value.isEmpty) {
+          return 'Please select your faculty';
+        }
+        return null;
+      },
+    ),
+  );
+}
+
+
 
   Widget _buildStudentIdUpload() {
     return Container(
@@ -681,11 +779,18 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen>
   }
 
   void _simulateImagePick(String source) {
-    // Simulate image picking
-    setState(() {
-      _studentIdImage = File('mock_student_id.jpg'); // Mock file
+    // Use image_picker to pick image from gallery
+    final picker = ImagePicker();
+    picker.pickImage(source: ImageSource.gallery).then((pickedFile) {
+      if (pickedFile != null) {
+        setState(() {
+          _studentIdImage = File(pickedFile.path);
+        });
+        _showSuccessSnackBar('Student ID image uploaded successfully');
+      } else {
+        _showErrorSnackBar('No image selected');
+      }
     });
-    _showSuccessSnackBar('Student ID image uploaded from $source');
   }
 
   Future<void> _completeRegistration(BuildContext context) async {
@@ -709,10 +814,20 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen>
       _showSuccessSnackBar('Registration completed successfully!');
       await _exitAnimation();
       
-      // Navigate to main dashboard
+      // Navigate to main dashboard, passing user details
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (context) => MainDashboardScreen()),
+        MaterialPageRoute(
+          builder: (context) => MainDashboardScreen(
+            userName: _nameController.text,
+            userEmail: _emailController.text,
+            studentId: _studentIdController.text,
+            year: _selectedYear,
+            faculty: _selectedFaculty,
+            course: _courseController.text,
+            studentIdImage: _studentIdImage,
+          ),
+        ),
         (route) => false,
       );
     } catch (e) {

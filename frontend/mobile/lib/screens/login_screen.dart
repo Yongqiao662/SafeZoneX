@@ -1,7 +1,9 @@
+
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../services/auth_service.dart'; // Make sure this exists and is implemented
 import 'main_dashboard_screen.dart';
+import 'personal_details_screen.dart';
 import 'signup_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -267,9 +269,9 @@ class _LoginScreenState extends State<LoginScreen>
           print('Email field validation - SUCCESS for: $email');
           
           // TODO: Re-enable domain validation later
-          // if (!email.endsWith('.siswa.um.edu.my')) {
+          // if (!email.endsWith('siswa.um.edu.my')) {
           //   setState(() => _hasEmailError = true);
-          //   return 'Only .siswa.um.edu.my email addresses are allowed. Your email: $email';
+          //   return 'Only siswa.um.edu.my email addresses are allowed. Your email: $email';
           // }
           
           return null;
@@ -452,7 +454,7 @@ class _LoginScreenState extends State<LoginScreen>
         width: double.infinity,
         child: ElevatedButton.icon(
           icon: Image.asset(
-            'assets/google_logo.png', // Make sure this asset exists
+            'assets/google_logo.png',
             height: 24,
             width: 24,
           ),
@@ -470,6 +472,8 @@ class _LoginScreenState extends State<LoginScreen>
               borderRadius: BorderRadius.circular(16),
             ),
             padding: const EdgeInsets.symmetric(vertical: 14),
+            // Keep color even when loading
+            disabledBackgroundColor: Colors.redAccent,
           ),
           onPressed: _isLoading ? null : _handleGoogleSignIn,
         ),
@@ -491,25 +495,27 @@ class _LoginScreenState extends State<LoginScreen>
       }
     } catch (error) {
       print('Error during Google Sign-In: $error');
-      _showErrorSnackBar('Google Sign-In failed: $error');
+  // Error: Google Sign-In failed, but do not show SnackBar
     } finally {
       setState(() => _isLoading = false);
     }
   }
 
   Future<void> _processGoogleUser(GoogleSignInAccount googleUser) async {
-    // Check if the email is from the allowed domain
-    final email = googleUser.email.toLowerCase();
+    final email = googleUser.email.trim().toLowerCase();
     print('Google Sign-In email: $email');
-    print('Checking if email ends with: .siswa.um.edu.my');
-    print('Email ends with domain: ${email.endsWith('.siswa.um.edu.my')}');
+    print('Checking if email ends with: siswa.um.edu.my');
     
-    // TODO: Re-enable domain validation later
-    // if (!email.endsWith('.siswa.um.edu.my')) {
-    //   _showErrorSnackBar('Only .siswa.um.edu.my email addresses are allowed. Your email: $email');
-    //   await _googleSignIn.signOut(); // Sign out the user
-    //   return;
-    // }
+    // Fixed validation - use endsWith() method instead of substring
+    final bool isValidDomain = email.endsWith('siswa.um.edu.my');
+    print('Email ends with domain: $isValidDomain');
+
+    // Domain validation
+    if (!isValidDomain) {
+  // Error: Email not allowed, but do not show SnackBar
+      await _googleSignIn.signOut(); // Sign out the user
+      return; // Don't navigate anywhere - stay on login screen
+    }
 
     final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
     final String? idToken = googleAuth.idToken;
@@ -517,15 +523,22 @@ class _LoginScreenState extends State<LoginScreen>
     
     if (idToken != null && accessToken != null) {
       print('Google ID Token: $idToken');
+      print('Authentication successful - navigating to PersonalDetailsScreen');
       
-      // TODO: Re-enable backend authentication when server is running
-      // For now, bypass backend and use Google data directly
-      print('Using Google data directly (backend disabled)');
       _showSuccessSnackBar('Welcome, ${googleUser.displayName ?? googleUser.email}!');
       await _exitAnimation();
-      _navigateToHome();
+      
+      // Navigate to PersonalDetailsScreen when validation passes
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (context) => PersonalDetailsScreen(
+            name: googleUser.displayName ?? '',
+            email: googleUser.email,
+          ),
+        ),
+      );
     } else {
-      _showErrorSnackBar('Failed to get authentication tokens');
+        _showErrorSnackBar('Failed to get authentication tokens');
     }
   }
 
@@ -583,14 +596,24 @@ class _LoginScreenState extends State<LoginScreen>
       );
 
       if (result['success']) {
-        _showSuccessSnackBar('Welcome back, ${result['user']['name']}!');
+  _showSuccessSnackBar('Welcome back, ${result['user']['name']}!');
         await _exitAnimation();
-        _navigateToHome();
+        // Navigate to personal details screen to complete profile
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (context) => PersonalDetailsScreen(
+              name: result['user']['name'] ?? '',
+              email: result['user']['email'] ?? '',
+            ),
+          ),
+        );
       } else {
-        _showErrorSnackBar(result['message']);
+          _showErrorSnackBar('Login failed');
+  // Error: Login failed, but do not show SnackBar
       }
     } catch (e) {
-      _showErrorSnackBar('Login failed: $e');
+        _showErrorSnackBar('Login failed');
+  // Error: Login failed, but do not show SnackBar
     } finally {
       setState(() => _isLoading = false);
     }
@@ -618,9 +641,11 @@ class _LoginScreenState extends State<LoginScreen>
           borderRadius: BorderRadius.circular(12),
         ),
         margin: const EdgeInsets.all(16),
+        duration: const Duration(seconds: 4),
       ),
     );
   }
+
 
   void _showSuccessSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -632,39 +657,6 @@ class _LoginScreenState extends State<LoginScreen>
           borderRadius: BorderRadius.circular(12),
         ),
         margin: const EdgeInsets.all(16),
-      ),
-    );
-  }
-
-  void _navigateToHome() {
-    Navigator.of(context).pushReplacement(
-      PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 800),
-        pageBuilder: (context, animation, secondaryAnimation) =>
-            MainDashboardScreen(),
-        transitionsBuilder:
-            (context, animation, secondaryAnimation, child) {
-          final slideAnimation = Tween<Offset>(
-            begin: const Offset(1.0, 0.0),
-            end: Offset.zero,
-          ).animate(CurvedAnimation(
-            parent: animation,
-            curve: Curves.easeOutCubic,
-          ));
-
-          final fadeAnimation = CurvedAnimation(
-            parent: animation,
-            curve: const Interval(0.3, 1.0, curve: Curves.easeOut),
-          );
-
-          return SlideTransition(
-            position: slideAnimation,
-            child: FadeTransition(
-              opacity: fadeAnimation,
-              child: child,
-            ),
-          );
-        },
       ),
     );
   }

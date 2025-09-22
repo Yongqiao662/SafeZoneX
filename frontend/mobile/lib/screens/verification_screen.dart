@@ -4,8 +4,9 @@ import 'personal_details_screen.dart';
 
 class VerificationScreen extends StatefulWidget {
   final String email;
+  final String name;
   
-  const VerificationScreen({Key? key, required this.email}) : super(key: key);
+  const VerificationScreen({Key? key, required this.email, required this.name}) : super(key: key);
 
   @override
   State<VerificationScreen> createState() => _VerificationScreenState();
@@ -478,7 +479,7 @@ class _VerificationScreenState extends State<VerificationScreen>
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => PersonalDetailsScreen(email: widget.email),
+            builder: (context) => PersonalDetailsScreen(name: widget.name, email: widget.email),
           ),
         );
       } else {

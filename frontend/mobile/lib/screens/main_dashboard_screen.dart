@@ -5,8 +5,27 @@ import 'addfriend_screen.dart';
 import 'walk_with_me.dart';
 import 'profile_screen.dart';
 import 'reports_screen.dart';
+import 'dart:io';
 
 class MainDashboardScreen extends StatefulWidget {
+  final String? userName;
+  final String? userEmail;
+  final String? studentId;
+  final String? year;
+  final String? faculty;
+  final String? course;
+  final File? studentIdImage;
+
+  MainDashboardScreen({
+    this.userName,
+    this.userEmail,
+    this.studentId,
+    this.year,
+    this.faculty,
+    this.course,
+    this.studentIdImage,
+  });
+
   @override
   _MainDashboardScreenState createState() => _MainDashboardScreenState();
 }
@@ -25,7 +44,15 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
     WalkWithMeHome(),
     FriendsScreen(),
     ReportsScreen(),
-    ProfileScreen(),
+    ProfileScreen(
+      userName: widget.userName,
+      userEmail: widget.userEmail,
+      studentId: widget.studentId,
+      year: widget.year,
+      faculty: widget.faculty,
+      course: widget.course,
+      studentIdImage: widget.studentIdImage,
+    ),
   ];
 
   void _showChatOverlay() {
