@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import '../services/auth_service.dart'; // Make sure this exists and is implemented
+import 'package:shared_preferences/shared_preferences.dart';
 import 'main_dashboard_screen.dart';
-import 'signup_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -13,9 +12,6 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen>
     with TickerProviderStateMixin {
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
-  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
   late AnimationController _fadeController;
   late AnimationController _slideController;
@@ -27,9 +23,6 @@ class _LoginScreenState extends State<LoginScreen>
   late Animation<double> _buttonScaleAnim;
 
   bool _isLoading = false;
-  bool _isPasswordVisible = false;
-  bool _hasEmailError = false;
-  bool _hasPasswordError = false;
 
   final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: ['email', 'profile'],
@@ -98,8 +91,6 @@ class _LoginScreenState extends State<LoginScreen>
     _fadeController.dispose();
     _slideController.dispose();
     _buttonController.dispose();
-    _emailController.dispose();
-    _passwordController.dispose();
     super.dispose();
   }
 
@@ -129,14 +120,10 @@ class _LoginScreenState extends State<LoginScreen>
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   _buildLogo(),
-                  const SizedBox(height: 60),
-                  _buildLoginForm(),
-                  const SizedBox(height: 32),
-                  _buildLoginButton(),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 80),
                   _buildGoogleSignInButton(),
-                  const SizedBox(height: 24),
-                  _buildSignUpLink(),
+                  const SizedBox(height: 32),
+                  _buildInfoText(),
                   const SizedBox(height: 40),
                 ],
               ),
@@ -155,44 +142,53 @@ class _LoginScreenState extends State<LoginScreen>
         child: Column(
           children: [
             Container(
-              width: 80,
-              height: 80,
+              width: 100,
+              height: 100,
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
                   colors: [Colors.deepPurple, Colors.purpleAccent],
                 ),
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(25),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.deepPurple.withOpacity(0.3),
-                    blurRadius: 20,
-                    offset: const Offset(0, 10),
+                    color: Colors.deepPurple.withOpacity(0.4),
+                    blurRadius: 25,
+                    offset: const Offset(0, 15),
                   ),
                 ],
               ),
               child: const Icon(
                 Icons.security,
                 color: Colors.white,
-                size: 40,
+                size: 50,
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 32),
             const Text(
               'SafeZoneX',
               style: TextStyle(
-                fontSize: 32,
+                fontSize: 36,
                 fontWeight: FontWeight.w300,
                 color: Colors.white,
-                letterSpacing: 2.0,
+                letterSpacing: 2.5,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Your Security, Our Priority',
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.white.withOpacity(0.8),
+                letterSpacing: 1.2,
               ),
             ),
             const SizedBox(height: 8),
             Text(
-              'Your Security, Our Priority',
+              'University of Malaya Campus Safety',
               style: TextStyle(
                 fontSize: 14,
-                color: Colors.white.withOpacity(0.7),
-                letterSpacing: 1.0,
+                color: Colors.white.withOpacity(0.6),
+                letterSpacing: 0.8,
               ),
             ),
           ],
@@ -201,192 +197,7 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  Widget _buildLoginForm() {
-    return SlideTransition(
-      position: _slideAnim,
-      child: Form(
-        key: _formKey,
-        child: Column(
-          children: [
-            _buildEmailField(),
-            const SizedBox(height: 20),
-            _buildPasswordField(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEmailField() {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: _hasEmailError
-            ? [
-                BoxShadow(
-                  color: Colors.red.withOpacity(0.3),
-                  blurRadius: 10,
-                  offset: const Offset(0, 5),
-                ),
-              ]
-            : [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 10,
-                  offset: const Offset(0, 5),
-                ),
-              ],
-      ),
-      child: TextFormField(
-        controller: _emailController,
-        keyboardType: TextInputType.emailAddress,
-        style: const TextStyle(color: Colors.white, fontSize: 16),
-        onChanged: (value) {
-          setState(() {
-            _hasEmailError = false;
-          });
-        },
-        validator: (value) {
-          if (value == null || value.isEmpty) {
-            setState(() => _hasEmailError = true);
-            return 'Please enter your email';
-          }
-          
-          final email = value.toLowerCase().trim();
-          print('Email field validation - Input: "$value"');
-          print('Email field validation - Processed: "$email"');
-          
-          // Basic email regex validation only
-          if (!RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$').hasMatch(email)) {
-            setState(() => _hasEmailError = true);
-            print('Email field validation - Regex failed for: $email');
-            return 'Please enter a valid email';
-          }
-          
-          print('Email field validation - SUCCESS for: $email');
-          
-          // TODO: Re-enable domain validation later
-          // if (!email.endsWith('.siswa.um.edu.my')) {
-          //   setState(() => _hasEmailError = true);
-          //   return 'Only .siswa.um.edu.my email addresses are allowed. Your email: $email';
-          // }
-          
-          return null;
-        },
-        decoration: InputDecoration(
-          hintText: 'Email Address',
-          hintStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
-          prefixIcon: Icon(
-            Icons.email_outlined,
-            color: _hasEmailError ? Colors.red : Colors.white.withOpacity(0.7),
-          ),
-          filled: true,
-          fillColor: Colors.white.withOpacity(0.1),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide.none,
-          ),
-          errorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Colors.red, width: 1),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Colors.deepPurple, width: 2),
-          ),
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 20,
-            vertical: 20,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPasswordField() {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: _hasPasswordError
-            ? [
-                BoxShadow(
-                  color: Colors.red.withOpacity(0.3),
-                  blurRadius: 10,
-                  offset: const Offset(0, 5),
-                ),
-              ]
-            : [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 10,
-                  offset: const Offset(0, 5),
-                ),
-              ],
-      ),
-      child: TextFormField(
-        controller: _passwordController,
-        obscureText: !_isPasswordVisible,
-        style: const TextStyle(color: Colors.white, fontSize: 16),
-        onChanged: (value) {
-          setState(() {
-            _hasPasswordError = false;
-          });
-        },
-        validator: (value) {
-          if (value == null || value.isEmpty) {
-            setState(() => _hasPasswordError = true);
-            return 'Please enter your password';
-          }
-          if (value.length < 6) {
-            setState(() => _hasPasswordError = true);
-            return 'Password must be at least 6 characters';
-          }
-          return null;
-        },
-        decoration: InputDecoration(
-          hintText: 'Password',
-          hintStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
-          prefixIcon: Icon(
-            Icons.lock_outline,
-            color: _hasPasswordError ? Colors.red : Colors.white.withOpacity(0.7),
-          ),
-          suffixIcon: IconButton(
-            icon: Icon(
-              _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
-              color: Colors.white.withOpacity(0.7),
-            ),
-            onPressed: () {
-              setState(() {
-                _isPasswordVisible = !_isPasswordVisible;
-              });
-            },
-          ),
-          filled: true,
-          fillColor: Colors.white.withOpacity(0.1),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide.none,
-          ),
-          errorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Colors.red, width: 1),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Colors.deepPurple, width: 2),
-          ),
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 20,
-            vertical: 20,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLoginButton() {
+  Widget _buildGoogleSignInButton() {
     return SlideTransition(
       position: _slideAnim,
       child: ScaleTransition(
@@ -397,22 +208,22 @@ class _LoginScreenState extends State<LoginScreen>
           onTapCancel: () => _buttonController.reverse(),
           child: Container(
             width: double.infinity,
-            height: 56,
+            height: 60,
             decoration: BoxDecoration(
               gradient: const LinearGradient(
-                colors: [Colors.deepPurple, Colors.purpleAccent],
+                colors: [Color(0xFFDB4437), Color(0xFFE57373)],
               ),
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.deepPurple.withOpacity(0.4),
+                  color: Colors.red.withOpacity(0.4),
                   blurRadius: 15,
                   offset: const Offset(0, 8),
                 ),
               ],
             ),
-            child: ElevatedButton(
-              onPressed: _isLoading ? null : () => _login(context),
+            child: ElevatedButton.icon(
+              onPressed: _isLoading ? null : _handleGoogleSignIn,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.transparent,
                 shadowColor: Colors.transparent,
@@ -420,7 +231,7 @@ class _LoginScreenState extends State<LoginScreen>
                   borderRadius: BorderRadius.circular(16),
                 ),
               ),
-              child: _isLoading
+              icon: _isLoading
                   ? const SizedBox(
                       height: 24,
                       width: 24,
@@ -429,8 +240,15 @@ class _LoginScreenState extends State<LoginScreen>
                         valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                       ),
                     )
+                  : Image.asset(
+                      'assets/google_logo.png',
+                      height: 28,
+                      width: 28,
+                    ),
+              label: _isLoading
+                  ? const Text('')
                   : const Text(
-                      'Sign In',
+                      'Continue with UM Google',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w600,
@@ -445,33 +263,52 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  Widget _buildGoogleSignInButton() {
+  Widget _buildInfoText() {
     return SlideTransition(
       position: _slideAnim,
-      child: SizedBox(
-        width: double.infinity,
-        child: ElevatedButton.icon(
-          icon: Image.asset(
-            'assets/google_logo.png', // Make sure this asset exists
-            height: 24,
-            width: 24,
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.blue.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: Colors.blue.withOpacity(0.3),
+            width: 1,
           ),
-          label: const Text(
-            'Sign in with Google',
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.white,
-              fontWeight: FontWeight.w600,
+        ),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.info_outline,
+                  color: Colors.blue.shade300,
+                  size: 24,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'For UM Students Only',
+                    style: TextStyle(
+                      color: Colors.blue.shade300,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.redAccent,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+            const SizedBox(height: 12),
+            Text(
+              'Only University of Malaya student accounts (@siswa.um.edu.my) are allowed to access this campus safety system.',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.7),
+                fontSize: 14,
+                height: 1.5,
+              ),
+              textAlign: TextAlign.center,
             ),
-            padding: const EdgeInsets.symmetric(vertical: 14),
-          ),
-          onPressed: _isLoading ? null : _handleGoogleSignIn,
+          ],
         ),
       ),
     );
@@ -480,10 +317,10 @@ class _LoginScreenState extends State<LoginScreen>
   Future<void> _handleGoogleSignIn() async {
     try {
       setState(() => _isLoading = true);
-      
+
       // Sign out first to ensure account picker is shown
       await _googleSignIn.signOut();
-      
+
       // Force interactive sign-in to show account picker
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       if (googleUser != null) {
@@ -501,27 +338,35 @@ class _LoginScreenState extends State<LoginScreen>
     // Check if the email is from the allowed domain
     final email = googleUser.email.toLowerCase();
     print('Google Sign-In email: $email');
-    print('Checking if email ends with: .siswa.um.edu.my');
-    print('Email ends with domain: ${email.endsWith('.siswa.um.edu.my')}');
-    
-    // TODO: Re-enable domain validation later
-    // if (!email.endsWith('.siswa.um.edu.my')) {
-    //   _showErrorSnackBar('Only .siswa.um.edu.my email addresses are allowed. Your email: $email');
-    //   await _googleSignIn.signOut(); // Sign out the user
-    //   return;
-    // }
+    print('Checking if email ends with: @siswa.um.edu.my');
+    print('Email ends with domain: ${email.endsWith('@siswa.um.edu.my')}');
+
+    // Domain validation - ENABLED
+    if (!email.endsWith('@siswa.um.edu.my')) {
+      _showErrorSnackBar('Access restricted to UM students only.\nPlease use your @siswa.um.edu.my account.');
+      await _googleSignIn.signOut(); // Sign out the user
+      return;
+    }
 
     final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
     final String? idToken = googleAuth.idToken;
     final String? accessToken = googleAuth.accessToken;
-    
+
     if (idToken != null && accessToken != null) {
       print('Google ID Token: $idToken');
+
+      // Save user data locally
+      await _saveUserData(googleUser);
+
+      // Check if user is new or existing
+      bool isNewUser = await _checkIfNewUser(googleUser.email);
       
-      // TODO: Re-enable backend authentication when server is running
-      // For now, bypass backend and use Google data directly
-      print('Using Google data directly (backend disabled)');
-      _showSuccessSnackBar('Welcome, ${googleUser.displayName ?? googleUser.email}!');
+      if (isNewUser) {
+        _showSuccessSnackBar('Welcome to SafeZoneX, ${googleUser.displayName ?? googleUser.email.split('@')[0]}!');
+      } else {
+        _showSuccessSnackBar('Welcome back, ${googleUser.displayName ?? googleUser.email.split('@')[0]}!');
+      }
+
       await _exitAnimation();
       _navigateToHome();
     } else {
@@ -529,76 +374,23 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
-  Widget _buildSignUpLink() {
-    return SlideTransition(
-      position: _slideAnim,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            "Don't have an account? ",
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.7),
-              fontSize: 14,
-            ),
-          ),
-          GestureDetector(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => SignUpScreen()),
-              );
-            },
-            child: Text(
-              'Sign Up',
-              style: TextStyle(
-                color: Colors.purpleAccent,
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                decoration: TextDecoration.underline,
-                decorationColor: Colors.purpleAccent,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+  Future<void> _saveUserData(GoogleSignInAccount user) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('user_email', user.email);
+    await prefs.setString('user_name', user.displayName ?? '');
+    await prefs.setString('user_id', user.id);
+    await prefs.setBool('is_logged_in', true);
+    
+    // Save first login timestamp if new user
+    if (!prefs.containsKey('first_login_${user.id}')) {
+      await prefs.setString('first_login_${user.id}', DateTime.now().toIso8601String());
+    }
+    await prefs.setString('last_login', DateTime.now().toIso8601String());
   }
 
-  Future<void> _login(BuildContext context) async {
-    if (_isLoading) return;
-
-    if (!_formKey.currentState!.validate()) {
-      _shakeForm();
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    try {
-      final authService = AuthService();
-      final result = await authService.signInWithEmail(
-        _emailController.text.trim(),
-        _passwordController.text,
-      );
-
-      if (result['success']) {
-        _showSuccessSnackBar('Welcome back, ${result['user']['name']}!');
-        await _exitAnimation();
-        _navigateToHome();
-      } else {
-        _showErrorSnackBar(result['message']);
-      }
-    } catch (e) {
-      _showErrorSnackBar('Login failed: $e');
-    } finally {
-      setState(() => _isLoading = false);
-    }
-  }
-
-  void _shakeForm() {
-    // Add haptic feedback for error
-    // HapticFeedback.heavyImpact(); // Uncomment if you want haptic feedback
+  Future<bool> _checkIfNewUser(String email) async {
+    final prefs = await SharedPreferences.getInstance();
+    return !prefs.containsKey('user_email') || prefs.getString('user_email') != email;
   }
 
   Future<void> _exitAnimation() async {
@@ -618,6 +410,7 @@ class _LoginScreenState extends State<LoginScreen>
           borderRadius: BorderRadius.circular(12),
         ),
         margin: const EdgeInsets.all(16),
+        duration: const Duration(seconds: 4),
       ),
     );
   }

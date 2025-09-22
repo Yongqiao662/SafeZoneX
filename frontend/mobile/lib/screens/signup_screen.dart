@@ -201,7 +201,7 @@ class _SignUpScreenState extends State<SignUpScreen>
           ),
           const SizedBox(height: 8),
           Text(
-            'Enter your student email to get started',
+            'Enter your UM student email to get started',
             style: TextStyle(
               fontSize: 14,
               color: Colors.white.withOpacity(0.7),
@@ -242,7 +242,7 @@ class _SignUpScreenState extends State<SignUpScreen>
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Only .siswa.um.edu.my email addresses are allowed',
+                      'Only @siswa.um.edu.my email addresses are allowed',
                       style: TextStyle(
                         color: Colors.blue,
                         fontSize: 12,
@@ -299,25 +299,24 @@ class _SignUpScreenState extends State<SignUpScreen>
           print('Signup email field validation - Input: "$value"');
           print('Signup email field validation - Processed: "$email"');
           
-          // Basic email regex validation only
+          // Basic email regex validation
           if (!RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$').hasMatch(email)) {
             setState(() => _hasEmailError = true);
             print('Signup email field validation - Regex failed for: $email');
             return 'Please enter a valid email address';
           }
           
+          // Domain validation - ENABLED
+          if (!email.endsWith('@siswa.um.edu.my')) {
+            setState(() => _hasEmailError = true);
+            return 'Only UM student emails (@siswa.um.edu.my) are allowed';
+          }
+          
           print('Signup email field validation - SUCCESS for: $email');
-          
-          // TODO: Re-enable domain validation later
-          // if (!email.endsWith('.siswa.um.edu.my')) {
-          //   setState(() => _hasEmailError = true);
-          //   return 'Only .siswa.um.edu.my email addresses are allowed. Your email: $email';
-          // }
-          
           return null;
         },
         decoration: InputDecoration(
-          hintText: 'Student Email Address',
+          hintText: 'UM Student Email (@siswa.um.edu.my)',
           hintStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
           prefixIcon: Icon(
             Icons.school_outlined,
@@ -439,13 +438,30 @@ class _SignUpScreenState extends State<SignUpScreen>
   Widget _buildGoogleSignInButton() {
     return SlideTransition(
       position: _slideAnim,
-      child: ElevatedButton.icon(
-        onPressed: _handleGoogleSignIn,
-        icon: const Icon(Icons.login),
-        label: const Text('Sign in with Google'),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black,
+      child: SizedBox(
+        width: double.infinity,
+        child: ElevatedButton.icon(
+          onPressed: _isLoading ? null : _handleGoogleSignIn,
+          icon: Image.asset(
+            'assets/google_logo.png', // Make sure this asset exists
+            height: 24,
+            width: 24,
+          ),
+          label: const Text(
+            'Sign up with UM Google',
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.redAccent,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 14),
+          ),
         ),
       ),
     );
@@ -532,15 +548,15 @@ class _SignUpScreenState extends State<SignUpScreen>
         // Check if the email is from the allowed domain
         final email = googleUser.email.toLowerCase();
         print('Google Sign-In email: $email');
-        print('Checking if email ends with: .siswa.um.edu.my');
-        print('Email ends with domain: ${email.endsWith('.siswa.um.edu.my')}');
+        print('Checking if email ends with: @siswa.um.edu.my');
+        print('Email ends with domain: ${email.endsWith('@siswa.um.edu.my')}');
         
-        // TODO: Re-enable domain validation later
-        // if (!email.endsWith('.siswa.um.edu.my')) {
-        //   _showErrorSnackBar('Only .siswa.um.edu.my email addresses are allowed. Your email: $email');
-        //   await _googleSignIn.signOut(); // Sign out the user
-        //   return;
-        // }
+        // Domain validation - ENABLED
+        if (!email.endsWith('@siswa.um.edu.my')) {
+          _showErrorSnackBar('Only UM student emails (@siswa.um.edu.my) are allowed. Your email: $email');
+          await _googleSignIn.signOut(); // Sign out the user
+          return;
+        }
 
         final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
         final String? idToken = googleAuth.idToken;
@@ -569,4 +585,4 @@ class _SignUpScreenState extends State<SignUpScreen>
       setState(() => _isLoading = false);
     }
   }
-}
+    }
