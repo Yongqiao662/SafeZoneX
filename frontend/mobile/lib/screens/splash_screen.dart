@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'login_screen.dart';
+import 'main_dashboard_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   @override
@@ -22,7 +24,7 @@ class _SplashScreenState extends State<SplashScreen>
     super.initState();
     _initAnimations();
     _startAnimations();
-    _navigateToLogin();
+    _navigateToNextScreen();
   }
   
   void _initAnimations() {
@@ -76,10 +78,35 @@ class _SplashScreenState extends State<SplashScreen>
     });
   }
   
-  void _navigateToLogin() {
-    Timer(const Duration(seconds: 3), () {
-      Navigator.pushReplacement(
-        context,
+  Future<bool> _checkLoginStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('is_logged_in') ?? false;
+  }
+  
+  Future<void> _navigateToNextScreen() async {
+    // Wait for splash duration
+    await Future.delayed(const Duration(seconds: 3));
+    
+    // Check if user is already logged in
+    bool isLoggedIn = await _checkLoginStatus();
+    
+    if (isLoggedIn) {
+      // Navigate directly to dashboard
+      Navigator.of(context).pushReplacement(
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) => MainDashboardScreen(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(
+              opacity: animation,
+              child: child,
+            );
+          },
+          transitionDuration: const Duration(milliseconds: 500),
+        ),
+      );
+    } else {
+      // Navigate to login screen
+      Navigator.of(context).pushReplacement(
         PageRouteBuilder(
           pageBuilder: (context, animation, secondaryAnimation) => LoginScreen(),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
@@ -91,7 +118,7 @@ class _SplashScreenState extends State<SplashScreen>
           transitionDuration: const Duration(milliseconds: 500),
         ),
       );
-    });
+    }
   }
   
   @override
@@ -219,10 +246,10 @@ class _SplashScreenState extends State<SplashScreen>
                             builder: (context, child) {
                               String loadingText = 'Loading';
                               if (_progressAnimation.value > 0.3) {
-                                loadingText = 'Initializing Security Features';
+                                loadingText = 'Checking authentication';
                               }
                               if (_progressAnimation.value > 0.7) {
-                                loadingText = 'Almost Ready';
+                                loadingText = 'Initializing security features';
                               }
                               if (_progressAnimation.value > 0.9) {
                                 loadingText = 'Welcome to SafeZoneX';
@@ -301,4 +328,4 @@ class _SplashScreenState extends State<SplashScreen>
       ),
     );
   }
-}
+    }

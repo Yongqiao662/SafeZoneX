@@ -451,13 +451,14 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen>
       ],
     ),
     child: DropdownButtonFormField2<String>(
-      alignment: Alignment.topLeft,
+      alignment: Alignment.centerLeft,
       value: _selectedFaculty.isEmpty ? null : _selectedFaculty,
       decoration: InputDecoration(
         hintText: 'Faculty',
         hintStyle: TextStyle(
           color: Colors.white.withOpacity(0.6),
-          height: 3, // Adjust text height to align with icon
+          fontSize: 16,
+          // Removed height property to fix alignment
         ),
         prefixIcon: Icon(
           Icons.account_balance_outlined,
@@ -474,22 +475,33 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen>
           borderRadius: BorderRadius.circular(16),
           borderSide: const BorderSide(color: Colors.deepPurple, width: 2),
         ),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 18,
-          vertical: 16,
+        contentPadding: const EdgeInsets.only(
+          left: 12,
+          right: 18,
+          top: 16,
+          bottom: 16,
         ),
+        // Add this to ensure proper alignment
+        isDense: false,
       ),
       dropdownStyleData: DropdownStyleData(
         direction: DropdownDirection.textDirection,
-        maxHeight: 300, // scrollable list if items exceed 300px
+        maxHeight: 300,
         decoration: BoxDecoration(
           color: const Color(0xFF16213e),
           borderRadius: BorderRadius.circular(16),
         ),
       ),
-      style: const TextStyle(color: Colors.white, fontSize: 16),
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 16,
+        height: 1.2, // Proper line height for text
+      ),
       iconStyleData: IconStyleData(
-        icon: Icon(Icons.arrow_drop_down, color: Colors.white.withOpacity(0.7)),
+        icon: Icon(
+          Icons.arrow_drop_down,
+          color: Colors.white.withOpacity(0.7),
+        ),
       ),
       items: _facultyOptions.map((String faculty) {
         return DropdownMenuItem<String>(
@@ -498,7 +510,14 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen>
             width: 200,
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
-              child: Text(faculty, style: const TextStyle(color: Colors.white)),
+              child: Text(
+                faculty,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  height: 1.2,
+                ),
+              ),
             ),
           ),
         );
@@ -594,66 +613,6 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen>
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPasswordField({
-    required TextEditingController controller,
-    required String hintText,
-    required bool isVisible,
-    required VoidCallback onVisibilityChanged,
-    String? Function(String?)? validator,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
-      child: TextFormField(
-        controller: controller,
-        obscureText: !isVisible,
-        style: const TextStyle(color: Colors.white, fontSize: 16),
-        validator: validator,
-        decoration: InputDecoration(
-          hintText: hintText,
-          hintStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
-          prefixIcon: Icon(
-            Icons.lock_outline,
-            color: Colors.white.withOpacity(0.7),
-          ),
-          suffixIcon: IconButton(
-            icon: Icon(
-              isVisible ? Icons.visibility : Icons.visibility_off,
-              color: Colors.white.withOpacity(0.7),
-            ),
-            onPressed: onVisibilityChanged,
-          ),
-          filled: true,
-          fillColor: Colors.white.withOpacity(0.1),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide.none,
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Colors.deepPurple, width: 2),
-          ),
-          errorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Colors.red, width: 1),
-          ),
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 20,
-            vertical: 20,
-          ),
         ),
       ),
     );
