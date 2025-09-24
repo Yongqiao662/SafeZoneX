@@ -2,8 +2,84 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
-import 'main_dashboard_screen.dart';
+import 'profile_screen.dart';
 import 'package:dropdown_button2/dropdown_button2.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
+import 'main_dashboard_screen.dart';
+import 'package:http/http.dart' as http;
+
+// User Preferences Management Class
+class UserPreferences {
+  static const String _keyUserData = 'user_data';
+  static const String _keyIsProfileComplete = 'is_profile_complete';
+
+  // Save user profile data
+  static Future<void> saveUserData({
+    required String name,
+    required String email,
+    required String phone,
+    required String studentId,
+    required String selectedYear,
+    required String selectedFaculty,
+    String? course,
+    String? studentIdImagePath,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    
+    final userData = {
+      'name': name,
+      'email': email,
+      'phone': phone,
+      'studentId': studentId,
+      'selectedYear': selectedYear,
+      'selectedFaculty': selectedFaculty,
+      'course': course ?? '',
+      'studentIdImagePath': studentIdImagePath ?? '',
+      'lastUpdated': DateTime.now().toIso8601String(),
+    };
+    
+    await prefs.setString(_keyUserData, jsonEncode(userData));
+    await prefs.setBool(_keyIsProfileComplete, true);
+    
+    // Also save individual keys for backward compatibility
+    await prefs.setString('user_name', name);
+    await prefs.setString('user_email', email);
+    await prefs.setString('user_phone', phone);
+    await prefs.setString('user_student_id', studentId);
+    await prefs.setString('user_year', selectedYear);
+    await prefs.setString('user_faculty', selectedFaculty);
+    await prefs.setString('user_course', course ?? '');
+    if (studentIdImagePath != null && studentIdImagePath.isNotEmpty) {
+      await prefs.setString('student_id_image_path', studentIdImagePath);
+    }
+  }
+
+  // Load user profile data
+  static Future<Map<String, String>?> getUserData() async {
+    final prefs = await SharedPreferences.getInstance();
+    final userDataString = prefs.getString(_keyUserData);
+    
+    if (userDataString != null) {
+      final userData = jsonDecode(userDataString) as Map<String, dynamic>;
+      return userData.cast<String, String>();
+    }
+    return null;
+  }
+
+  // Check if profile is complete
+  static Future<bool> isProfileComplete() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_keyIsProfileComplete) ?? false;
+  }
+
+  // Clear user data (for logout)
+  static Future<void> clearUserData() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_keyUserData);
+    await prefs.setBool(_keyIsProfileComplete, false);
+  }
+}
 
 class PersonalDetailsScreen extends StatefulWidget {
   final String name;
@@ -22,6 +98,7 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen>
   final TextEditingController _yearController = TextEditingController();
   final TextEditingController _courseController = TextEditingController();
   final TextEditingController _studentIdController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
   String _selectedFaculty = '';
   final List<String> _facultyOptions = [
     'Faculty of Arts and Social Sciences',
@@ -49,8 +126,6 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen>
   late Animation<double> _buttonScaleAnim;
   
   bool _isLoading = false;
-  bool _isPasswordVisible = false;
-  bool _isConfirmPasswordVisible = false;
   File? _studentIdImage;
   String _selectedYear = '';
   
@@ -68,14 +143,38 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen>
     super.initState();
     _initAnimations();
     _startEntryAnimation();
-    // Autofill name and email
-    _nameController.text = widget.name;
-    _emailController.text = widget.email;
-    // Autofill student ID as first 8 characters of email
-    if (widget.email.length >= 8) {
-      _studentIdController.text = widget.email.substring(0, 8);
+    _loadExistingData();
+  }
+
+  // Load existing user data
+  void _loadExistingData() async {
+    final savedData = await UserPreferences.getUserData();
+    if (savedData != null) {
+      setState(() {
+        _nameController.text = savedData['name'] ?? widget.name;
+        _emailController.text = savedData['email'] ?? widget.email;
+        _phoneController.text = savedData['phone'] ?? '';
+        _studentIdController.text = savedData['studentId'] ?? 
+          (widget.email.length >= 8 ? widget.email.substring(0, 8) : widget.email);
+        _selectedYear = savedData['selectedYear'] ?? '';
+        _selectedFaculty = savedData['selectedFaculty'] ?? '';
+        _courseController.text = savedData['course'] ?? '';
+        
+        // Load student ID image if available
+        final imagePath = savedData['studentIdImagePath'];
+        if (imagePath != null && imagePath.isNotEmpty) {
+          _studentIdImage = File(imagePath);
+        }
+      });
     } else {
-      _studentIdController.text = widget.email;
+      // First time setup
+      _nameController.text = widget.name;
+      _emailController.text = widget.email;
+      if (widget.email.length >= 8) {
+        _studentIdController.text = widget.email.substring(0, 8);
+      } else {
+        _studentIdController.text = widget.email;
+      }
     }
   }
 
@@ -121,6 +220,211 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen>
     _slideController.forward();
   }
 
+  // Image picker function for Student ID
+  void _pickStudentIdImage() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF16213e),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Select Student ID Image',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _simulateImagePick(ImageSource.camera);
+                    },
+                    icon: const Icon(Icons.camera_alt, color: Colors.white),
+                    label: const Text('Camera', style: TextStyle(color: Colors.white)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.deepPurple,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _simulateImagePick(ImageSource.gallery);
+                    },
+                    icon: const Icon(Icons.photo_library, color: Colors.white),
+                    label: const Text('Gallery', style: TextStyle(color: Colors.white)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.deepPurple,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _simulateImagePick(ImageSource source) {
+    final picker = ImagePicker();
+    picker.pickImage(source: source).then((pickedFile) {
+      if (pickedFile != null) {
+        setState(() {
+          _studentIdImage = File(pickedFile.path);
+        });
+        _showSuccessSnackBar('Student ID image uploaded successfully');
+      } else {
+        _showErrorSnackBar('No image selected');
+      }
+    });
+  }
+
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+
+  // Save data and navigate to MainDashboardScreen
+  void _saveAndComplete() async {
+    if (_formKey.currentState!.validate()) {
+      if (_selectedYear.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please select your year of study'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+      
+      if (_selectedFaculty.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please select your faculty'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      setState(() {
+        _isLoading = true;
+      });
+
+      try {
+        // Save to local storage
+        await UserPreferences.saveUserData(
+          name: _nameController.text.trim(),
+          email: _emailController.text.trim(),
+          phone: _phoneController.text.trim(),
+          studentId: _studentIdController.text.trim(),
+          selectedYear: _selectedYear,
+          selectedFaculty: _selectedFaculty,
+          course: _courseController.text.trim(),
+          studentIdImagePath: _studentIdImage?.path,
+        );
+
+        // Optional: Also send to your server
+        await _sendToServer();
+
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Profile saved successfully!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+
+        // Navigate to MainDashboardScreen (passing data for immediate use)
+        await Future.delayed(const Duration(milliseconds: 500));
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => MainDashboardScreen(),
+          ),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving profile: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      } finally {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  // Send data to your Node.js server
+  Future<void> _sendToServer() async {
+    try {
+      final userData = {
+        'userId': _studentIdController.text.trim(),
+        'email': _emailController.text.trim(),
+        'name': _nameController.text.trim(),
+        'phone': _phoneController.text.trim(),
+        'studentId': _studentIdController.text.trim(),
+        'faculty': _selectedFaculty,
+        'year': _selectedYear,
+        'course': _courseController.text.trim(),
+        'isVerified': false,
+        'verificationScore': 0,
+        'safetyRating': 5.0,
+        'totalWalks': 0,
+        'isActive': true,
+        'joinedAt': DateTime.now().toIso8601String(),
+        'lastSeen': DateTime.now().toIso8601String(),
+      };
+
+      // Replace with your actual server URL
+      final response = await http.post(
+        Uri.parse('http://localhost:5000/api/user/signup'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(userData),
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception('Server error: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error sending to server: $e');
+      // Don't throw - allow local save to succeed even if server fails
+    }
+  }
+
   @override
   void dispose() {
     _fadeController.dispose();
@@ -131,6 +435,7 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen>
     _yearController.dispose();
     _courseController.dispose();
     _studentIdController.dispose();
+    _phoneController.dispose();
     super.dispose();
   }
 
@@ -277,9 +582,24 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen>
                 if (value == null || value.isEmpty) {
                   return 'Please enter your email';
                 }
-                // Basic email validation
                 if (!RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$').hasMatch(value)) {
                   return 'Please enter a valid email';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 20),
+            _buildTextField(
+              controller: _phoneController,
+              hintText: 'Phone Number',
+              icon: Icons.phone_outlined,
+              keyboardType: TextInputType.phone,
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Please enter your phone number';
+                }
+                if (!RegExp(r'^\d{9,15}$').hasMatch(value)) {
+                  return 'Enter a valid phone number (9-15 digits)';
                 }
                 return null;
               },
@@ -294,11 +614,12 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen>
                   return 'Please enter your student ID';
                 }
                 if (value.length != 8) {
-                  return 'ID must be 8 characters long';
+                  return 'Student ID must be 8 characters long';
                 }
                 return null;
               },
             ),
+            
             const SizedBox(height: 20),
             _buildYearDropdown(),
             const SizedBox(height: 20),
@@ -306,17 +627,11 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen>
             const SizedBox(height: 20),
             _buildTextField(
               controller: _courseController,
-              hintText: 'Course/Program',
-              icon: Icons.school_outlined,
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please enter your course';
-                }
-                return null;
-              },
+              hintText: 'Course/Program (Optional)',
+              icon: Icons.book_outlined,
             ),
             const SizedBox(height: 20),
-            _buildStudentIdUpload(),
+            _buildStudentIdImagePicker(),
           ],
         ),
       ),
@@ -327,48 +642,33 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen>
     required TextEditingController controller,
     required String hintText,
     required IconData icon,
+    TextInputType? keyboardType,
     String? Function(String?)? validator,
+    bool obscureText = false,
+    Widget? suffixIcon,
   }) {
     return Container(
       decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.1),
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
-        ],
+        border: Border.all(
+          color: Colors.white.withOpacity(0.2),
+          width: 1,
+        ),
       ),
       child: TextFormField(
         controller: controller,
-        style: const TextStyle(color: Colors.white, fontSize: 16),
+        keyboardType: keyboardType,
         validator: validator,
+        obscureText: obscureText,
+        style: const TextStyle(color: Colors.white),
         decoration: InputDecoration(
           hintText: hintText,
           hintStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
-          prefixIcon: Icon(
-            icon,
-            color: Colors.white.withOpacity(0.7),
-          ),
-          filled: true,
-          fillColor: Colors.white.withOpacity(0.1),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide.none,
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Colors.deepPurple, width: 2),
-          ),
-          errorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Colors.red, width: 1),
-          ),
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 20,
-            vertical: 20,
-          ),
+          prefixIcon: Icon(icon, color: Colors.white.withOpacity(0.7)),
+          suffixIcon: suffixIcon,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.all(20),
         ),
       ),
     );
@@ -377,457 +677,242 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen>
   Widget _buildYearDropdown() {
     return Container(
       decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.1),
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
-        ],
+        border: Border.all(
+          color: Colors.white.withOpacity(0.2),
+          width: 1,
+        ),
       ),
-        child: DropdownButtonFormField<String>(
-          value: _selectedYear.isEmpty ? null : _selectedYear,
-          hint: Text(
-          'Year of Study',
+      child: DropdownButtonFormField2<String>(
+        isExpanded: true,
+        decoration: InputDecoration(
+          prefixIcon: Icon(Icons.school_outlined, color: Colors.white.withOpacity(0.7)),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.all(20),
+        ),
+        hint: Text(
+          'Select Year of Study',
           style: TextStyle(color: Colors.white.withOpacity(0.6)),
         ),
-        decoration: InputDecoration(
-          prefixIcon: Icon(
-            Icons.calendar_today_outlined,
-            color: Colors.white.withOpacity(0.7),
+        value: _selectedYear.isEmpty ? null : _selectedYear,
+        items: _studyYears.map((year) => DropdownMenuItem(
+          value: year,
+          child: Text(year, style: const TextStyle(color: Colors.white)),
+        )).toList(),
+        onChanged: (value) {
+          setState(() {
+            _selectedYear = value ?? '';
+          });
+        },
+        dropdownStyleData: DropdownStyleData(
+          decoration: BoxDecoration(
+            color: const Color(0xFF1a1a2e),
+            borderRadius: BorderRadius.circular(16),
           ),
-          filled: true,
-          fillColor: Colors.white.withOpacity(0.1),
-          border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide.none,
-          ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(16),
-      borderSide: const BorderSide(color: Colors.deepPurple, width: 2),
-    ),
-    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-  ),
-  dropdownColor: const Color(0xFF16213e),
-  style: TextStyle(
-    color: _selectedYear.isEmpty
-        ? Colors.white.withOpacity(0.6)
-        : Colors.white,
-    fontSize: 16,
-  ),
-  icon: Icon(Icons.arrow_drop_down, color: Colors.white.withOpacity(0.7)),
-  items: _studyYears.map((String year) {
-    return DropdownMenuItem<String>(
-      value: year,
-      child: Text(year, style: const TextStyle(color: Colors.white)),
-    );
-  }).toList(),
-  onChanged: (String? newValue) {
-    setState(() {
-      _selectedYear = newValue ?? '';
-    });
-  },
-  validator: (value) {
-    if (value == null || value.isEmpty) {
-      return 'Please select your year of study';
-    }
-    return null;
-  },
-),
+        ),
+        menuItemStyleData: const MenuItemStyleData(
+          padding: EdgeInsets.symmetric(horizontal: 16),
+        ),
+      ),
     );
   }
 
   Widget _buildFacultyDropdown() {
-  return Container(
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(16),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.1),
-          blurRadius: 10,
-          offset: const Offset(0, 5),
-        ),
-      ],
-    ),
-    child: DropdownButtonFormField2<String>(
-      alignment: Alignment.centerLeft,
-      value: _selectedFaculty.isEmpty ? null : _selectedFaculty,
-      decoration: InputDecoration(
-        hintText: 'Faculty',
-        hintStyle: TextStyle(
-          color: Colors.white.withOpacity(0.6),
-          fontSize: 16,
-          // Removed height property to fix alignment
-        ),
-        prefixIcon: Icon(
-          Icons.account_balance_outlined,
-          color: Colors.white.withOpacity(0.7),
-          size: 22,
-        ),
-        filled: true,
-        fillColor: Colors.white.withOpacity(0.1),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide.none,
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: Colors.deepPurple, width: 2),
-        ),
-        contentPadding: const EdgeInsets.only(
-          left: 12,
-          right: 18,
-          top: 16,
-          bottom: 16,
-        ),
-        // Add this to ensure proper alignment
-        isDense: false,
-      ),
-      dropdownStyleData: DropdownStyleData(
-        direction: DropdownDirection.textDirection,
-        maxHeight: 300,
-        decoration: BoxDecoration(
-          color: const Color(0xFF16213e),
-          borderRadius: BorderRadius.circular(16),
-        ),
-      ),
-      style: const TextStyle(
-        color: Colors.white,
-        fontSize: 16,
-        height: 1.2, // Proper line height for text
-      ),
-      iconStyleData: IconStyleData(
-        icon: Icon(
-          Icons.arrow_drop_down,
-          color: Colors.white.withOpacity(0.7),
-        ),
-      ),
-      items: _facultyOptions.map((String faculty) {
-        return DropdownMenuItem<String>(
-          value: faculty,
-          child: SizedBox(
-            width: 200,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Text(
-                faculty,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  height: 1.2,
-                ),
-              ),
-            ),
-          ),
-        );
-      }).toList(),
-      onChanged: (String? newValue) {
-        setState(() {
-          _selectedFaculty = newValue ?? '';
-        });
-      },
-      validator: (value) {
-        if (value == null || value.isEmpty) {
-          return 'Please select your faculty';
-        }
-        return null;
-      },
-    ),
-  );
-}
-
-
-
-  Widget _buildStudentIdUpload() {
     return Container(
       decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.1),
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
-        ],
+        border: Border.all(
+          color: Colors.white.withOpacity(0.2),
+          width: 1,
+        ),
       ),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: _studentIdImage != null 
-              ? Colors.green 
-              : Colors.white.withOpacity(0.3),
-            width: 2,
+      child: DropdownButtonFormField2<String>(
+        isExpanded: true,
+        decoration: InputDecoration(
+          prefixIcon: Icon(Icons.account_balance_outlined, color: Colors.white.withOpacity(0.7)),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.all(20),
+        ),
+        hint: Text(
+          'Select Faculty',
+          style: TextStyle(color: Colors.white.withOpacity(0.6)),
+        ),
+        value: _selectedFaculty.isEmpty ? null : _selectedFaculty,
+        items: _facultyOptions.map((faculty) => DropdownMenuItem(
+          value: faculty,
+          child: Text(faculty, style: const TextStyle(color: Colors.white)),
+        )).toList(),
+        onChanged: (value) {
+          setState(() {
+            _selectedFaculty = value ?? '';
+          });
+        },
+        dropdownStyleData: DropdownStyleData(
+          maxHeight: 200,
+          decoration: BoxDecoration(
+            color: const Color(0xFF1a1a2e),
+            borderRadius: BorderRadius.circular(16),
           ),
         ),
-        child: Column(
-          children: [
-            Icon(
-              _studentIdImage != null 
-                ? Icons.check_circle_outline 
-                : Icons.upload_file_outlined,
-              color: _studentIdImage != null 
-                ? Colors.green 
-                : Colors.white.withOpacity(0.7),
-              size: 32,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              _studentIdImage != null 
-                ? 'Student ID Uploaded' 
-                : 'Upload Student ID',
-              style: TextStyle(
-                color: _studentIdImage != null 
-                  ? Colors.green 
-                  : Colors.white.withOpacity(0.7),
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _studentIdImage != null 
-                ? 'Tap to change image' 
-                : 'Take a photo or select from gallery',
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.5),
-                fontSize: 12,
-              ),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _pickStudentIdImage,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.deepPurple.withOpacity(0.3),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+        menuItemStyleData: const MenuItemStyleData(
+          padding: EdgeInsets.symmetric(horizontal: 16),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStudentIdImagePicker() {
+    return Container(
+      height: 120,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: _studentIdImage != null ? Colors.green : Colors.white.withOpacity(0.2),
+          width: 2,
+        ),
+      ),
+      child: InkWell(
+        onTap: _pickStudentIdImage,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: _studentIdImage != null 
+            ? Row(
+                children: [
+                  Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      image: DecorationImage(
+                        image: FileImage(_studentIdImage!),
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Text(
+                            'Student ID Photo Uploaded',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Tap to change photo',
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.7),
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const Icon(
+                    Icons.check_circle,
+                    color: Colors.green,
+                    size: 32,
+                  ),
+                ],
+              )
+            : SingleChildScrollView(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.camera_alt_outlined,
+                      color: Colors.white.withOpacity(0.7),
+                      size: 32,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Upload Student ID Photo',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.8),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Optional',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.5),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              child: Text(
-                _studentIdImage != null ? 'Change Image' : 'Choose Image',
-                style: const TextStyle(color: Colors.white),
-              ),
-            ),
-          ],
         ),
       ),
     );
   }
 
   Widget _buildCompleteButton() {
-    return SlideTransition(
-      position: _slideAnim,
-      child: ScaleTransition(
-        scale: _buttonScaleAnim,
-        child: GestureDetector(
-          onTapDown: (_) => _buttonController.forward(),
-          onTapUp: (_) => _buttonController.reverse(),
-          onTapCancel: () => _buttonController.reverse(),
-          child: Container(
-            width: double.infinity,
-            height: 56,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Colors.deepPurple, Colors.purpleAccent],
-              ),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.deepPurple.withOpacity(0.4),
-                  blurRadius: 15,
-                  offset: const Offset(0, 8),
-                ),
-              ],
+    return ScaleTransition(
+      scale: _buttonScaleAnim,
+      child: Container(
+        width: double.infinity,
+        height: 56,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Colors.deepPurple, Colors.purpleAccent],
+          ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.deepPurple.withOpacity(0.3),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
             ),
-            child: ElevatedButton(
-              onPressed: _isLoading ? null : () => _completeRegistration(context),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.transparent,
-                shadowColor: Colors.transparent,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: _isLoading ? null : () {
+              _buttonController.forward().then((_) {
+                _buttonController.reverse();
+              });
+              _saveAndComplete();
+            },
+            child: Center(
               child: _isLoading
                   ? const SizedBox(
-                      height: 24,
                       width: 24,
+                      height: 24,
                       child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
                         valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        strokeWidth: 2,
                       ),
                     )
                   : const Text(
                       'Complete Registration',
                       style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
                         color: Colors.white,
-                        letterSpacing: 1.0,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1,
                       ),
                     ),
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  void _pickStudentIdImage() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF16213e),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Select Student ID Image',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      _simulateImagePick('camera');
-                    },
-                    icon: const Icon(Icons.camera_alt, color: Colors.white),
-                    label: const Text('Camera', style: TextStyle(color: Colors.white)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.deepPurple,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      _simulateImagePick('gallery');
-                    },
-                    icon: const Icon(Icons.photo_library, color: Colors.white),
-                    label: const Text('Gallery', style: TextStyle(color: Colors.white)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.deepPurple,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _simulateImagePick(String source) {
-    // Use image_picker to pick image from gallery
-    final picker = ImagePicker();
-    picker.pickImage(source: ImageSource.gallery).then((pickedFile) {
-      if (pickedFile != null) {
-        setState(() {
-          _studentIdImage = File(pickedFile.path);
-        });
-        _showSuccessSnackBar('Student ID image uploaded successfully');
-      } else {
-        _showErrorSnackBar('No image selected');
-      }
-    });
-  }
-
-  Future<void> _completeRegistration(BuildContext context) async {
-    if (_isLoading) return;
-    
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-
-    if (_studentIdImage == null) {
-      _showErrorSnackBar('Please upload your student ID');
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    try {
-      // Simulate registration process
-      await Future.delayed(const Duration(seconds: 3));
-      
-      _showSuccessSnackBar('Registration completed successfully!');
-      await _exitAnimation();
-      
-      // Navigate to main dashboard, passing user details
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(
-          builder: (context) => MainDashboardScreen(
-            userName: _nameController.text,
-            userEmail: _emailController.text,
-            studentId: _studentIdController.text,
-            year: _selectedYear,
-            faculty: _selectedFaculty,
-            course: _courseController.text,
-            studentIdImage: _studentIdImage,
-          ),
-        ),
-        (route) => false,
-      );
-    } catch (e) {
-      if (mounted) {
-        _showErrorSnackBar('Registration failed: ${e.toString()}');
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-
-  Future<void> _exitAnimation() async {
-    await Future.wait([
-      _slideController.reverse(),
-      _fadeController.reverse(),
-    ]);
-  }
-
-  void _showSuccessSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.green.shade600,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        margin: const EdgeInsets.all(16),
-      ),
-    );
-  }
-
-  void _showErrorSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red.shade600,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        margin: const EdgeInsets.all(16),
       ),
     );
   }
