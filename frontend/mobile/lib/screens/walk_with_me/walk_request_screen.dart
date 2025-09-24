@@ -129,7 +129,7 @@ class _WalkRequestScreenState extends State<WalkRequestScreen> {
                       ),
                       child: Center(
                         child: Text(
-                          widget.partner.profilePicture,
+                          widget.partner.profilePicture ?? widget.partner.name[0],
                           style: const TextStyle(fontSize: 30),
                         ),
                       ),

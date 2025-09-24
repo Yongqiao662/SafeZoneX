@@ -95,17 +95,30 @@ class _FaceVerificationScreenState extends State<FaceVerificationScreen> {
       // Auto-proceed to active walk after 2 seconds
       Future.delayed(const Duration(seconds: 2), () {
         if (mounted) {
-          _proceedToActiveWalk();
+          _onVerificationSuccess();
         }
       });
     }
   }
 
-  void _proceedToActiveWalk() {
+  void _onVerificationSuccess() {
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (context) => ActiveWalkScreen(partner: widget.partner),
+        builder: (context) => ActiveWalkScreen(
+          partner: UserProfile(
+            id: widget.partner.id,
+            name: widget.partner.name,
+            profilePicture: widget.partner.profilePicture,
+            rating: widget.partner.rating,
+            walkCount: widget.partner.walkCount,  // Fixed: was totalWalks
+            location: widget.partner.location,
+            estimatedMinutes: widget.partner.estimatedMinutes,
+            isVerified: widget.partner.isVerified,
+            department: widget.partner.department,
+            creditScore: widget.partner.creditScore,
+          ),
+        ),
       ),
     );
   }
@@ -198,9 +211,12 @@ class _FaceVerificationScreenState extends State<FaceVerificationScreen> {
                     CircleAvatar(
                       radius: 25,
                       backgroundColor: Colors.deepPurple,
-                      child: widget.partner.profilePicture.startsWith('assets/')
-                        ? ClipOval(child: Image.asset(widget.partner.profilePicture, fit: BoxFit.cover))
-                        : Icon(Icons.person, color: Colors.white, size: 30),
+                      child: widget.partner.profilePicture?.startsWith('assets/') == true
+                        ? ClipOval(child: Image.asset(widget.partner.profilePicture!, fit: BoxFit.cover))
+                        : Text(
+                            widget.partner.profilePicture ?? widget.partner.name[0],
+                            style: const TextStyle(color: Colors.white, fontSize: 20),
+                          ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -247,112 +263,112 @@ class _FaceVerificationScreenState extends State<FaceVerificationScreen> {
               Expanded(
                 child: Column(
                   children: [
-          // Camera Preview Placeholder
-          Expanded(
-            flex: 2, // Reduced from 3 to 2 to give more space for bottom content
-            child: Container(
-              width: double.infinity,
-              child: _buildCameraView(),
-            ),
-          ),
-
-          // Verification Status
-          if (_verificationComplete) _buildVerificationResult(),
-
-          // Instructions and Controls
-          Flexible( // Changed from Expanded to Flexible to prevent overflow
-            child: Container(
-              padding: const EdgeInsets.all(12), // Reduced from 16 to 12
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min, // Add this to minimize space usage
-                children: [
-                  if (!_verificationComplete) ...[
-                    const Text(
-                      'Take a photo to verify your identity',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 15, // Reduced from 16 to 15
+                    // Camera Preview Placeholder
+                    Expanded(
+                      flex: 2, // Reduced from 3 to 2 to give more space for bottom content
+                      child: Container(
+                        width: double.infinity,
+                        child: _buildCameraView(),
                       ),
-                      textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 4), // Reduced from 6 to 4
-                    Text(
-                      'This helps ensure safety for both walking partners',
-                      style: TextStyle(
-                        color: Colors.grey[400],
-                        fontSize: 13, // Reduced from 14 to 13
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 12), // Reduced from 16 to 12
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        // Capture Button
-                        GestureDetector(
-                          onTap: _isCapturing || _isVerifying ? null : _captureAndVerifyFace,
-                          child: Container(
-                            width: 70, // Reduced from 80 to 70
-                            height: 70, // Reduced from 80 to 70
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: _isCapturing || _isVerifying 
-                                ? Colors.grey 
-                                : Colors.deepPurple,
-                              border: Border.all(
-                                color: Colors.white,
-                                width: 2, // Reduced from 3 to 2
+
+                    // Verification Status
+                    if (_verificationComplete) _buildVerificationResult(),
+
+                    // Instructions and Controls
+                    Flexible( // Changed from Expanded to Flexible to prevent overflow
+                      child: Container(
+                        padding: const EdgeInsets.all(12), // Reduced from 16 to 12
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min, // Add this to minimize space usage
+                          children: [
+                            if (!_verificationComplete) ...[
+                              const Text(
+                                'Take a photo to verify your identity',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 15, // Reduced from 16 to 15
+                                ),
+                                textAlign: TextAlign.center,
                               ),
-                            ),
-                            child: Icon(
-                              _isCapturing 
-                                ? Icons.hourglass_empty 
-                                : Icons.camera_alt,
-                              size: 25, // Reduced from 30 to 25
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                              const SizedBox(height: 4), // Reduced from 6 to 4
+                              Text(
+                                'This helps ensure safety for both walking partners',
+                                style: TextStyle(
+                                  color: Colors.grey[400],
+                                  fontSize: 13, // Reduced from 14 to 13
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 12), // Reduced from 16 to 12
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                children: [
+                                  // Capture Button
+                                  GestureDetector(
+                                    onTap: _isCapturing || _isVerifying ? null : _captureAndVerifyFace,
+                                    child: Container(
+                                      width: 70, // Reduced from 80 to 70
+                                      height: 70, // Reduced from 80 to 70
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: _isCapturing || _isVerifying 
+                                          ? Colors.grey 
+                                          : Colors.deepPurple,
+                                        border: Border.all(
+                                          color: Colors.white,
+                                          width: 2, // Reduced from 3 to 2
+                                        ),
+                                      ),
+                                      child: Icon(
+                                        _isCapturing 
+                                          ? Icons.hourglass_empty 
+                                          : Icons.camera_alt,
+                                        size: 25, // Reduced from 30 to 25
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
 
-                  if (_verificationComplete && !_verificationSuccess) ...[
-                    ElevatedButton(
-                      onPressed: _retryVerification,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.orange,
-                        minimumSize: const Size(180, 45), // Reduced from Size(200, 50)
-                      ),
-                      child: const Text('Try Again'),
-                    ),
-                    const SizedBox(height: 6), // Reduced from 8 to 6
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text(
-                        'Cancel Walk',
-                        style: TextStyle(color: Colors.red),
-                      ),
-                    ),
-                  ],
+                            if (_verificationComplete && !_verificationSuccess) ...[
+                              ElevatedButton(
+                                onPressed: _retryVerification,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.orange,
+                                  minimumSize: const Size(180, 45), // Reduced from Size(200, 50)
+                                ),
+                                child: const Text('Try Again'),
+                              ),
+                              const SizedBox(height: 6), // Reduced from 8 to 6
+                              TextButton(
+                                onPressed: () => Navigator.pop(context),
+                                child: const Text(
+                                  'Cancel Walk',
+                                  style: TextStyle(color: Colors.red),
+                                ),
+                              ),
+                            ],
 
-                  if (_isVerifying)
-                    Column( // Removed const
-                      mainAxisSize: MainAxisSize.min, // Add this to minimize space
-                      children: [
-                        const CircularProgressIndicator(color: Colors.deepPurple),
-                        const SizedBox(height: 6), // Reduced from 8 to 6
-                        const Text(
-                          'Verifying identity...',
-                          style: TextStyle(color: Colors.white, fontSize: 14), // Reduced font size
+                            if (_isVerifying)
+                              Column( // Removed const
+                                mainAxisSize: MainAxisSize.min, // Add this to minimize space
+                                children: [
+                                  const CircularProgressIndicator(color: Colors.deepPurple),
+                                  const SizedBox(height: 6), // Reduced from 8 to 6
+                                  const Text(
+                                    'Verifying identity...',
+                                    style: TextStyle(color: Colors.white, fontSize: 14), // Reduced font size
+                                  ),
+                                ],
+                              ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
-                ],
-              ),
-            ),
-          ),
                   ],
                 ),
               ),
@@ -448,6 +464,20 @@ class _FaceVerificationScreenState extends State<FaceVerificationScreen> {
             ),
         ],
       ),
+    );
+  }
+
+  Widget _buildPartnerImage() {
+    return CircleAvatar(
+      radius: 50,
+      backgroundImage: widget.partner.profilePicture != null
+          ? (widget.partner.profilePicture!.startsWith('assets/')
+              ? AssetImage(widget.partner.profilePicture!) as ImageProvider
+              : NetworkImage(widget.partner.profilePicture!) as ImageProvider)
+          : null,
+      child: widget.partner.profilePicture == null
+          ? Text(widget.partner.name[0], style: const TextStyle(fontSize: 40))
+          : null,
     );
   }
 }

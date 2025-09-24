@@ -1,32 +1,39 @@
 // Data Models for Walk with Me Feature
 
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+
 class UserProfile {
   final String id;
   final String name;
-  final String profilePicture;
-  final int creditScore;
-  final String department;
-  final double currentLat;
-  final double currentLng;
-  final String currentLocation;
-  final bool isVerified;
+  final String? profilePicture;
   final double rating;
-  final int walkCount;
+  final int walkCount;  // This was "totalWalks" in some files
+  final bool isVerified;
+  final String department;
+  final int creditScore;
+  final LatLng location;
+  final int estimatedMinutes;
 
-  UserProfile({
+  const UserProfile({
     required this.id,
     required this.name,
-    required this.profilePicture,
-    required this.creditScore,
-    required this.department,
-    required this.currentLat,
-    required this.currentLng,
-    required this.currentLocation,
+    this.profilePicture,
+    required this.rating,
+    required this.walkCount,
     this.isVerified = false,
-    this.rating = 0.0,
-    this.walkCount = 0,
+    this.department = '',
+    this.creditScore = 0,
+    required this.location,
+    required this.estimatedMinutes,
   });
+
+  // Add convenience getters for backward compatibility
+  int get totalWalks => walkCount;
+  String get currentLocation => 'Campus Area'; // For partner profile screen
 }
+
+// Using UserProfile instead of separate WalkPartner class
+typedef WalkPartner = UserProfile;
 
 class WalkRequest {
   final String id;

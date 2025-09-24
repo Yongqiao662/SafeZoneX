@@ -43,6 +43,8 @@ class _ActiveWalkScreenState extends State<ActiveWalkScreen> {
   Set<Polyline> polylines = {};
   List<LatLng> routePoints = [];
 
+  bool isPartnerArrived = false;
+
   @override
   void initState() {
     super.initState();
@@ -53,6 +55,11 @@ class _ActiveWalkScreenState extends State<ActiveWalkScreen> {
     // Start navigation after a short delay to allow location initialization
     Future.delayed(const Duration(seconds: 3), () {
       _startNavigation();
+    });
+
+    // Simulate partner arrival for demo purposes
+    Future.delayed(const Duration(seconds: 10), () {
+      setState(() => isPartnerArrived = true);
     });
   }
 
@@ -553,6 +560,47 @@ class _ActiveWalkScreenState extends State<ActiveWalkScreen> {
     );
   }
 
+  Widget _buildPartnerInfo() {
+    return Row(
+      children: [
+        CircleAvatar(
+          radius: 25,
+          backgroundImage: widget.partner.profilePicture != null
+              ? NetworkImage(widget.partner.profilePicture!)
+              : null,
+          child: widget.partner.profilePicture == null
+              ? Text(widget.partner.name[0])
+              : null,
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            widget.partner.name,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+        const Icon(
+          Icons.star,
+          color: Colors.amber,
+          size: 20,
+        ),
+        const SizedBox(width: 4),
+        Text(
+          '${widget.partner.rating}',
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -883,7 +931,7 @@ class _ActiveWalkScreenState extends State<ActiveWalkScreen> {
                       ),
                       child: Center(
                         child: Text(
-                          widget.partner.profilePicture,
+                          widget.partner.profilePicture ?? widget.partner.name[0],
                           style: const TextStyle(fontSize: 30),
                         ),
                       ),

@@ -1,22 +1,14 @@
 import 'package:flutter/material.dart';
-import 'models.dart';
-import 'partner_profile_screen.dart';
-import 'walk_request_screen.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import './models.dart';
+import './walk_confirmation_screen.dart';
 
 class PartnerResultsScreen extends StatefulWidget {
-  final String destination;
-  final DateTime departureTime;
-  final String walkSpeed;
-  final bool onlyHighCreditScore;
-  final bool onlyVerified;
+  final String? destination;
 
   const PartnerResultsScreen({
     Key? key,
-    required this.destination,
-    required this.departureTime,
-    required this.walkSpeed,
-    required this.onlyHighCreditScore,
-    required this.onlyVerified,
+    this.destination,
   }) : super(key: key);
 
   @override
@@ -24,67 +16,71 @@ class PartnerResultsScreen extends StatefulWidget {
 }
 
 class _PartnerResultsScreenState extends State<PartnerResultsScreen> {
-  List<UserProfile> availablePartners = [];
+  List<UserProfile> nearbyPartners = [];
   bool isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _searchForPartners();
+    _loadNearbyPartners();
   }
 
-  void _searchForPartners() async {
+  Future<void> _loadNearbyPartners() async {
     // Simulate API call
     await Future.delayed(const Duration(seconds: 2));
-    
     setState(() {
-      availablePartners = _generateMockPartners();
+      nearbyPartners = [
+        const UserProfile(
+          id: '1',
+          name: 'Sarah Chen',
+          profilePicture: '👩‍🎓',
+          rating: 4.8,
+          walkCount: 156,
+          isVerified: true,
+          department: 'Computer Science',
+          creditScore: 850,
+          location: LatLng(3.1236, 101.6546),
+          estimatedMinutes: 5,
+        ),
+        const UserProfile(
+          id: '2',
+          name: 'Ahmad Rahman',
+          profilePicture: '👨‍🎓',
+          rating: 4.9,
+          walkCount: 203,
+          isVerified: true,
+          department: 'Engineering',
+          creditScore: 920,
+          location: LatLng(3.1224, 101.6534),
+          estimatedMinutes: 8,
+        ),
+        const UserProfile(
+          id: '3',
+          name: 'Priya Sharma',
+          profilePicture: '👩‍🔬',
+          rating: 4.7,
+          walkCount: 89,
+          isVerified: false,
+          department: 'Biology',
+          creditScore: 780,
+          location: LatLng(3.1240, 101.6520),
+          estimatedMinutes: 12,
+        ),
+        const UserProfile(
+          id: '4',
+          name: 'David Lim',
+          profilePicture: '👨‍💼',
+          rating: 4.6,
+          walkCount: 134,
+          isVerified: true,
+          department: 'Business',
+          creditScore: 800,
+          location: LatLng(3.1215, 101.6550),
+          estimatedMinutes: 7,
+        ),
+      ];
       isLoading = false;
     });
-  }
-
-  List<UserProfile> _generateMockPartners() {
-    return [
-      UserProfile(
-        id: '1',
-        name: 'Sarah Johnson',
-        profilePicture: '👩',
-        creditScore: 820,
-        department: 'Computer Science',
-        currentLat: 0.0, // Demo coordinates - will use actual location in real app
-        currentLng: 0.0,
-        currentLocation: 'Building A',
-        isVerified: true,
-        rating: 4.8,
-        walkCount: 15,
-      ),
-      UserProfile(
-        id: '2',
-        name: 'Mike Chen',
-        profilePicture: '👨',
-        creditScore: 750,
-        department: 'Engineering',
-        currentLat: 0.0, // Demo coordinates - will use actual location in real app
-        currentLng: 0.0,
-        currentLocation: 'Building B',
-        isVerified: true,
-        rating: 4.6,
-        walkCount: 12,
-      ),
-      UserProfile(
-        id: '3',
-        name: 'Emma Wilson',
-        profilePicture: '👩‍🦱',
-        creditScore: 780,
-        department: 'Business',
-        currentLat: 0.0, // Demo coordinates - will use actual location in real app
-        currentLng: 0.0,
-        currentLocation: 'Building C',
-        isVerified: false,
-        rating: 4.9,
-        walkCount: 8,
-      ),
-    ];
   }
 
   @override
@@ -105,19 +101,20 @@ class _PartnerResultsScreenState extends State<PartnerResultsScreen> {
         child: SafeArea(
           child: Column(
             children: [
-              // Title Section - Matching Home page style with back button
+              // Title Section
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                 child: Row(
                   children: [
-                    // Back Button
                     GestureDetector(
                       onTap: () => Navigator.pop(context),
                       child: Container(
                         width: 40,
                         height: 40,
                         decoration: BoxDecoration(
-                          color: Colors.deepPurple, // Single purple color to match walk request
+                          gradient: const LinearGradient(
+                            colors: [Colors.deepPurple, Colors.purpleAccent],
+                          ),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: const Icon(
@@ -125,24 +122,6 @@ class _PartnerResultsScreenState extends State<PartnerResultsScreen> {
                           color: Colors.white,
                           size: 20,
                         ),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [Colors.deepPurple, Colors.purpleAccent],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(
-                        Icons.people,
-                        color: Colors.white,
-                        size: 20,
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -160,130 +139,42 @@ class _PartnerResultsScreenState extends State<PartnerResultsScreen> {
                   ],
                 ),
               ),
-              // Content section
+              
+              // Content Section
               Expanded(
-                child: Container(
-                  decoration: const BoxDecoration(
-                    color: Colors.transparent,
-                  ),
-                  child: isLoading ? _buildLoadingScreen() : _buildPartnersList(),
-                ),
+                child: isLoading
+                    ? const Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            CircularProgressIndicator(color: Colors.deepPurple),
+                            SizedBox(height: 16),
+                            Text(
+                              'Finding nearby partners...',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: nearbyPartners.length,
+                        itemBuilder: (context, index) => _buildPartnerCard(nearbyPartners[index]),
+                      ),
               ),
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildLoadingScreen() {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(Colors.deepPurple),
-          ),
-          SizedBox(height: 20),
-          Text(
-            'Searching for walking partners...',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPartnersList() {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              Text(
-                'Going to ${widget.destination}',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Departure: ${widget.departureTime.hour.toString().padLeft(2, '0')}:${widget.departureTime.minute.toString().padLeft(2, '0')} • ${widget.walkSpeed} pace',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.7),
-                  fontSize: 16,
-                ),
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: availablePartners.isEmpty
-              ? _buildNoPartnersFound()
-              : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: availablePartners.length,
-                  itemBuilder: (context, index) {
-                    return _buildPartnerCard(availablePartners[index]);
-                  },
-                ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildNoPartnersFound() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 100,
-            height: 100,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(50),
-            ),
-            child: const Icon(
-              Icons.person_search,
-              size: 50,
-              color: Colors.white70,
-            ),
-          ),
-          const SizedBox(height: 20),
-          const Text(
-            'No partners found',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Try adjusting your preferences or departure time',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.7),
-              fontSize: 16,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
       ),
     );
   }
 
   Widget _buildPartnerCard(UserProfile partner) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.05),
         borderRadius: BorderRadius.circular(20),
@@ -292,10 +183,14 @@ class _PartnerResultsScreenState extends State<PartnerResultsScreen> {
           width: 1,
         ),
       ),
-      child: Column(
-        children: [
-          Row(
+      child: InkWell(
+        onTap: () => _selectPartner(partner),
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Row(
             children: [
+              // Partner Avatar
               Container(
                 width: 60,
                 height: 60,
@@ -307,12 +202,19 @@ class _PartnerResultsScreenState extends State<PartnerResultsScreen> {
                 ),
                 child: Center(
                   child: Text(
-                    partner.profilePicture,
-                    style: const TextStyle(fontSize: 30),
+                    partner.profilePicture ?? partner.name[0],
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ),
+              
               const SizedBox(width: 16),
+              
+              // Partner Info
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -328,11 +230,11 @@ class _PartnerResultsScreenState extends State<PartnerResultsScreen> {
                           ),
                         ),
                         if (partner.isVerified) ...[
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 6),
                           const Icon(
                             Icons.verified,
                             color: Colors.blue,
-                            size: 20,
+                            size: 16,
                           ),
                         ],
                       ],
@@ -345,90 +247,134 @@ class _PartnerResultsScreenState extends State<PartnerResultsScreen> {
                         fontSize: 14,
                       ),
                     ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        // Rating
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.star, color: Colors.amber, size: 14),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${partner.rating}',
+                                style: const TextStyle(
+                                  color: Colors.amber,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // Walk Count
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.directions_walk, color: Colors.green, size: 14),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${partner.walkCount}',
+                                style: const TextStyle(
+                                  color: Colors.green,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _buildStatChip('Credit: ${partner.creditScore}', Colors.green),
-              _buildStatChip('Rating: ${partner.rating}⭐', Colors.amber),
-              _buildStatChip('${partner.walkCount} walks', Colors.blue),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => _viewProfile(partner),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Colors.white70),
+              
+              // Distance and Time
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.deepPurple.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    child: Text(
+                      '${partner.estimatedMinutes} min',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
-                  child: const Text(
-                    'View Profile',
-                    style: TextStyle(color: Colors.white),
+                  const SizedBox(height: 4),
+                  Text(
+                    'away',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.6),
+                      fontSize: 12,
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 8),
+                  // Credit Score Indicator
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.security,
+                        color: _getCreditScoreColor(partner.creditScore),
+                        size: 14,
+                      ),
+                      const SizedBox(width: 2),
+                      Text(
+                        '${partner.creditScore}',
+                        style: TextStyle(
+                          color: _getCreditScoreColor(partner.creditScore),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () => _requestWalk(partner),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepPurple,
-                  ),
-                  child: const Text(
-                    'Request Walk',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                ),
-              ),
             ],
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatChip(String text, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: color,
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
         ),
       ),
     );
   }
 
-  void _viewProfile(UserProfile partner) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => PartnerProfileScreen(partner: partner),
-      ),
-    );
+  Color _getCreditScoreColor(int creditScore) {
+    if (creditScore >= 850) return Colors.green;
+    if (creditScore >= 750) return Colors.blue;
+    if (creditScore >= 650) return Colors.orange;
+    return Colors.red;
   }
 
-  void _requestWalk(UserProfile partner) {
+  void _selectPartner(UserProfile partner) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => WalkRequestScreen(
+        builder: (context) => WalkConfirmationScreen(
           partner: partner,
-          destination: widget.destination,
-          departureTime: widget.departureTime,
+          destination: widget.destination ?? 'Student Center',
+          departureTime: DateTime.now().add(const Duration(minutes: 10)), // Default to 10 minutes from now
         ),
       ),
     );

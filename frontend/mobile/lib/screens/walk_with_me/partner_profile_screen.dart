@@ -49,22 +49,7 @@ class PartnerProfileScreen extends StatelessWidget {
                 ),
                 child: Column(
                   children: [
-                    Container(
-                      width: 100,
-                      height: 100,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Colors.deepPurple, Colors.purpleAccent],
-                        ),
-                        borderRadius: BorderRadius.circular(50),
-                      ),
-                      child: Center(
-                        child: Text(
-                          partner.profilePicture,
-                          style: const TextStyle(fontSize: 50),
-                        ),
-                      ),
-                    ),
+                    _buildProfileImage(),
                     const SizedBox(height: 16),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -196,6 +181,18 @@ class PartnerProfileScreen extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildProfileImage() {
+    return CircleAvatar(
+      radius: 50,
+      backgroundImage: partner.profilePicture != null
+          ? NetworkImage(partner.profilePicture!)
+          : null,
+      child: partner.profilePicture == null
+          ? Text(partner.name[0], style: TextStyle(fontSize: 40))
+          : null,
     );
   }
 }

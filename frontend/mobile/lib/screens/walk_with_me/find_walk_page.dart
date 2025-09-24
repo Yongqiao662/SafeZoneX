@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+
 import 'models.dart';
 import 'partner_results_screen.dart';
 
@@ -483,13 +485,32 @@ class _FindWalkPageState extends State<FindWalkPage> {
       context,
       MaterialPageRoute(
         builder: (context) => PartnerResultsScreen(
-          destination: selectedDestination!,
-          departureTime: departureTime!,
-          walkSpeed: walkSpeed,
-          onlyHighCreditScore: onlyHighCreditScore,
-          onlyVerified: onlyVerified,
+          destination: selectedDestination,  // Make sure selectedDestination is LatLng type
         ),
       ),
     );
+  }
+
+  void _handleDestinationSelected() {
+    if (selectedDestination != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => PartnerResultsScreen(
+            destination: selectedDestination,
+          ),
+        ),
+      );
+    }
+  }
+
+  LatLng _getLatLngFromDestination(String destination) {
+    final Map<String, LatLng> locationMap = {
+      'UM Main Library': const LatLng(3.1235, 101.6545),
+      'Student Center': const LatLng(3.1220, 101.6530),
+      'Engineering Faculty': const LatLng(3.1240, 101.6555),
+      'Sports Complex': const LatLng(3.1265, 101.6525),
+    };
+    return locationMap[destination] ?? const LatLng(3.1225, 101.6532);
   }
 }
