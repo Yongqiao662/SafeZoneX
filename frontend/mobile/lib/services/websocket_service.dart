@@ -73,7 +73,7 @@ class WebSocketService {
     }
   }
 
-  // Enhanced SOS alert with real-time location
+  // Enhanced SOS alert with real-time location - FIXED VERSION
   Future<void> sendSOSAlertWithRealLocation({
     required String userId,
     required String userName,
@@ -84,20 +84,45 @@ class WebSocketService {
   }) async {
     final locationService = LocationTrackingService();
     
-    // Ensure we have current location
+    print('📍 Getting GPS location for emergency report...');
+    
+    // Force initialize the location service first
+    await locationService.initialize();
+    
+    // Get fresh GPS location
     await locationService.getCurrentLocation();
+    
     final locationData = locationService.getEmergencyLocationData();
+    
+    // Check if GPS coordinates are valid (not 0.0 and not null)
+    double latitude = locationData['latitude'] ?? 0.0;
+    double longitude = locationData['longitude'] ?? 0.0;
+    
+    // If GPS failed or returned invalid coordinates, use University Malaya as fallback
+    if (latitude == 0.0 || longitude == 0.0) {
+      print('⚠️ GPS failed, using University Malaya coordinates as fallback');
+      latitude = 3.1319;   // University Malaya latitude
+      longitude = 101.6841; // University Malaya longitude
+    } else {
+      print('✅ Using real GPS coordinates: $latitude, $longitude');
+    }
+    
+    // Use address from GPS if available, otherwise create fallback address
+    String address = locationData['address'] ?? 'Current Location (GPS)';
+    if (latitude == 3.1319 && longitude == 101.6841) {
+      address = 'University Malaya Campus (GPS Fallback)';
+    }
     
     sendSOSAlert(
       userId: userId,
       userName: userName,
       userPhone: userPhone,
-      latitude: locationData['latitude'],
-      longitude: locationData['longitude'],
-      address: locationData['address'],
+      latitude: latitude,
+      longitude: longitude,
+      address: address,
       alertType: alertType,
       additionalInfo: additionalInfo ?? 
-        'SOS with live GPS - Accuracy: ${locationData['accuracy']?.toStringAsFixed(1) ?? 'Unknown'}m',
+        'Emergency alert with GPS location - Accuracy: ${locationData['accuracy']?.toStringAsFixed(1) ?? 'Unknown'}m',
     );
   }
 
@@ -151,7 +176,8 @@ class WebSocketService {
       'payload': alertData,
     });
 
-    print('🚨 SOS Alert sent: $alertData');
+    print('🚨 SOS Alert sent with coordinates: $latitude, $longitude');
+    print('📍 Address: $address');
   }
 
   void sendWalkingPartnerRequest({

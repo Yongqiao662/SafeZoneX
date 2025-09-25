@@ -36,6 +36,14 @@ const io = socketIo(server);
 
 app.use(express.json({ limit: '10mb' }));
 
+// Add CORS middleware for web dashboard
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  next();
+});
+
 // MongoDB connection
 const mongoURI = process.env.MONGODB_URI;
 mongoose.connect(mongoURI, {
@@ -51,10 +59,6 @@ mongoose.connect(mongoURI, {
 // Active alerts cache
 let alertsCache = new Map();
 
-// API to submit a report
-// API to submit a report - CORRECTED
-// API to submit a report - CORRECTED
-// API to submit a report - CORRECTED
 // API to submit a report - CORRECTED WITH PROPER ENUM VALUES
 app.post('/api/report', async (req, res) => {
   try {
@@ -210,11 +214,218 @@ app.post('/api/report', async (req, res) => {
   }
 });
 
+// GET all reports for dashboard
+app.get('/api/reports', async (req, res) => {
+  try {
+    console.log('📊 Dashboard fetching all reports');
+    
+    const reports = await Alert.find({})
+      .sort({ createdAt: -1 })
+      .limit(100);
+
+    console.log(`📋 Found ${reports.length} reports for dashboard`);
+
+    // Transform data to match dashboard expectations
+    const transformedReports = reports.map(report => ({
+      id: report.alertId,
+      alertId: report.alertId,
+      userId: report.userId,
+      userName: report.userName,
+      userPhone: report.userPhone,
+      alertType: report.alertType,
+      description: report.description,
+      location: report.location,
+      status: report.status,
+      priority: report.priority,
+      createdAt: report.createdAt,
+      aiAnalysis: report.aiAnalysis,
+      evidenceImages: report.evidenceImages || []
+    }));
+
+    res.json({
+      success: true,
+      count: transformedReports.length,
+      reports: transformedReports
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching reports for dashboard:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch reports'
+    });
+  }
+});
+
+// GET specific report by ID
+app.get('/api/reports/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log('🔍 Fetching specific report:', id);
+
+    const report = await Alert.findOne({ alertId: id });
+
+    if (!report) {
+      return res.status(404).json({
+        success: false,
+        error: 'Report not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      report: {
+        id: report.alertId,
+        alertId: report.alertId,
+        userId: report.userId,
+        userName: report.userName,
+        userPhone: report.userPhone,
+        alertType: report.alertType,
+        description: report.description,
+        location: report.location,
+        status: report.status,
+        priority: report.priority,
+        createdAt: report.createdAt,
+        aiAnalysis: report.aiAnalysis,
+        evidenceImages: report.evidenceImages || []
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching specific report:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch report'
+    });
+  }
+});
+
+// UPDATE report status (for dashboard to resolve reports)
+app.put('/api/reports/:id/status', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, resolution, resolvedBy } = req.body;
+    
+    console.log('🔄 Dashboard updating report status:', id, 'to', status);
+
+    const validStatuses = ['active', 'investigating', 'resolved', 'false_alarm', 'pending_review'];
+    
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid status. Must be: ' + validStatuses.join(', ')
+      });
+    }
+
+    const updatedReport = await Alert.findOneAndUpdate(
+      { alertId: id },
+      { 
+        status: status,
+        resolution: resolution || '',
+        resolvedBy: resolvedBy || '',
+        resolvedAt: status === 'resolved' ? new Date() : null,
+        updatedAt: new Date()
+      },
+      { new: true }
+    );
+
+    if (!updatedReport) {
+      return res.status(404).json({
+        success: false,
+        error: 'Report not found'
+      });
+    }
+
+    console.log('✅ Report status updated successfully via dashboard');
+
+    // Emit status update to all connected clients
+    const updatePayload = {
+      alertId: id,
+      status: status,
+      resolvedBy: resolvedBy,
+      resolvedAt: updatedReport.resolvedAt
+    };
+    io.to('security_dashboard').emit('report_status_updated', updatePayload);
+    io.emit('report_status_updated', updatePayload);
+
+    res.json({
+      success: true,
+      message: 'Report status updated successfully',
+      report: {
+        id: updatedReport.alertId,
+        alertId: updatedReport.alertId,
+        status: updatedReport.status,
+        resolvedBy: updatedReport.resolvedBy,
+        resolvedAt: updatedReport.resolvedAt
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error updating report status via dashboard:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update report status'
+    });
+  }
+});
+
+// GET dashboard statistics
+app.get('/api/reports/stats', async (req, res) => {
+  try {
+    console.log('📈 Fetching dashboard statistics');
+
+    const [
+      totalReports,
+      activeReports, 
+      resolvedReports,
+      recentReports
+    ] = await Promise.all([
+      Alert.countDocuments({}),
+      Alert.countDocuments({ status: 'active' }),
+      Alert.countDocuments({ status: 'resolved' }),
+      Alert.countDocuments({ 
+        createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+      })
+    ]);
+
+    const alertTypeStats = await Alert.aggregate([
+      {
+        $group: {
+          _id: '$alertType',
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    const stats = {
+      totalReports,
+      activeReports,
+      resolvedReports, 
+      recentReports,
+      alertTypeBreakdown: alertTypeStats
+    };
+
+    console.log('📊 Dashboard statistics:', stats);
+
+    res.json({
+      success: true,
+      stats: stats
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching dashboard statistics:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch dashboard statistics'
+    });
+  }
+});
+
 // Import required modules for AI analysis
 const fs = require('fs');
 const { spawn } = require('child_process');
 
-// AI analysis function
+// AI analysis function - FIXED FOR CONSISTENT STATUS
 async function analyzeReport(alert) {
   try {
     logger.info(`🤖 Analyzing report: ${alert.alertId}`);
@@ -251,18 +462,19 @@ async function analyzeReport(alert) {
         let sendToDashboard = false;
         let details = analysisResult.details;
 
-        if (confidence > 70) {
+        // FIXED: Consistent status logic - no more 'likely_real'
+        if (confidence >= 60) {
           status = 'real';
           sendToDashboard = true;
-          details = 'High confidence: classified as real';
-        } else if (confidence >= 50 && confidence <= 70) {
-          status = 'likely_real';
+          details = 'AI verified: legitimate safety report';
+        } else if (confidence >= 40) {
+          status = 'real';
           sendToDashboard = true;
-          details = `Confidence ${confidence}%: likely to be real`;
+          details = `Confidence ${confidence}%: classified as real`;
         } else {
-          status = 'filtered';
-          sendToDashboard = false;
-          details = 'Low confidence: filtered out';
+          status = 'investigating';
+          sendToDashboard = true;
+          details = 'Under review - manual verification required';
         }
 
         alert.status = status;
@@ -274,7 +486,7 @@ async function analyzeReport(alert) {
 
         logger.info(`✅ Report analysis complete: ${alert.alertId} (${status})`);
 
-        // Only send to dashboard if confidence >= 50%
+        // Send to dashboard with new status
         if (sendToDashboard) {
           const reportPayload = {
             alertId: alert.alertId,
@@ -288,11 +500,6 @@ async function analyzeReport(alert) {
           };
           io.to('security_dashboard').emit('report_update', reportPayload);
           io.emit('report_update', reportPayload);
-        }
-
-        // Feedback loop for likely_real
-        if (status === 'likely_real') {
-          requestFeedback(alert);
         }
       } else {
         logger.error(`Python script exited with code ${code}`);
@@ -331,8 +538,6 @@ function requestFeedback(alert) {
     message: 'Please provide feedback on this report.'
   });
 }
-
-// Implemented Socket.IO authentication
 
 // DEVELOPMENT ONLY: Disable JWT authentication for Socket.IO
 // WARNING: Remove this in production!
@@ -399,5 +604,3 @@ const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
   logger.info(`🚀 Server running on http://localhost:${PORT}`);
 });
-
-

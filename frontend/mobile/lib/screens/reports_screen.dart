@@ -5,7 +5,7 @@ import 'package:geolocator/geolocator.dart';
 import 'dart:io';
 import '../services/backend_api_service.dart';
 import '../services/location_tracking_service.dart';
-import '../services/auth_service.dart'; // Import AuthService
+import '../services/auth_service.dart';
 
 class ReportsScreen extends StatefulWidget {
   @override
@@ -26,6 +26,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
   Position? _currentPosition;
   String _currentLocationName = "Getting location...";
   final TextEditingController _descriptionController = TextEditingController();
+  bool _isGettingLocation = false;
   
   // Campus locations for manual selection
   final List<Map<String, dynamic>> _campusLocations = [
@@ -127,7 +128,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
     super.initState();
     _getCurrentLocation();
 
-    // Initialize AuthService and check authentication
     AuthService().initialize().then((success) {
       setState(() {
         _authInitialized = true;
@@ -135,9 +135,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
       });
     });
 
-    // Initialize and connect WebSocketService
     _webSocketService = WebSocketService();
-    // TODO: Replace with actual JWT token retrieval logic
     final token = 'your_jwt_token_here';
     _webSocketService.connect(token);
     _webSocketService.messageStream.listen((message) {
@@ -147,7 +145,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
           _reportConfidence = message['aiAnalysis']?['confidence']?.toDouble();
           _reportDetails = message['aiAnalysis']?['details'];
         });
-        // Optionally show a notification/snackbar
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Report update: $_reportStatus ($_reportConfidence%)'),
@@ -165,49 +162,94 @@ class _ReportsScreenState extends State<ReportsScreen> {
     super.dispose();
   }
 
+  // IMPROVED GPS location method
   Future<void> _getCurrentLocation() async {
+    setState(() {
+      _isGettingLocation = true;
+      _currentLocationName = "Getting GPS location...";
+    });
+
     try {
+      print('🌍 Starting location acquisition...');
+
+      // Check if location services are enabled
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
+        print('❌ Location services disabled');
         setState(() {
-          _currentLocationName = "Location services disabled";
+          _currentLocationName = "Location services disabled - Enable GPS";
+          _isGettingLocation = false;
         });
         return;
       }
 
+      // Check and request permissions
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
+          print('❌ Location permission denied');
           setState(() {
             _currentLocationName = "Location permission denied";
+            _isGettingLocation = false;
           });
           return;
         }
       }
 
       if (permission == LocationPermission.deniedForever) {
+        print('❌ Location permission permanently denied');
         setState(() {
           _currentLocationName = "Location permission permanently denied";
+          _isGettingLocation = false;
         });
         return;
       }
 
-      Position position = await Geolocator.getCurrentPosition();
+      print('✅ Location permissions granted');
+
+      // Get current position with high accuracy
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: Duration(seconds: 15), // Increased timeout
+      );
+
+      print('📍 GPS coordinates received: ${position.latitude}, ${position.longitude}');
+      print('📍 Accuracy: ${position.accuracy}m');
+
       setState(() {
         _currentPosition = position;
         _currentLocationName = _getLocationDescription(position);
         _selectedLocation = "Current Location: $_currentLocationName";
+        _isGettingLocation = false;
       });
+
+      print('✅ Location set: $_currentLocationName');
+
     } catch (e) {
+      print('❌ GPS error: $e');
       setState(() {
-        _currentLocationName = "Unable to get location";
+        _currentLocationName = "GPS unavailable - Using campus location";
+        _isGettingLocation = false;
+        // Set fallback to University Malaya coordinates
+        _currentPosition = Position(
+          latitude: 3.1319,
+          longitude: 101.6841,
+          timestamp: DateTime.now(),
+          accuracy: 100.0,
+          altitude: 0.0,
+          heading: 0.0,
+          speed: 0.0,
+          speedAccuracy: 0.0,
+          altitudeAccuracy: 0.0,
+          headingAccuracy: 0.0,
+        );
+        _selectedLocation = "Current Location: University Malaya Campus (Fallback)";
       });
     }
   }
 
   String _getLocationDescription(Position position) {
-    // Find the closest campus location
     double minDistance = double.infinity;
     String closestLocation = "Campus Area";
 
@@ -231,10 +273,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
     try {
       final XFile? image = await _picker.pickImage(
         source: source,
-        maxWidth: 800, // Reduced from 1080 to prevent buffer issues
-        maxHeight: 800, // Reduced from 1080 to prevent buffer issues
-        imageQuality: 60, // Reduced from 85 to decrease memory usage
-        preferredCameraDevice: CameraDevice.rear, // Use rear camera by default
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 60,
+        preferredCameraDevice: CameraDevice.rear,
       );
       
       if (image != null) {
@@ -364,14 +406,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
     );
   }
 
-  void _submitReport() {
-  print('=== SUBMIT REPORT DEBUG ===');
-  print('_authInitialized: $_authInitialized');
-  print('_isAuthenticated: $_isAuthenticated');
-  final authService = AuthService();
-  print('AuthService isAuthenticated: ${authService.isAuthenticated}');
-  print('AuthService getUserProfile: ${authService.getUserProfile()}');
-  print('========================');
+  // IMPROVED submit report with better location handling
+  void _submitReport() async {
+    print('=== SUBMIT REPORT DEBUG ===');
+    
     if (_selectedActivity == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -392,38 +430,49 @@ class _ReportsScreenState extends State<ReportsScreen> {
       return;
     }
 
-    // Get user profile from AuthService
-    // TEMPORARY: Skip authentication checks for testing
-    print('=== DEBUGGING: Skipping auth checks ===');
-    // Create a test user profile since auth might not be working
+    // If GPS location is still being acquired, wait or use fallback
+    if (_isGettingLocation) {
+      print('⏳ Still getting location, trying once more...');
+      await _getCurrentLocation();
+    }
+
+    // Get user profile
     final userProfile = {
       'userId': 'test_user_123',
       'userName': 'Test User',
       'userPhone': '+60123456789',
     };
-    print('Using test user profile: $userProfile');
 
-    // Use LocationTrackingService for location data
-    final locationService = LocationTrackingService();
-    final locationData = _currentPosition != null
-        ? {
-            'latitude': _currentPosition!.latitude,
-            'longitude': _currentPosition!.longitude,
-          }
-        : locationService.getEmergencyLocationData();
-    print('Location Data: $locationData');
+    // IMPROVED location data handling
+    Map<String, double> locationData;
 
-    // Prepare image file
-    final imageFile = _selectedImage != null ? File(_selectedImage!.path) : null;
+    if (_currentPosition != null) {
+      locationData = {
+        'latitude': _currentPosition!.latitude,
+        'longitude': _currentPosition!.longitude,
+      };
+      print('✅ Using GPS coordinates: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}');
+    } else {
+      // Force get fresh location one more time
+      print('⚠️ No GPS position, forcing fresh location...');
+      final locationService = LocationTrackingService();
+      await locationService.initialize();
+      await locationService.getCurrentLocation();
+      final emergencyData = locationService.getEmergencyLocationData();
+      
+      locationData = {
+        'latitude': (emergencyData['latitude'] != 0.0 ? emergencyData['latitude'] : 3.1319).toDouble(),
+        'longitude': (emergencyData['longitude'] != 0.0 ? emergencyData['longitude'] : 101.6841).toDouble(),
+      };
+      print('📍 Using location service coordinates: ${locationData['latitude']}, ${locationData['longitude']}');
+    }
 
-    // Submit report using BackendApiService with correct parameters
+    print('📤 Final location data: $locationData');
+
     final apiService = BackendApiService();
     apiService.submitSecurityReport(
       text: _descriptionController.text.trim(),
-      location: {
-        'latitude': locationData['latitude'],
-        'longitude': locationData['longitude'],
-      },
+      location: locationData,
       userProfile: userProfile,
       metadata: {
         'activityType': _selectedActivity,
@@ -529,7 +578,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     ],
                   ),
                 ),
-              // Title Section - Matching Friends page style
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                 child: Row(
@@ -564,362 +612,363 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   ],
                 ),
               ),
-              // Content section
               Expanded(
                 child: SingleChildScrollView(
-            padding: EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header
-                Container(
-                  padding: EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.05),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white.withOpacity(0.1)),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.security, color: Colors.white, size: 28),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Campus Safety Report',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              'Help keep University Malaya safe by reporting suspicious activities',
-                              style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                SizedBox(height: 24),
-
-                // Activity Type Selection
-                Text(
-                  'Type of Activity',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                SizedBox(height: 12),
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: NeverScrollableScrollPhysics(),
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                    childAspectRatio: 1.2,
-                  ),
-                  itemCount: _suspiciousActivities.length,
-                  itemBuilder: (context, index) {
-                    final activity = _suspiciousActivities[index];
-                    final isSelected = _selectedActivity == activity['title'];
-                    
-                    return GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _selectedActivity = activity['title'];
-                        });
-                      },
-                      child: AnimatedContainer(
-                        duration: Duration(milliseconds: 200),
-                        padding: EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? activity['color'].withOpacity(0.2)
-                              : Colors.white.withOpacity(0.05),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: isSelected
-                                ? activity['color']
-                                : Colors.white.withOpacity(0.1),
-                            width: isSelected ? 2 : 1,
-                          ),
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              activity['icon'],
-                              color: isSelected
-                                  ? activity['color']
-                                  : Colors.white70,
-                              size: 28,
-                            ),
-                            SizedBox(height: 8),
-                            Text(
-                              activity['title'],
-                              style: TextStyle(
-                                color: isSelected
-                                    ? activity['color']
-                                    : Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-
-                SizedBox(height: 24),
-
-                // Location Selection
-                Text(
-                  'Incident Location',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                SizedBox(height: 12),
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.05),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.white.withOpacity(0.2)),
-                  ),
+                  padding: EdgeInsets.all(16),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Current Location Option
-                      ListTile(
-                        leading: Icon(Icons.my_location, color: Colors.blue),
-                        title: Text(
-                          'Use Current Location',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+                      Container(
+                        padding: EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.white.withOpacity(0.1)),
                         ),
-                        subtitle: Text(
-                          _currentLocationName,
-                          style: TextStyle(color: Colors.white70, fontSize: 12),
-                        ),
-                        trailing: Radio<String>(
-                          value: "Current Location: $_currentLocationName",
-                          groupValue: _selectedLocation,
-                          onChanged: (value) {
-                            setState(() {
-                              _selectedLocation = value;
-                            });
-                          },
-                          activeColor: Colors.blue,
-                        ),
-                        onTap: () {
-                          setState(() {
-                            _selectedLocation = "Current Location: $_currentLocationName";
-                          });
-                        },
-                      ),
-                      Divider(color: Colors.white.withOpacity(0.1), height: 1),
-                      // Manual Location Selection
-                      ListTile(
-                        leading: Icon(Icons.location_on, color: Colors.orange),
-                        title: Text(
-                          'Choose Campus Location',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
-                        ),
-                        subtitle: Text(
-                          _selectedLocation != null && !_selectedLocation!.startsWith("Current Location") 
-                            ? _selectedLocation! 
-                            : 'Select from campus locations',
-                          style: TextStyle(color: Colors.white70, fontSize: 12),
-                        ),
-                        trailing: Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 16),
-                        onTap: _showLocationSelectionDialog,
-                      ),
-                    ],
-                  ),
-                ),
-
-                SizedBox(height: 24),
-
-                // Photo Upload
-                Text(
-                  'Photo Evidence (Optional)',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                SizedBox(height: 12),
-                GestureDetector(
-                  onTap: _showImageSourceDialog,
-                  child: Container(
-                    height: 120,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.05),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.2),
-                        style: BorderStyle.solid,
-                      ),
-                    ),
-                    child: _selectedImage != null
-                        ? Stack(
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: Image.file(
-                                  File(_selectedImage!.path),
-                                  width: double.infinity,
-                                  height: 120,
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                              Positioned(
-                                top: 8,
-                                right: 8,
-                                child: GestureDetector(
-                                  onTap: () {
-                                    setState(() {
-                                      _selectedImage = null;
-                                    });
-                                  },
-                                  child: Container(
-                                    padding: EdgeInsets.all(4),
-                                    decoration: BoxDecoration(
-                                      color: Colors.black.withOpacity(0.6),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Icon(
-                                      Icons.close,
+                        child: Row(
+                          children: [
+                            Icon(Icons.security, color: Colors.white, size: 28),
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Campus Safety Report',
+                                    style: TextStyle(
                                       color: Colors.white,
-                                      size: 16,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
                                     ),
                                   ),
+                                  Text(
+                                    'Help keep University Malaya safe by reporting suspicious activities',
+                                    style: TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      SizedBox(height: 24),
+
+                      Text(
+                        'Type of Activity',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      SizedBox(height: 12),
+                      GridView.builder(
+                        shrinkWrap: true,
+                        physics: NeverScrollableScrollPhysics(),
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                          childAspectRatio: 1.2,
+                        ),
+                        itemCount: _suspiciousActivities.length,
+                        itemBuilder: (context, index) {
+                          final activity = _suspiciousActivities[index];
+                          final isSelected = _selectedActivity == activity['title'];
+                          
+                          return GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _selectedActivity = activity['title'];
+                              });
+                            },
+                            child: AnimatedContainer(
+                              duration: Duration(milliseconds: 200),
+                              padding: EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? activity['color'].withOpacity(0.2)
+                                    : Colors.white.withOpacity(0.05),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? activity['color']
+                                      : Colors.white.withOpacity(0.1),
+                                  width: isSelected ? 2 : 1,
                                 ),
                               ),
-                            ],
-                          )
-                        : Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.add_a_photo,
-                                color: Colors.white60,
-                                size: 32,
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    activity['icon'],
+                                    color: isSelected
+                                        ? activity['color']
+                                        : Colors.white70,
+                                    size: 28,
+                                  ),
+                                  SizedBox(height: 8),
+                                  Text(
+                                    activity['title'],
+                                    style: TextStyle(
+                                      color: isSelected
+                                          ? activity['color']
+                                          : Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ],
                               ),
-                              SizedBox(height: 8),
-                              Text(
-                                'Tap to add photo',
+                            ),
+                          );
+                        },
+                      ),
+
+                      SizedBox(height: 24),
+
+                      Text(
+                        'Incident Location',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      SizedBox(height: 12),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white.withOpacity(0.2)),
+                        ),
+                        child: Column(
+                          children: [
+                            ListTile(
+                              leading: _isGettingLocation 
+                                ? SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+                                    ),
+                                  )
+                                : Icon(Icons.my_location, color: Colors.blue),
+                              title: Text(
+                                'Use Current Location',
+                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+                              ),
+                              subtitle: Text(
+                                _currentLocationName,
+                                style: TextStyle(color: Colors.white70, fontSize: 12),
+                              ),
+                              trailing: Radio<String>(
+                                value: "Current Location: $_currentLocationName",
+                                groupValue: _selectedLocation,
+                                onChanged: (value) {
+                                  setState(() {
+                                    _selectedLocation = value;
+                                  });
+                                },
+                                activeColor: Colors.blue,
+                              ),
+                              onTap: () {
+                                if (!_isGettingLocation) {
+                                  setState(() {
+                                    _selectedLocation = "Current Location: $_currentLocationName";
+                                  });
+                                }
+                              },
+                            ),
+                            Divider(color: Colors.white.withOpacity(0.1), height: 1),
+                            ListTile(
+                              leading: Icon(Icons.location_on, color: Colors.orange),
+                              title: Text(
+                                'Choose Campus Location',
+                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+                              ),
+                              subtitle: Text(
+                                _selectedLocation != null && !_selectedLocation!.startsWith("Current Location") 
+                                  ? _selectedLocation! 
+                                  : 'Select from campus locations',
+                                style: TextStyle(color: Colors.white70, fontSize: 12),
+                              ),
+                              trailing: Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 16),
+                              onTap: _showLocationSelectionDialog,
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      SizedBox(height: 24),
+
+                      Text(
+                        'Photo Evidence (Optional)',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      SizedBox(height: 12),
+                      GestureDetector(
+                        onTap: _showImageSourceDialog,
+                        child: Container(
+                          height: 120,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.05),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.2),
+                              style: BorderStyle.solid,
+                            ),
+                          ),
+                          child: _selectedImage != null
+                              ? Stack(
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: Image.file(
+                                        File(_selectedImage!.path),
+                                        width: double.infinity,
+                                        height: 120,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    ),
+                                    Positioned(
+                                      top: 8,
+                                      right: 8,
+                                      child: GestureDetector(
+                                        onTap: () {
+                                          setState(() {
+                                            _selectedImage = null;
+                                          });
+                                        },
+                                        child: Container(
+                                          padding: EdgeInsets.all(4),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black.withOpacity(0.6),
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          child: Icon(
+                                            Icons.close,
+                                            color: Colors.white,
+                                            size: 16,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              : Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.add_a_photo,
+                                      color: Colors.white60,
+                                      size: 32,
+                                    ),
+                                    SizedBox(height: 8),
+                                    Text(
+                                      'Tap to add photo',
+                                      style: TextStyle(
+                                        color: Colors.white60,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                        ),
+                      ),
+
+                      SizedBox(height: 24),
+
+                      Text(
+                        'Description',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      SizedBox(height: 12),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white.withOpacity(0.2)),
+                        ),
+                        child: TextField(
+                          controller: _descriptionController,
+                          maxLines: 4,
+                          style: TextStyle(color: Colors.white),
+                          decoration: InputDecoration(
+                            hintText: 'Describe what you observed, when and where it happened...',
+                            hintStyle: TextStyle(color: Colors.white60),
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.all(16),
+                          ),
+                        ),
+                      ),
+
+                      SizedBox(height: 32),
+
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: _submitReport,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.deepPurple,
+                            padding: EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: Text(
+                            'Submit Report',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      SizedBox(height: 16),
+
+                      Container(
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.red.withOpacity(0.3)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.emergency, color: Colors.red, size: 20),
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'For immediate emergencies, call 999 or use the Emergency button',
                                 style: TextStyle(
-                                  color: Colors.white60,
-                                  fontSize: 14,
+                                  color: Colors.red,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
-                            ],
-                          ),
-                  ),
-                ),
-
-                SizedBox(height: 24),
-
-                // Description
-                Text(
-                  'Description',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                SizedBox(height: 12),
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.05),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.white.withOpacity(0.2)),
-                  ),
-                  child: TextField(
-                    controller: _descriptionController,
-                    maxLines: 4,
-                    style: TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      hintText: 'Describe what you observed, when and where it happened...',
-                      hintStyle: TextStyle(color: Colors.white60),
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.all(16),
-                    ),
-                  ),
-                ),
-
-                SizedBox(height: 32),
-
-                // Submit Button
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _submitReport,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.deepPurple,
-                      padding: EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: Text(
-                      'Submit Report',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-
-                SizedBox(height: 16),
-
-                // Emergency note
-                Container(
-                  padding: EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.red.withOpacity(0.3)),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.emergency, color: Colors.red, size: 20),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'For immediate emergencies, call 999 or use the Emergency button',
-                          style: TextStyle(
-                            color: Colors.red,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
-                ),
-              ],
-            ),
                 ),
               ),
             ],

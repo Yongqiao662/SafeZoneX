@@ -4,8 +4,8 @@
   "description": "AI-powered SafeZoneX backend server",
   "main": "server.js",
   "scripts": {
-    "start": "node ai-server.js",
-    "dev": "nodemon ai-server.js",
+    "start": "node server.js",
+    "dev": "nodemon server.js",
     "train": "node train-models.js",
     "test": "jest",
     "test:watch": "jest --watch"

@@ -3,6 +3,7 @@ import 'dart:async';
 // import 'dart:async'; // Commented out for static demo
 import '../models/sos_alert.dart';
 import '../services/websocket_service.dart';
+import '../services/api_service.dart';  // Added API service import
 import '../widgets/alert_card_new.dart';
 import '../widgets/safety_heatmap.dart';
 
@@ -41,6 +42,59 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
   super.initState();
   _tabController = TabController(length: 2, vsync: this);
   _initializeWebSocket();
+  _loadExistingReports(); // Added this line to load existing reports
+  }
+
+  // Added method to load existing reports from backend
+  Future<void> _loadExistingReports() async {
+    try {
+      print('Loading existing reports from backend...');
+      final reports = await ApiService.fetchReports();
+      
+      setState(() {
+        _alerts.clear();
+        for (var reportData in reports) {
+          // Convert API response to SOSAlert object
+          final alert = SOSAlert(
+            id: reportData['id'] ?? reportData['alertId'],
+            userId: reportData['userId'] ?? '',
+            userName: reportData['userName'] ?? 'Unknown',
+            userPhone: reportData['userPhone'] ?? '',
+            alertType: reportData['alertType'] ?? 'Other',
+            additionalInfo: reportData['description'] ?? '',
+            latitude: (reportData['location']?['latitude'] ?? 0).toDouble(),
+            longitude: (reportData['location']?['longitude'] ?? 0).toDouble(),
+            address: reportData['location']?['address'] ?? '',
+            status: _mapBackendStatusToDashboard(reportData['status'] ?? 'active'),
+            timestamp: DateTime.tryParse(reportData['createdAt'] ?? '') ?? DateTime.now(),
+          );
+          _alerts.add(alert);
+        }
+        _updateCounts();
+      });
+      
+      print('Loaded ${_alerts.length} existing reports');
+    } catch (e) {
+      print('Error loading existing reports: $e');
+    }
+  }
+
+  // Added method to map backend status to dashboard status
+  String _mapBackendStatusToDashboard(String backendStatus) {
+    switch (backendStatus) {
+      case 'real':
+      case 'likely_real':
+      case 'pending_review':
+        return 'active';
+      case 'investigating':
+        return 'acknowledged';
+      case 'resolved':
+        return 'resolved';
+      case 'false_alarm':
+        return 'resolved';
+      default:
+        return 'active';
+    }
   }
 
   void _initializeWebSocket() {
@@ -315,28 +369,50 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     _resolvedAlerts = _alerts.where((a) => a.status == 'resolved').length;
   }
 
-  void _acknowledgeAlert(SOSAlert alert) {
-    setState(() {
-      final index = _alerts.indexWhere((a) => a.id == alert.id);
-      if (index != -1) {
-        _alerts[index] = alert.copyWith(status: 'acknowledged');
-        _updateCounts();
+  // Modified to use API service for backend updates
+  void _acknowledgeAlert(SOSAlert alert) async {
+    try {
+      // Update backend first
+      bool success = await ApiService.updateReportStatus(alert.id, 'investigating');
+      
+      if (success) {
+        setState(() {
+          final index = _alerts.indexWhere((a) => a.id == alert.id);
+          if (index != -1) {
+            _alerts[index] = alert.copyWith(status: 'acknowledged');
+            _updateCounts();
+          }
+        });
+        print('Alert acknowledged successfully');
+      } else {
+        print('Failed to acknowledge alert in backend');
       }
-    });
-    // Commented out WebSocket call for static demo
-    // _wsService.acknowledgeAlert(alert.id);
+    } catch (e) {
+      print('Error acknowledging alert: $e');
+    }
   }
 
-  void _resolveAlert(SOSAlert alert) {
-    setState(() {
-      final index = _alerts.indexWhere((a) => a.id == alert.id);
-      if (index != -1) {
-        _alerts[index] = alert.copyWith(status: 'resolved');
-        _updateCounts();
+  // Modified to use API service for backend updates
+  void _resolveAlert(SOSAlert alert) async {
+    try {
+      // Update backend first
+      bool success = await ApiService.updateReportStatus(alert.id, 'resolved', resolution: 'Resolved by security team');
+      
+      if (success) {
+        setState(() {
+          final index = _alerts.indexWhere((a) => a.id == alert.id);
+          if (index != -1) {
+            _alerts[index] = alert.copyWith(status: 'resolved');
+            _updateCounts();
+          }
+        });
+        print('Alert resolved successfully');
+      } else {
+        print('Failed to resolve alert in backend');
       }
-    });
-    // Commented out WebSocket call for static demo
-    // _wsService.resolveAlert(alert.id);
+    } catch (e) {
+      print('Error resolving alert: $e');
+    }
   }
 
   void _showMapDialog(SOSAlert alert) {
