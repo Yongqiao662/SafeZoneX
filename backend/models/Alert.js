@@ -20,12 +20,21 @@ const alertSchema = new mongoose.Schema({
   },
   alertType: {
     type: String,
-    enum: ['emergency', 'medical', 'security', 'harassment', 'accident', 'other'],
-    default: 'emergency'
+    enum: [
+      'Suspicious Person',
+      'Theft/Robbery',
+      'Vandalism',
+      'Drug Activity',
+      'Harassment',
+      'Safety Hazard',
+      'Unauthorized Access',
+      'Other'
+    ],
+    default: 'Other'
   },
   status: {
     type: String,
-    enum: ['active', 'acknowledged', 'resolved', 'false_alarm'],
+    enum: ['active', 'acknowledged', 'resolved', 'false_alarm', 'pending_review', 'real', 'likely_real', 'filtered'],
     default: 'active'
   },
   priority: {
@@ -110,20 +119,8 @@ const alertSchema = new mongoose.Schema({
     notifiedAt: Date
   }],
   aiAnalysis: {
-    reportGenuineness: {
-      score: Number, // 0-100
-      factors: [String],
-      riskLevel: String
-    },
-    locationVerification: {
-      plausible: Boolean,
-      score: Number,
-      reasoning: String
-    },
-    behaviorAnalysis: {
-      consistent: Boolean,
-      anomalies: [String]
-    }
+    type: mongoose.Schema.Types.Mixed,
+    default: {}
   },
   metadata: {
     deviceInfo: String,

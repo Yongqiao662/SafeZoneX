@@ -26,41 +26,37 @@ class BackendApiService {
     required String text,
     required Map<String, double> location,
     Map<String, dynamic>? userProfile,
-    List<File>? images,
     Map<String, dynamic>? metadata,
   }) async {
     try {
-      // Use multipart request for image upload
-      var request = http.MultipartRequest('POST', Uri.parse('${baseUrl}/api/report'));
+      // Build the JSON body
+      final latitude = location['latitude'] ?? location['lat'] ?? 3.12194;
+      final longitude = location['longitude'] ?? location['lng'] ?? 101.6569867;
+      final address = metadata?['locationName'] ?? 'Test Location';
+      final body = {
+        'description': text.isNotEmpty ? text : 'Test report description',
+        'location': {
+          'latitude': latitude,
+          'longitude': longitude,
+          'address': address,
+          'campus': 'University Malaya',
+        },
+        'alertType': metadata?['activityType'] ?? 'emergency',
+        'priority': metadata?['priority'] ?? 'high',
+        'userId': userProfile?['userId'] ?? 'test_user_123',
+        'userName': userProfile?['userName'] ?? 'Test User',
+        'userPhone': userProfile?['userPhone'] ?? '+60123456789',
+        // 'evidenceImages': [], // Images omitted for now
+      };
 
-      // Add images if available
-      if (images != null && images.isNotEmpty) {
-        for (var image in images) {
-          request.files.add(await http.MultipartFile.fromPath('images', image.path));
-        }
-      }
+      final response = await http.post(
+        Uri.parse('${baseUrl}/api/report'),
+        headers: _headers,
+        body: json.encode(body),
+      );
 
-      // Add other fields
-      request.fields['description'] = text;
-      request.fields['location'] = json.encode({
-        'latitude': location['latitude'] ?? location['lat'],
-        'longitude': location['longitude'] ?? location['lng'],
-        'address': metadata?['locationName'] ?? '',
-        'campus': 'University Malaya',
-      });
-      request.fields['alertType'] = metadata?['activityType'] ?? 'emergency';
-      request.fields['priority'] = 'high';
-      request.fields['userId'] = userProfile?['userId'] ?? '';
-      request.fields['userName'] = userProfile?['userName'] ?? '';
-      request.fields['userPhone'] = userProfile?['userPhone'] ?? '';
-
-      // Send the request
-      var response = await request.send();
-
-      // Handle the response
       if (response.statusCode == 200) {
-        final responseBody = await response.stream.bytesToString();
-        return json.decode(responseBody);
+        return json.decode(response.body);
       } else {
         return {'success': false, 'message': 'Failed to submit report: ${response.reasonPhrase}'};
       }

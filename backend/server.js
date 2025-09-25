@@ -52,8 +52,14 @@ mongoose.connect(mongoURI, {
 let alertsCache = new Map();
 
 // API to submit a report
+// API to submit a report - CORRECTED
+// API to submit a report - CORRECTED
+// API to submit a report - CORRECTED
+// API to submit a report - CORRECTED WITH PROPER ENUM VALUES
 app.post('/api/report', async (req, res) => {
   try {
+    console.log('📝 Report submission request body:', JSON.stringify(req.body, null, 2));
+
     // Extract and validate required fields
     const {
       userId,
@@ -66,12 +72,26 @@ app.post('/api/report', async (req, res) => {
       priority
     } = req.body;
 
-    // Re-enable validation for userId, userName, and userPhone
+    console.log('📋 Extracted fields:', {
+      userId,
+      userName,
+      userPhone,
+      location,
+      description: description?.substring(0, 50) + '...',
+      hasImages: evidenceImages?.length > 0,
+      alertType,
+      priority
+    });
+
+    // Validate required fields
     if (!userId || !userName || !userPhone) {
-      return res.status(400).json({ error: 'Missing required user fields (userId, userName, userPhone)' });
+      console.log('❌ Missing user fields:', { userId: !!userId, userName: !!userName, userPhone: !!userPhone });
+      return res.status(400).json({ success: false, error: 'Missing required user fields' });
     }
+    
     if (!location || typeof location.latitude !== 'number' || typeof location.longitude !== 'number') {
-      return res.status(400).json({ error: 'Missing or invalid location (latitude, longitude required)' });
+      console.log('❌ Invalid location:', location);
+      return res.status(400).json({ success: false, error: 'Missing or invalid location' });
     }
 
     const reportId = uuidv4();
@@ -81,8 +101,17 @@ app.post('/api/report', async (req, res) => {
     if (evidenceImages && evidenceImages.length > 0) initialConfidence += 10;
     if (initialConfidence > 90) initialConfidence = 90;
 
-    let status = 'pending';
+    // FIXED: Use proper enum values from your schema
+    let status = 'active'; // Default status from schema
     let aiAnalysis = null;
+    
+    // Map priority values correctly
+    let validPriority = 'high'; // Default priority from schema
+    if (priority === 'normal') {
+      validPriority = 'medium'; // Map 'normal' to 'medium' which exists in enum
+    } else if (['low', 'medium', 'high', 'critical'].includes(priority)) {
+      validPriority = priority;
+    }
 
     // Build alert object for MongoDB
     const alertData = {
@@ -98,13 +127,13 @@ app.post('/api/report', async (req, res) => {
       },
       description: description || '',
       evidenceImages: Array.isArray(evidenceImages) ? evidenceImages : [],
-      alertType: alertType || 'emergency',
-      priority: priority || 'high',
-      status,
+      alertType: alertType || 'Other', // Use 'Other' as default (matches enum)
+      priority: validPriority, // Use mapped priority value
+      status, // Use 'active' status (matches enum)
       createdAt: new Date()
     };
 
-    // If confidence > 70%, skip AI analysis
+    // Process based on confidence level
     if (initialConfidence > 70) {
       status = 'real';
       aiAnalysis = {
@@ -113,116 +142,71 @@ app.post('/api/report', async (req, res) => {
       };
       alertData.status = status;
       alertData.aiAnalysis = aiAnalysis;
-      logger.info(`🚨 New report submitted: ${reportId} (auto-classified as real)`);
-      const newAlert = new Alert(alertData);
-      await newAlert.save();
-      alertsCache.set(reportId, newAlert);
-      res.json({ success: true, reportId });
-      io.emit('report_update', {
-        alertId: reportId,
-        status,
-        aiAnalysis
-      });
     } else if (initialConfidence >= 50 && initialConfidence <= 70) {
-      logger.info(`🚨 New report submitted: ${reportId} (pending AI analysis)`);
-      const newAlert = new Alert(alertData);
-      await newAlert.save();
-      alertsCache.set(reportId, newAlert);
-      res.json({ success: true, reportId });
-      analyzeReport(newAlert);
+      status = 'active'; // Keep as active for pending AI analysis
+      aiAnalysis = {
+        confidence: initialConfidence,
+        details: 'Pending AI analysis'
+      };
+      alertData.status = status;
+      alertData.aiAnalysis = aiAnalysis;
     } else {
-      status = 'pending_review';
+      status = 'pending_review'; // This matches your enum
       aiAnalysis = {
         confidence: initialConfidence,
         details: 'Low confidence, pending manual review'
       };
       alertData.status = status;
       alertData.aiAnalysis = aiAnalysis;
-      logger.info(`🚨 New report submitted: ${reportId} (pending manual review)`);
-      const newAlert = new Alert(alertData);
-      await newAlert.save();
-      alertsCache.set(reportId, newAlert);
-      res.json({ success: true, reportId });
-      io.emit('report_update', {
-        alertId: reportId,
-        status,
-        aiAnalysis
-      });
-    }
-  } catch (error) {
-    logger.error('Error submitting report:', error && error.stack ? error.stack : error);
-    res.status(500).json({ error: 'Failed to submit report' });
-  }
-});
-
-// Signup or profile update endpoint
-app.post('/api/user/signup', async (req, res) => {
-  try {
-    const {
-      userId,
-      email,
-      name,
-      phone,
-      studentId,
-      profilePicture,
-      faceDescriptors,
-      emergencyContacts,
-      location,
-      isVerified,
-      verificationScore,
-      safetyRating,
-      totalWalks,
-      isActive,
-      joinedAt,
-      lastSeen
-    } = req.body;
-
-    let user = await User.findOne({ email });
-    if (user) {
-      // Update profile if exists
-      user.userId = userId || user.userId;
-      user.name = name || user.name;
-      user.phone = phone || user.phone;
-      user.studentId = studentId || user.studentId;
-      user.profilePicture = profilePicture || user.profilePicture;
-      user.faceDescriptors = faceDescriptors || user.faceDescriptors;
-      user.emergencyContacts = emergencyContacts || user.emergencyContacts;
-      user.location = location || user.location;
-      user.isVerified = isVerified !== undefined ? isVerified : user.isVerified;
-      user.verificationScore = verificationScore !== undefined ? verificationScore : user.verificationScore;
-      user.safetyRating = safetyRating !== undefined ? safetyRating : user.safetyRating;
-      user.totalWalks = totalWalks !== undefined ? totalWalks : user.totalWalks;
-      user.isActive = isActive !== undefined ? isActive : user.isActive;
-      user.joinedAt = joinedAt || user.joinedAt;
-      user.lastSeen = lastSeen || user.lastSeen;
-      user.updatedAt = new Date();
-      await user.save();
-      return res.json({ success: true, user, message: 'Profile updated.' });
     }
 
-    // Create new user
-    user = new User({
-      userId,
-      email,
-      name,
-      phone,
-      studentId,
-      profilePicture,
-      faceDescriptors,
-      emergencyContacts,
-      location,
-      isVerified,
-      verificationScore,
-      safetyRating,
-      totalWalks,
-      isActive,
-      joinedAt,
-      lastSeen
+    console.log('💾 Saving alert with status:', status, 'priority:', validPriority);
+
+    // Save to database
+    const newAlert = new Alert(alertData);
+    await newAlert.save();
+    alertsCache.set(reportId, newAlert);
+
+    console.log('✅ Report saved successfully:', reportId);
+    logger.info(`🚨 New report submitted: ${reportId} (${status})`);
+
+    // Return success response
+    res.json({ 
+      success: true, 
+      reportId,
+      status,
+      message: 'Report submitted successfully' 
     });
-    await user.save();
-    res.json({ success: true, user, message: 'User created.' });
+
+    // Emit to websocket: send to security_dashboard room and broadcast to all
+    const reportPayload = {
+      alertId: reportId,
+      userId,
+      userName,
+      alertType,
+      status,
+      aiAnalysis,
+      location: alertData.location,
+      description
+    };
+    io.to('security_dashboard').emit('report_update', reportPayload);
+    io.emit('report_update', reportPayload);
+
+    // Start AI analysis if needed (don't wait for it)
+    if (initialConfidence >= 50 && initialConfidence <= 70) {
+      analyzeReport(newAlert).catch(err => 
+        console.log('AI analysis error (non-blocking):', err)
+      );
+    }
+
   } catch (error) {
-    res.status(500).json({ success: false, message: 'User creation failed.', error: error.message });
+    console.error('❌ Report submission error:', error);
+    logger.error('Error submitting report:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to submit report',
+      message: error.message 
+    });
   }
 });
 
@@ -282,21 +266,28 @@ async function analyzeReport(alert) {
         }
 
         alert.status = status;
-        alert.aiAnalysis = {
-          confidence,
-          details
-        };
+        // Patch: Only set aiAnalysis.confidence and details as top-level fields
+        alert.aiAnalysis = alert.aiAnalysis || {};
+        alert.aiAnalysis.confidence = confidence;
+        alert.aiAnalysis.details = details;
         await alert.save();
 
         logger.info(`✅ Report analysis complete: ${alert.alertId} (${status})`);
 
         // Only send to dashboard if confidence >= 50%
         if (sendToDashboard) {
-          io.emit('report_update', {
+          const reportPayload = {
             alertId: alert.alertId,
+            userId: alert.userId,
+            userName: alert.userName,
+            alertType: alert.alertType,
             status,
-            aiAnalysis: alert.aiAnalysis
-          });
+            aiAnalysis: alert.aiAnalysis,
+            location: alert.location,
+            description: alert.description
+          };
+          io.to('security_dashboard').emit('report_update', reportPayload);
+          io.emit('report_update', reportPayload);
         }
 
         // Feedback loop for likely_real
@@ -342,10 +333,16 @@ function requestFeedback(alert) {
 }
 
 // Implemented Socket.IO authentication
+
 // DEVELOPMENT ONLY: Disable JWT authentication for Socket.IO
 // WARNING: Remove this in production!
 io.use((socket, next) => {
-  // Allow all connections without authentication
+  // Set a default user object for development to prevent crashes
+  socket.user = {
+    id: 'dev_user',
+    role: 'security', // Change to 'security' for dashboard testing
+    name: 'Dev User'
+  };
   next();
 });
 

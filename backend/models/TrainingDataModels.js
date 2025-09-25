@@ -2,47 +2,30 @@ const mongoose = require('mongoose');
 
 // Training Data Schemas for MongoDB
 
-// Report Training Data Schema
+// Report Training Data Schema (aligned with reports_screen.dart)
 const ReportTrainingSchema = new mongoose.Schema({
     text: {
         type: String,
         required: true,
         trim: true
     },
-    isAuthentic: {
-        type: Boolean,
-        required: true
-    },
-    category: {
-        type: String,
-        enum: ['emergency', 'theft', 'vandalism', 'suspicious_activity', 'noise_complaint', 'other'],
-        default: 'other'
-    },
-    source: {
-        type: String,
-        enum: ['user', 'admin', 'synthetic', 'government', 'news', 'social_media'],
-        default: 'user'
-    },
-    verifiedBy: {
-        type: String,
-        default: 'system'
-    },
     location: {
-        latitude: Number,
-        longitude: Number,
-        address: String
+        latitude: { type: Number, required: false },
+        longitude: { type: Number, required: false },
+        name: { type: String, required: false },
     },
+    userProfile: {
+        type: mongoose.Schema.Types.Mixed, // Store user info object
+        required: false
+    },
+    images: [{
+        type: String // Store file path or URL
+    }],
     metadata: {
-        priority: String,
-        userId: String,
-        timestamp: Date,
-        confidence: Number
+        activityType: { type: String },
+        locationName: { type: String }
     },
     createdAt: {
-        type: Date,
-        default: Date.now
-    },
-    updatedAt: {
         type: Date,
         default: Date.now
     }

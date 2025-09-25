@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 // import 'dart:async'; // Commented out for static demo
 import '../models/sos_alert.dart';
-// import '../services/websocket_service.dart'; // Commented out for static demo
+import '../services/websocket_service.dart';
 import '../widgets/alert_card_new.dart';
 import '../widgets/safety_heatmap.dart';
 
@@ -11,11 +12,10 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> with TickerProviderStateMixin {
-  // Commented out WebSocket functionality for static demo
-  // final WebSocketService _wsService = WebSocketService();
+  final WebSocketService _wsService = WebSocketService();
   final List<SOSAlert> _alerts = [];
-  // late StreamSubscription<SOSAlert> _alertSubscription;
-  // late StreamSubscription<String> _connectionSubscription;
+  late StreamSubscription<SOSAlert> _alertSubscription;
+  late StreamSubscription<String> _connectionSubscription;
   late TabController _tabController;
   
   String _connectionStatus = 'disconnected';
@@ -38,15 +38,11 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
 
   @override
   void initState() {
-    super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-    // Comment out WebSocket initialization for now - using static images
-    // _initializeWebSocket();
-    _loadMockData();
+  super.initState();
+  _tabController = TabController(length: 2, vsync: this);
+  _initializeWebSocket();
   }
 
-  // Commented out WebSocket functionality - using static demo data
-  /*
   void _initializeWebSocket() {
     _alertSubscription = _wsService.alertStream.listen((alert) {
       setState(() {
@@ -63,44 +59,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
 
     _wsService.connect();
   }
-  */
 
-  void _loadMockData() {
-    // Add some mock SOS alerts
-    final mockAlerts = [
-      SOSAlert(
-        id: '1',
-        userId: 'user_123',
-        userName: 'John Doe',
-        userPhone: '+60123456789',
-        latitude: 3.1235,
-        longitude: 101.6545,
-        address: 'Perpustakaan Utama UM, University of Malaya',
-        timestamp: DateTime.now().subtract(const Duration(minutes: 5)),
-        alertType: 'Safety Hazard',
-        status: 'active',
-        additionalInfo: 'Faulty street light',
-      ),
-      SOSAlert(
-        id: '2',
-        userId: 'user_456',
-        userName: 'Sarah Johnson',
-        userPhone: '+1987654321',
-        latitude: 3.1289,
-        longitude: 101.6818,
-        address: 'Student Dormitory, University of Malaya',
-        timestamp: DateTime.now().subtract(const Duration(minutes: 15)),
-        alertType: 'Medical',
-        status: 'acknowledged',
-        additionalInfo: 'Feeling dizzy and nauseous',
-      ),
-    ];
-
-    setState(() {
-      _alerts.addAll(mockAlerts);
-      _updateCounts();
-    });
-  }
 
   void _showAlertDetails(SOSAlert alert) {
     showDialog(
@@ -801,10 +760,9 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
 
   @override
   void dispose() {
-    // Commented out WebSocket subscription cleanup
-    // _alertSubscription.cancel();
-    // _connectionSubscription.cancel();
-    _tabController.dispose();
-    super.dispose();
+  _alertSubscription.cancel();
+  _connectionSubscription.cancel();
+  _tabController.dispose();
+  super.dispose();
   }
 }

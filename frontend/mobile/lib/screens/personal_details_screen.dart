@@ -7,6 +7,7 @@ import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'main_dashboard_screen.dart';
+import '../services/auth_service.dart';
 import 'package:http/http.dart' as http;
 
 // User Preferences Management Class
@@ -365,6 +366,8 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen>
           ),
         );
 
+        // Re-initialize AuthService to ensure session is loaded
+  await AuthService().initialize();
         // Navigate to MainDashboardScreen (passing data for immediate use)
         await Future.delayed(const Duration(milliseconds: 500));
         Navigator.pushReplacement(

@@ -1,67 +1,90 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:io' show Platform;
 import 'dart:async';
 import 'dart:convert';
-import 'dart:html' as html;
+import 'package:socket_io_client/socket_io_client.dart' as IO;
 import '../models/sos_alert.dart';
 
 class WebSocketService {
+  final StreamController<Map<String, dynamic>> _messageController = StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get messageStream => _messageController.stream;
   static final WebSocketService _instance = WebSocketService._internal();
   factory WebSocketService() => _instance;
   WebSocketService._internal();
 
-  html.WebSocket? _webSocket;
+  IO.Socket? _socket;
   final StreamController<SOSAlert> _alertController = StreamController<SOSAlert>.broadcast();
   final StreamController<String> _connectionController = StreamController<String>.broadcast();
   
   Stream<SOSAlert> get alertStream => _alertController.stream;
   Stream<String> get connectionStream => _connectionController.stream;
   
-  bool get isConnected => _webSocket?.readyState == html.WebSocket.OPEN;
+  bool get isConnected => _socket?.connected ?? false;
 
   Future<void> connect() async {
-    try {
-      // Connect to our local WebSocket server (web dashboard runs on same machine)
-      _webSocket = html.WebSocket('ws://localhost:8080');
-      
-      _webSocket!.onOpen.listen((event) {
-        print('✅ Web Dashboard WebSocket connected');
-        _connectionController.add('connected');
-        
-        // Register as web client
-        sendMessage({
-          'register': true,
-          'type': 'web',
-          'timestamp': DateTime.now().toIso8601String(),
-        });
-      });
-      
-      _webSocket!.onMessage.listen((event) {
-        try {
-          final data = json.decode(event.data);
-          if (data['type'] == 'sos_alert') {
-            final alert = SOSAlert.fromJson(data['payload']);
-            _alertController.add(alert);
-            _showBrowserNotification(alert);
-          }
-        } catch (e) {
-          print('Error parsing message: $e');
-        }
-      });
-      
-      _webSocket!.onError.listen((event) {
-        print('WebSocket error: $event');
-        _connectionController.add('error');
-      });
-      
-      _webSocket!.onClose.listen((event) {
-        print('WebSocket closed');
-        _connectionController.add('disconnected');
-        _reconnect();
-      });
-      
-    } catch (e) {
-      print('Failed to connect: $e');
-      _connectionController.add('error');
+    String socketUrl;
+    if (kIsWeb) {
+      socketUrl = 'http://localhost:8080';
+    } else if (Platform.isAndroid) {
+      socketUrl = 'http://10.0.2.2:8080';
+    } else {
+      socketUrl = 'http://localhost:8080';
     }
+
+    _socket = IO.io(socketUrl, <String, dynamic>{
+      'transports': ['websocket'],
+      'autoConnect': true,
+    });
+
+    _socket!.on('connect', (_) {
+      print('✅ Socket.IO connected');
+      _connectionController.add('connected');
+      sendMessage({
+        'register': true,
+        'type': 'web',
+        'timestamp': DateTime.now().toIso8601String(),
+      });
+    });
+
+    _socket!.on('report_update', (data) {
+      try {
+        print('Received report_update: $data');
+        // Parse all required fields for SOSAlert
+        final alert = SOSAlert(
+          id: data['alertId'] ?? 'unknown',
+          userId: data['userId'] ?? 'mobile_user',
+          userName: data['userName'] ?? 'Mobile Reporter',
+          userPhone: '+60123456789',
+          latitude: data['location']?['latitude'] ?? 3.1235,
+          longitude: data['location']?['longitude'] ?? 101.6545,
+          address: data['location']?['address'] ?? 'University Malaya',
+          timestamp: DateTime.now(),
+          alertType: data['alertType'] ?? 'Emergency',
+          status: data['status'] ?? 'active',
+          additionalInfo: data['description'] ?? 'Report from mobile app',
+        );
+        _alertController.add(alert);
+        _messageController.add({
+          'type': 'report_update',
+          'alertId': data['alertId'],
+          'status': data['status'],
+          'aiAnalysis': data['aiAnalysis'],
+        });
+      } catch (e) {
+        print('Error parsing report_update: $e');
+      }
+    });
+
+    _socket!.on('error', (err) {
+      print('Socket.IO error: $err');
+      _connectionController.add('error');
+    });
+
+    _socket!.on('disconnect', (_) {
+      print('Socket.IO disconnected');
+      _connectionController.add('disconnected');
+      _reconnect();
+    });
   }
 
   void _reconnect() {
@@ -74,7 +97,7 @@ class WebSocketService {
 
   void sendMessage(Map<String, dynamic> message) {
     if (isConnected) {
-      _webSocket!.send(json.encode(message));
+  _socket!.emit('message', message);
     }
   }
 
@@ -94,33 +117,9 @@ class WebSocketService {
     });
   }
 
-  void _showBrowserNotification(SOSAlert alert) {
-    if (html.Notification.supported) {
-      html.Notification.requestPermission().then((permission) {
-        if (permission == 'granted') {
-          final notification = html.Notification(
-            'SafeZoneX - Emergency Alert!',
-            body: '${alert.userName} needs help at ${alert.address}',
-            icon: '/icons/Icon-192.png',
-            tag: alert.id,
-          );
-          
-          notification.onClick.listen((event) {
-            // html.window.focus(); // Removed problematic line
-            notification.close();
-          });
-          
-          // Auto close after 10 seconds
-          Timer(const Duration(seconds: 10), () {
-            notification.close();
-          });
-        }
-      });
-    }
-  }
 
   void dispose() {
-    _webSocket?.close();
+  _socket?.disconnect();
     _alertController.close();
     _connectionController.close();
   }

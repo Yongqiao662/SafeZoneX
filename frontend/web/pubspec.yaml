@@ -15,6 +15,7 @@ dependencies:
   cupertino_icons: ^1.0.2
   web_socket_channel: ^2.4.0
   http: ^1.1.0
+  socket_io_client: ^2.0.0
   
   # New dependencies for enhanced dashboard
   image_picker: ^1.0.4          # For photo uploads from camera/gallery
