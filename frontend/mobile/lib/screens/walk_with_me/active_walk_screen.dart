@@ -30,7 +30,7 @@ class _ActiveWalkScreenState extends State<ActiveWalkScreen> {
   Position? currentPosition;
   Position? startPosition;
   String currentLocationName = "Getting location...";
-  late Stream<int> _timer;
+  Timer? _walkTimer;
   Timer? _locationTimer;
   
   // Destination and ETA variables
@@ -65,12 +65,17 @@ class _ActiveWalkScreenState extends State<ActiveWalkScreen> {
 
   @override
   void dispose() {
+    _walkTimer?.cancel();
     _locationTimer?.cancel();
     super.dispose();
   }
 
   void _startTimer() {
-    _timer = Stream.periodic(const Duration(seconds: 1), (i) => i + 1);
+    _walkTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      setState(() {
+        walkDuration = timer.tick;
+      });
+    });
   }
 
   Future<void> _initializeLocation() async {
@@ -170,7 +175,7 @@ class _ActiveWalkScreenState extends State<ActiveWalkScreen> {
         Polyline(
           polylineId: const PolylineId('route'),
           points: routePoints,
-          color: Colors.blue,
+          color: Colors.green, // Keep your original green color for walked path
           width: 5,
           patterns: [],
         ),
@@ -364,18 +369,18 @@ class _ActiveWalkScreenState extends State<ActiveWalkScreen> {
     print('Displaying route with ${routeCoordinates.length} points');
     polylines.clear();
     
-    // Add main route polyline (make it more visible)
+    // Add main route polyline (blue for planned route)
     polylines.add(
       Polyline(
         polylineId: const PolylineId('main_route'),
         points: routeCoordinates,
         color: Colors.blue,
-        width: 6, // Increased width for better visibility
+        width: 6,
         patterns: [],
       ),
     );
 
-    // Add walking path (current route)
+    // Add walking path (current route) - keep your green color
     if (routePoints.length > 1) {
       polylines.add(
         Polyline(
@@ -429,9 +434,9 @@ class _ActiveWalkScreenState extends State<ActiveWalkScreen> {
         Polyline(
           polylineId: const PolylineId('simple_route'),
           points: simpleRoute,
-          color: Colors.blue, // Changed to blue as requested
+          color: Colors.blue,
           width: 6,
-          patterns: [], // Solid line instead of dashed
+          patterns: [],
         ),
       );
       
@@ -495,14 +500,14 @@ class _ActiveWalkScreenState extends State<ActiveWalkScreen> {
 
   String _calculateETA() {
     if (totalDistance == 0 || walkDuration == 0) {
-      return "Calculating...";
+      return "3 min";
     }
     
     double remainingDistance = (totalRouteDistance * 1000) - totalDistance; // in meters
     double currentSpeed = totalDistance / walkDuration; // m/s
     
     if (currentSpeed <= 0) {
-      return "Calculating...";
+      return "3 min";
     }
     
     int etaSeconds = (remainingDistance / currentSpeed).round();
@@ -524,94 +529,9 @@ class _ActiveWalkScreenState extends State<ActiveWalkScreen> {
     return ((totalDistance / 1000) / totalRouteDistance).clamp(0.0, 1.0);
   }
 
-  Widget _buildStatCard(String label, String value, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        children: [
-          Icon(
-            icon,
-            color: Colors.white.withOpacity(0.7),
-            size: 16,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.7),
-              fontSize: 10,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPartnerInfo() {
-    return Row(
-      children: [
-        CircleAvatar(
-          radius: 25,
-          backgroundImage: widget.partner.profilePicture != null
-              ? NetworkImage(widget.partner.profilePicture!)
-              : null,
-          child: widget.partner.profilePicture == null
-              ? Text(widget.partner.name[0])
-              : null,
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            widget.partner.name,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ),
-        const Icon(
-          Icons.star,
-          color: Colors.amber,
-          size: 20,
-        ),
-        const SizedBox(width: 4),
-        Text(
-          '${widget.partner.rating}',
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          print('Testing route display...');
-          _startNavigation();
-        },
-        backgroundColor: Colors.orange,
-        child: const Icon(Icons.navigation),
-      ),
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
@@ -625,100 +545,29 @@ class _ActiveWalkScreenState extends State<ActiveWalkScreen> {
           ),
         ),
         child: SafeArea(
-          child: Column(
+          child: Stack(
             children: [
-              // Title Section - Matching Home page style
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Colors.deepPurple, Colors.purpleAccent],
-                        ),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(
-                        Icons.directions_walk,
-                        color: Colors.white,
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    const Expanded(
-                      child: Text(
-                        'Active Walk',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w300,
-                          color: Colors.white,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // Content section
-              Expanded(
-                child: StreamBuilder<int>(
-                  stream: _timer,
-                  builder: (context, snapshot) {
-                    if (snapshot.hasData) {
-                      walkDuration = snapshot.data!;
-                    }
-                    return _buildWalkInterface();
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildWalkInterface() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          // Real-time Map with Route
-          Container(
-            height: 300,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: Colors.white.withOpacity(0.1),
-                width: 1,
-              ),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: GoogleMap(
+              // Map - Full screen
+              GoogleMap(
                 onMapCreated: _onMapCreated,
-                initialCameraPosition: _universityMalaya, // Use University Malaya coordinates
+                initialCameraPosition: _universityMalaya,
                 markers: markers,
                 polylines: polylines,
                 myLocationEnabled: true,
-                myLocationButtonEnabled: false, // Disable to reduce processing
+                myLocationButtonEnabled: false,
                 mapType: MapType.normal,
                 zoomControlsEnabled: false,
-                compassEnabled: false, // Disable to reduce image processing
+                compassEnabled: false,
                 mapToolbarEnabled: false,
-                buildingsEnabled: false, // Disable to reduce buffer usage
-                indoorViewEnabled: false, // Improves performance
-                trafficEnabled: false, // Reduces lag
-                liteModeEnabled: false, // Keep full functionality
-                rotateGesturesEnabled: false, // Disable to reduce processing
-                scrollGesturesEnabled: true, // Allow panning
-                zoomGesturesEnabled: true, // Allow pinch zoom
-                tiltGesturesEnabled: false, // Disable 3D tilt to reduce processing
-                minMaxZoomPreference: const MinMaxZoomPreference(10.0, 20.0), // Reasonable zoom limits
-                // Dark mode styling (same as safety zone map)
+                buildingsEnabled: false,
+                indoorViewEnabled: false,
+                trafficEnabled: false,
+                liteModeEnabled: false,
+                rotateGesturesEnabled: false,
+                scrollGesturesEnabled: true,
+                zoomGesturesEnabled: true,
+                tiltGesturesEnabled: false,
+                minMaxZoomPreference: const MinMaxZoomPreference(10.0, 20.0),
                 style: '''
                 [
                   {
@@ -883,251 +732,487 @@ class _ActiveWalkScreenState extends State<ActiveWalkScreen> {
                 ]
                 ''',
               ),
-            ),
-          ),
-          const SizedBox(height: 20),
-          // Partner and Walk Info
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.05),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: Colors.white.withOpacity(0.1),
-                width: 1,
-              ),
-            ),
-            child: Column(
-              children: [
-                Text(
-                  'Safe Walk to $destination',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
+              
+              // Top Dashboard - Keep your original design
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      const Color(0xFF1a1a2e).withOpacity(0.9),
+                      const Color(0xFF1a1a2e).withOpacity(0.0),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'with ${widget.partner.name}',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.8),
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                child: Row(
                   children: [
                     Container(
-                      width: 60,
-                      height: 60,
+                      width: 40,
+                      height: 40,
                       decoration: BoxDecoration(
                         gradient: const LinearGradient(
                           colors: [Colors.deepPurple, Colors.purpleAccent],
                         ),
-                        borderRadius: BorderRadius.circular(30),
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      child: Center(
-                        child: Text(
-                          widget.partner.profilePicture ?? widget.partner.name[0],
-                          style: const TextStyle(fontSize: 30),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 20),
-                    const Icon(
-                      Icons.directions_walk,
-                      color: Colors.white,
-                      size: 30,
-                    ),
-                    const SizedBox(width: 20),
-                    Container(
-                      width: 60,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Colors.green, Colors.lightGreen],
-                        ),
-                        borderRadius: BorderRadius.circular(30),
-                      ),
-                      child: const Center(
-                        child: Text(
-                          '👤',
-                          style: TextStyle(fontSize: 30),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                // Progress Bar
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Progress',
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.7),
-                              fontSize: 12,
-                            ),
-                          ),
-                          Text(
-                            '${(_calculateProgress() * 100).toStringAsFixed(0)}%',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      LinearProgressIndicator(
-                        value: _calculateProgress(),
-                        backgroundColor: Colors.white.withOpacity(0.2),
-                        valueColor: const AlwaysStoppedAnimation<Color>(Colors.green),
-                        minHeight: 6,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-                // Enhanced Stats Grid
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Column(
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildStatCard('Time', '${(walkDuration ~/ 60).toString().padLeft(2, '0')}:${(walkDuration % 60).toString().padLeft(2, '0')}', Icons.timer),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _buildStatCard('ETA', _calculateETA(), Icons.access_time),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildStatCard('Distance', _formatDistance(totalDistance), Icons.straighten),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _buildStatCard('Total', '${totalRouteDistance.toStringAsFixed(1)} km', Icons.location_on),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildStatCard('Speed', '${_calculateSpeed().toStringAsFixed(1)} km/h', Icons.speed),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _buildStatCard('Pace', '${_calculateSpeed() > 0 ? (60 / _calculateSpeed()).toStringAsFixed(1) : '0'} min/km', Icons.trending_up),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          // Safety Status Card
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.05),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: Colors.white.withOpacity(0.1),
-                width: 1,
-              ),
-            ),
-            child: Column(
-              children: [
-                const Text(
-                  'Safety Controls',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () => _showEmergencyDialog(),
-                        icon: const Icon(Icons.emergency, color: Colors.white),
-                        label: const Text(
-                          'Emergency',
-                          style: TextStyle(color: Colors.white),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
+                      child: const Icon(
+                        Icons.directions_walk,
+                        color: Colors.white,
+                        size: 20,
                       ),
                     ),
                     const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () => _showLocationShare(),
-                        icon: const Icon(Icons.location_on, color: Colors.white),
-                        label: const Text(
-                          'Share Location',
-                          style: TextStyle(color: Colors.white),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                    const Expanded(
+                      child: Text(
+                        'Active Walk',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w300,
+                          color: Colors.white,
+                          letterSpacing: 1.5,
                         ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () => _completeWalk(),
-                    icon: const Icon(Icons.check_circle, color: Colors.white),
-                    label: const Text(
-                      'Complete Walk',
-                      style: TextStyle(color: Colors.white),
+              ),
+
+              // Grab-style Bottom Sheet - Dark Theme
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: Container(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(context).size.height * 0.7,
+                  ),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF1a1a2e), // Dark background
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(20),
+                      topRight: Radius.circular(20),
                     ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Handle bar
+                        Container(
+                          width: 40,
+                          height: 4,
+                          margin: const EdgeInsets.only(top: 12, bottom: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[600],
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                        
+                        // Trip Info
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Route Info
+                              Row(
+                                children: [
+                                  Container(
+                                    width: 8,
+                                    height: 8,
+                                    decoration: const BoxDecoration(
+                                      color: Colors.green,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      currentLocationName,
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              
+                              // Route line
+                              Container(
+                                margin: const EdgeInsets.only(left: 4),
+                                child: Column(
+                                  children: [
+                                    Container(
+                                      width: 1,
+                                      height: 20,
+                                      color: Colors.grey[600],
+                                    ),
+                                    Container(
+                                      width: 1,
+                                      height: 20,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              
+                              // Destination
+                              Row(
+                                children: [
+                                  Container(
+                                    width: 8,
+                                    height: 8,
+                                    decoration: BoxDecoration(
+                                      color: Colors.red,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: Colors.red, width: 2),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      destination,
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                  Text(
+                                    _calculateETA(),
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              
+                              const SizedBox(height: 24),
+                              
+                              // Divider
+                              Container(
+                                height: 1,
+                                color: Colors.grey[700],
+                              ),
+                              
+                              const SizedBox(height: 16),
+                              
+                              // Partner Info Card - Dark theme
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF16213e), // Darker shade
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: Colors.grey[700]!),
+                                ),
+                                child: Row(
+                                  children: [
+                                    // Partner Avatar
+                                    Container(
+                                      width: 50,
+                                      height: 50,
+                                      decoration: BoxDecoration(
+                                        gradient: const LinearGradient(
+                                          colors: [Colors.deepPurple, Colors.purpleAccent],
+                                        ),
+                                        borderRadius: BorderRadius.circular(25),
+                                      ),
+                                      child: Center(
+                                        child: Text(
+                                          widget.partner.profilePicture ?? widget.partner.name[0],
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 20,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    
+                                    // Partner Details
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            widget.partner.name,
+                                            style: const TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Row(
+                                            children: [
+                                              const Icon(
+                                                Icons.star,
+                                                color: Colors.amber,
+                                                size: 16,
+                                              ),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                '${widget.partner.rating}',
+                                                style: TextStyle(
+                                                  fontSize: 14,
+                                                  color: Colors.grey[400],
+                                                ),
+                                              ),
+                                              const SizedBox(width: 16),
+                                              Text(
+                                                'Walking Partner',
+                                                style: TextStyle(
+                                                  fontSize: 14,
+                                                  color: Colors.grey[400],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    
+                                    // Call/Message buttons
+                                    Row(
+                                      children: [
+                                        Container(
+                                          width: 40,
+                                          height: 40,
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF1a1a2e),
+                                            borderRadius: BorderRadius.circular(20),
+                                            border: Border.all(color: Colors.grey[600]!),
+                                          ),
+                                          child: IconButton(
+                                            onPressed: () => _showContactOptions(),
+                                            icon: const Icon(
+                                              Icons.phone,
+                                              size: 18,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Container(
+                                          width: 40,
+                                          height: 40,
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF1a1a2e),
+                                            borderRadius: BorderRadius.circular(20),
+                                            border: Border.all(color: Colors.grey[600]!),
+                                          ),
+                                          child: IconButton(
+                                            onPressed: () => _showContactOptions(),
+                                            icon: const Icon(
+                                              Icons.message,
+                                              size: 18,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              
+                              const SizedBox(height: 20),
+                              
+                              // Progress and Stats Row - Dark theme
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF16213e),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Column(
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        _buildMiniStat('Distance', _formatDistance(totalDistance)),
+                                        _buildMiniStat('Time', Text(
+                                          '${(walkDuration ~/ 60).toString().padLeft(2, '0')}:${(walkDuration % 60).toString().padLeft(2, '0')}',
+                                          style: const TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.white,
+                                          ),
+                                        )),
+                                        _buildMiniStat('Speed', '${_calculateSpeed().toStringAsFixed(1)} km/h'),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 16),
+                                    
+                                    // Progress Bar
+                                    Column(
+                                      children: [
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text(
+                                              'Progress',
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                color: Colors.grey[400],
+                                              ),
+                                            ),
+                                            Text(
+                                              '${(_calculateProgress() * 100).toStringAsFixed(0)}%',
+                                              style: const TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w600,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 8),
+                                        LinearProgressIndicator(
+                                          value: _calculateProgress(),
+                                          backgroundColor: Colors.grey[700],
+                                          valueColor: const AlwaysStoppedAnimation<Color>(Colors.green),
+                                          minHeight: 6,
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              
+                              const SizedBox(height: 20),
+                              
+                              // Action Buttons - Dark theme
+                              Column(
+                                children: [
+                                  // Emergency and Share Location buttons
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Container(
+                                          height: 50,
+                                          decoration: BoxDecoration(
+                                            color: Colors.red,
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          child: TextButton.icon(
+                                            onPressed: () => _showEmergencyDialog(),
+                                            icon: const Icon(Icons.warning, color: Colors.white, size: 20),
+                                            label: const Text(
+                                              'Emergency',
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Container(
+                                          height: 50,
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF16213e),
+                                            borderRadius: BorderRadius.circular(12),
+                                            border: Border.all(color: Colors.grey[600]!),
+                                          ),
+                                          child: TextButton.icon(
+                                            onPressed: () => _showLocationShare(),
+                                            icon: const Icon(Icons.location_on, color: Colors.white, size: 20),
+                                            label: const Text(
+                                              'Share Location',
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  
+                                  const SizedBox(height: 12),
+                                  
+                                  // Complete Walk button
+                                  Container(
+                                    width: double.infinity,
+                                    height: 50,
+                                    decoration: BoxDecoration(
+                                      color: Colors.green,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: TextButton.icon(
+                                      onPressed: () => _completeWalk(),
+                                      icon: const Icon(Icons.check_circle, color: Colors.white, size: 20),
+                                      label: const Text(
+                                        'Complete Walk',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              
+                              const SizedBox(height: 20),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMiniStat(String label, dynamic value) {
+    return Column(
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey[400],
+          ),
+        ),
+        const SizedBox(height: 4),
+        value is Widget ? value : Text(
+          value.toString(),
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showContactOptions() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Contacting ${widget.partner.name}...'),
+        backgroundColor: Colors.blue,
+        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -1155,7 +1240,7 @@ class _ActiveWalkScreenState extends State<ActiveWalkScreen> {
               );
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Send Alert'),
+            child: const Text('Send Alert', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),

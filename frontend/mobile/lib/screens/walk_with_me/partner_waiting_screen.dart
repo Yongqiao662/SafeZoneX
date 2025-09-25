@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:math';
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:shimmer/shimmer.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'models.dart';
@@ -13,44 +15,50 @@ class PartnerWaitingScreen extends StatefulWidget {
   final String message;
 
   const PartnerWaitingScreen({
-    Key? key,
+    super.key,
     required this.partner,
     required this.destination,
     required this.departureTime,
     required this.message,
-  }) : super(key: key);
+  });
 
   @override
-  _PartnerWaitingScreenState createState() => _PartnerWaitingScreenState();
+  State<PartnerWaitingScreen> createState() => _PartnerWaitingScreenState();
 }
 
-class _PartnerWaitingScreenState extends State<PartnerWaitingScreen> with TickerProviderStateMixin {
-  GoogleMapController? mapController;
-  Set<Marker> markers = {};
-  Set<Polyline> polylines = {};
+class _PartnerWaitingScreenState extends State<PartnerWaitingScreen> 
+    with TickerProviderStateMixin {
   
-  // Location tracking
-  Position? myCurrentPosition;
-  Position? partnerCurrentPosition;
-  Timer? locationUpdateTimer;
+  // Controllers and streams
+  GoogleMapController? _mapController;
+  Timer? _locationUpdateTimer;
+  late final AnimationController _pulseController;
+  late final AnimationController _slideController;
+  late final AnimationController _cardController;
   
-  // Animation controllers
-  late AnimationController _pulseAnimationController;
-  late AnimationController _slideAnimationController;
-  late Animation<double> _pulseAnimation;
-  late Animation<Offset> _slideAnimation;
+  // Animations
+  late final Animation<double> _pulseAnimation;
+  late final Animation<Offset> _slideAnimation;
+  late final Animation<double> _cardAnimation;
   
-  // Status tracking
-  String partnerStatus = 'Looking for your partner...';
-  int estimatedArrivalMinutes = 0;
-  double distanceToPartner = 0.0;
-  bool partnerFound = false;
-  bool partnerAccepted = false;
-  bool partnerOnTheWay = false;
+  // Map data
+  final Set<Marker> _markers = <Marker>{};
+  final Set<Polyline> _polylines = <Polyline>{};
   
-  // University Malaya center coordinates
-  static const LatLng _universityMalayaCenter = LatLng(3.1225, 101.6532);
-
+  // Location data
+  Position? _myPosition;
+  Position? _partnerPosition;
+  
+  // State variables
+  PartnerStatus _partnerStatus = PartnerStatus.searching;
+  int _estimatedArrival = 0;
+  double _distanceToPartner = 0.0;
+  
+  // Constants
+  static const LatLng _universityCenter = LatLng(3.1225, 101.6532);
+  static const double _walkingSpeedMs = 1.2;
+  static const int _maxEstimatedMinutes = 30;
+  
   @override
   void initState() {
     super.initState();
@@ -62,19 +70,27 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen> with Ticker
 
   @override
   void dispose() {
-    locationUpdateTimer?.cancel();
-    _pulseAnimationController.dispose();
-    _slideAnimationController.dispose();
+    _locationUpdateTimer?.cancel();
+    _pulseController.dispose();
+    _slideController.dispose();
+    _cardController.dispose();
     super.dispose();
   }
 
+  // Animation setup
   void _initializeAnimations() {
-    _pulseAnimationController = AnimationController(
+    _pulseController = AnimationController(
       duration: const Duration(seconds: 2),
       vsync: this,
     );
-    _slideAnimationController = AnimationController(
+    
+    _slideController = AnimationController(
       duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    
+    _cardController = AnimationController(
+      duration: const Duration(milliseconds: 600),
       vsync: this,
     );
     
@@ -82,7 +98,7 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen> with Ticker
       begin: 0.8,
       end: 1.2,
     ).animate(CurvedAnimation(
-      parent: _pulseAnimationController,
+      parent: _pulseController,
       curve: Curves.easeInOut,
     ));
     
@@ -90,206 +106,43 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen> with Ticker
       begin: const Offset(0, 1),
       end: Offset.zero,
     ).animate(CurvedAnimation(
-      parent: _slideAnimationController,
+      parent: _slideController,
       curve: Curves.elasticOut,
     ));
     
-    _pulseAnimationController.repeat(reverse: true);
-    _slideAnimationController.forward();
+    _cardAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _cardController,
+      curve: Curves.elasticOut,
+    ));
+    
+    _pulseController.repeat(reverse: true);
+    _slideController.forward();
   }
 
+  // Location initialization
   Future<void> _initializeLocation() async {
     try {
-      Position position = await _getCurrentPosition();
-      setState(() {
-        myCurrentPosition = position;
-      });
-      _updateMapMarkers();
-    } catch (e) {
-      print('Error getting location: $e');
-      // Use default UM location for demo
-      setState(() {
-        myCurrentPosition = Position(
-          latitude: _universityMalayaCenter.latitude,
-          longitude: _universityMalayaCenter.longitude,
-          timestamp: DateTime.now(),
-          accuracy: 10.0,
-          altitude: 0.0,
-          heading: 0.0,
-          speed: 0.0,
-          speedAccuracy: 0.0,
-          altitudeAccuracy: 0.0,
-          headingAccuracy: 0.0,
-        );
-      });
-      _updateMapMarkers();
-    }
-  }
-
-  void _startLocationTracking() {
-    locationUpdateTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
-      _updateLocations();
-    });
-  }
-
-  Future<void> _updateLocations() async {
-    try {
-      // Update my location
-      Position newPosition = await _getCurrentPosition();
-      setState(() {
-        myCurrentPosition = newPosition;
-      });
-      
-      // Simulate partner location updates
-      if (partnerFound && partnerAccepted) {
-        _updatePartnerLocation();
+      final position = await _getCurrentPosition();
+      if (mounted) {
+        setState(() => _myPosition = position);
+        _updateMapMarkers();
       }
-      
-      _updateMapMarkers();
-      _calculateDistance();
     } catch (e) {
-      print('Error updating location: $e');
+      debugPrint('Location error: $e');
+      if (mounted) {
+        setState(() => _myPosition = _createFallbackPosition());
+        _updateMapMarkers();
+      }
     }
   }
 
-  void _updatePartnerLocation() {
-    if (partnerCurrentPosition == null) return;
-    
-    // Simulate partner moving towards user
-    final Random random = Random();
-    double latOffset = (random.nextDouble() - 0.5) * 0.0002; // Small random movement
-    double lngOffset = (random.nextDouble() - 0.5) * 0.0002;
-    
-    // Move slightly towards user location
-    if (myCurrentPosition != null) {
-      double directionLat = (myCurrentPosition!.latitude - partnerCurrentPosition!.latitude) * 0.1;
-      double directionLng = (myCurrentPosition!.longitude - partnerCurrentPosition!.longitude) * 0.1;
-      
-      setState(() {
-        partnerCurrentPosition = Position(
-          latitude: partnerCurrentPosition!.latitude + directionLat + latOffset,
-          longitude: partnerCurrentPosition!.longitude + directionLng + lngOffset,
-          timestamp: DateTime.now(),
-          accuracy: 10.0,
-          altitude: 0.0,
-          heading: 0.0,
-          speed: 0.0,
-          speedAccuracy: 0.0,
-          altitudeAccuracy: 0.0,
-          headingAccuracy: 0.0,
-        );
-      });
-    }
-  }
-
-  void _calculateDistance() {
-    if (myCurrentPosition != null && partnerCurrentPosition != null) {
-      double distance = Geolocator.distanceBetween(
-        myCurrentPosition!.latitude,
-        myCurrentPosition!.longitude,
-        partnerCurrentPosition!.latitude,
-        partnerCurrentPosition!.longitude,
-      );
-      
-      setState(() {
-        distanceToPartner = distance;
-        // Estimate arrival time based on walking speed (average 1.2 m/s)
-        estimatedArrivalMinutes = (distance / 1.2 / 60).ceil();
-      });
-    }
-  }
-
-  void _updateMapMarkers() {
-    markers.clear();
-    
-    // Add my location marker
-    if (myCurrentPosition != null) {
-      markers.add(
-        Marker(
-          markerId: const MarkerId('my_location'),
-          position: LatLng(myCurrentPosition!.latitude, myCurrentPosition!.longitude),
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
-          infoWindow: const InfoWindow(
-            title: 'Your Location',
-            snippet: 'You are here',
-          ),
-        ),
-      );
-    }
-    
-    // Add partner location marker (if found and accepted)
-    if (partnerCurrentPosition != null && partnerAccepted) {
-      markers.add(
-        Marker(
-          markerId: const MarkerId('partner_location'),
-          position: LatLng(partnerCurrentPosition!.latitude, partnerCurrentPosition!.longitude),
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
-          infoWindow: InfoWindow(
-            title: widget.partner.name,
-            snippet: 'Your walking partner',
-          ),
-        ),
-      );
-      
-      // Draw line between users
-      _drawRouteBetweenUsers();
-    }
-    
-    // Add destination marker
-    LatLng destinationLatLng = _getDestinationCoordinates(widget.destination);
-    markers.add(
-      Marker(
-        markerId: const MarkerId('destination'),
-        position: destinationLatLng,
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-        infoWindow: InfoWindow(
-          title: 'Destination',
-          snippet: widget.destination,
-        ),
-      ),
-    );
-  }
-
-  void _drawRouteBetweenUsers() {
-    if (myCurrentPosition != null && partnerCurrentPosition != null) {
-      polylines.clear();
-      polylines.add(
-        Polyline(
-          polylineId: const PolylineId('user_connection'),
-          points: [
-            LatLng(myCurrentPosition!.latitude, myCurrentPosition!.longitude),
-            LatLng(partnerCurrentPosition!.latitude, partnerCurrentPosition!.longitude),
-          ],
-          color: Colors.green,
-          width: 3,
-          patterns: [PatternItem.dash(10), PatternItem.gap(5)],
-        ),
-      );
-    }
-  }
-
-  LatLng _getDestinationCoordinates(String destination) {
-    final Map<String, LatLng> destinations = {
-      'UM Main Library': const LatLng(3.1235, 101.6545),
-      'Student Center': const LatLng(3.1220, 101.6530),
-      'Engineering Faculty': const LatLng(3.1240, 101.6555),
-      'Sports Complex': const LatLng(3.1265, 101.6525),
-      'Perpustakaan Utama UM': const LatLng(3.1235, 101.6545),
-      'Student Affairs Division': const LatLng(3.1250, 101.6540),
-      'Faculty of Engineering': const LatLng(3.1240, 101.6555),
-      'UM Cafeteria Central': const LatLng(3.1225, 101.6535),
-      'UM Sports Centre': const LatLng(3.1265, 101.6525),
-      'Kolej Kediaman 4th College': const LatLng(3.1180, 101.6570),
-    };
-    return destinations[destination] ?? _universityMalayaCenter;
-  }
-
-  Future<Position> _getCurrentPosition() async {
-    // Mock position for demo - in production, use real GPS
-    final Random random = Random();
+  Position _createFallbackPosition() {
     return Position(
-      latitude: _universityMalayaCenter.latitude + (random.nextDouble() - 0.5) * 0.01,
-      longitude: _universityMalayaCenter.longitude + (random.nextDouble() - 0.5) * 0.01,
+      latitude: _universityCenter.latitude,
+      longitude: _universityCenter.longitude,
       timestamp: DateTime.now(),
       accuracy: 10.0,
       altitude: 0.0,
@@ -301,432 +154,491 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen> with Ticker
     );
   }
 
-  void _simulatePartnerResponse() {
-    // Stage 1: Finding partner (3 seconds)
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) {
-        setState(() {
-          partnerFound = true;
-          partnerStatus = '${widget.partner.name} found nearby!';
-        });
-      }
-    });
+  void _startLocationTracking() {
+    _locationUpdateTimer = Timer.periodic(
+      const Duration(seconds: 3),
+      (_) => _updateLocations(),
+    );
+  }
+
+  Future<void> _updateLocations() async {
+    if (!mounted) return;
     
-    // Stage 2: Partner accepts (5 seconds)
-    Future.delayed(const Duration(seconds: 5), () {
-      if (mounted) {
-        setState(() {
-          partnerAccepted = true;
-          partnerStatus = '${widget.partner.name} accepted your request!';
-          
-          // Initialize partner location near user
-          if (myCurrentPosition != null) {
-            final Random random = Random();
-            partnerCurrentPosition = Position(
-              latitude: myCurrentPosition!.latitude + (random.nextDouble() - 0.5) * 0.002,
-              longitude: myCurrentPosition!.longitude + (random.nextDouble() - 0.5) * 0.002,
-              timestamp: DateTime.now(),
-              accuracy: 10.0,
-              altitude: 0.0,
-              heading: 0.0,
-              speed: 0.0,
-              speedAccuracy: 0.0,
-              altitudeAccuracy: 0.0,
-              headingAccuracy: 0.0,
-            );
-          }
-        });
-        _updateMapMarkers();
-        _calculateDistance();
+    try {
+      final newPosition = await _getCurrentPosition();
+      setState(() => _myPosition = newPosition);
+      
+      if (_partnerStatus.isActive) {
+        _updatePartnerLocation();
       }
-    });
+      
+      _updateMapMarkers();
+      _calculateDistance();
+    } catch (e) {
+      debugPrint('Location update error: $e');
+    }
+  }
+
+  void _updatePartnerLocation() {
+    final partner = _partnerPosition;
+    final my = _myPosition;
+    if (partner == null || my == null) return;
     
-    // Stage 3: Partner on the way (7 seconds)
-    Future.delayed(const Duration(seconds: 7), () {
-      if (mounted) {
-        setState(() {
-          partnerOnTheWay = true;
-          partnerStatus = '${widget.partner.name} is walking to meet you';
-        });
-      }
+    final random = Random();
+    const variance = 0.0001;
+    const approachRate = 0.15;
+    
+    final latOffset = (random.nextDouble() - 0.5) * variance;
+    final lngOffset = (random.nextDouble() - 0.5) * variance;
+    
+    final directionLat = (my.latitude - partner.latitude) * approachRate;
+    final directionLng = (my.longitude - partner.longitude) * approachRate;
+    
+    setState(() {
+      _partnerPosition = Position(
+        latitude: partner.latitude + directionLat + latOffset,
+        longitude: partner.longitude + directionLng + lngOffset,
+        timestamp: DateTime.now(),
+        accuracy: 10.0,
+        altitude: 0.0,
+        heading: 0.0,
+        speed: 0.0,
+        speedAccuracy: 0.0,
+        altitudeAccuracy: 0.0,
+        headingAccuracy: 0.0,
+      );
     });
   }
 
-  void _onMapCreated(GoogleMapController controller) {
-    mapController = controller;
-    // Focus on user's location when map is ready
-    if (myCurrentPosition != null) {
-      controller.animateCamera(
-        CameraUpdate.newLatLngZoom(
-          LatLng(myCurrentPosition!.latitude, myCurrentPosition!.longitude),
-          16.0,
+  void _calculateDistance() {
+    final my = _myPosition;
+    final partner = _partnerPosition;
+    if (my == null || partner == null) return;
+    
+    final distance = Geolocator.distanceBetween(
+      my.latitude,
+      my.longitude,
+      partner.latitude,
+      partner.longitude,
+    );
+    
+    setState(() {
+      _distanceToPartner = distance;
+      _estimatedArrival = (distance / _walkingSpeedMs / 60)
+          .ceil()
+          .clamp(1, _maxEstimatedMinutes);
+    });
+  }
+
+  void _updateMapMarkers() {
+    _markers.clear();
+    
+    // My location marker
+    final my = _myPosition;
+    if (my != null) {
+      _markers.add(Marker(
+        markerId: const MarkerId('pickup'),
+        position: LatLng(my.latitude, my.longitude),
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+        infoWindow: const InfoWindow(
+          title: 'Pickup Point',
+          snippet: 'You are here',
         ),
-      );
+      ));
+    }
+    
+    // Partner marker
+    final partner = _partnerPosition;
+    if (partner != null && _partnerStatus.isActive) {
+      _markers.add(Marker(
+        markerId: const MarkerId('partner'),
+        position: LatLng(partner.latitude, partner.longitude),
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+        infoWindow: InfoWindow(
+          title: widget.partner.name,
+          snippet: 'Walking Partner',
+        ),
+      ));
+      
+      _drawRoute();
+    }
+    
+    // Destination marker
+    final destination = _getDestinationCoordinates(widget.destination);
+    _markers.add(Marker(
+      markerId: const MarkerId('destination'),
+      position: destination,
+      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+      infoWindow: InfoWindow(
+        title: 'Destination',
+        snippet: widget.destination,
+      ),
+    ));
+  }
+
+  void _drawRoute() {
+    final my = _myPosition;
+    final partner = _partnerPosition;
+    if (my == null || partner == null) return;
+    
+    _polylines.clear();
+    _polylines.add(Polyline(
+      polylineId: const PolylineId('route'),
+      points: [
+        LatLng(my.latitude, my.longitude),
+        LatLng(partner.latitude, partner.longitude),
+      ],
+      color: Colors.deepPurple,
+      width: 4,
+    ));
+  }
+
+  LatLng _getDestinationCoordinates(String destination) {
+    return DestinationMap.locations[destination] ?? _universityCenter;
+  }
+
+  Future<Position> _getCurrentPosition() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      return Future.error('Location services are disabled.');
+    }
+
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        return Future.error('Location permissions are denied');
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      return Future.error('Location permissions are permanently denied');
+    }
+
+    return await Geolocator.getCurrentPosition();
+  }
+
+  void _simulatePartnerResponse() {
+    // Partner found
+    Timer(const Duration(seconds: 2), () {
+      if (!mounted) return;
+      setState(() => _partnerStatus = PartnerStatus.found);
+    });
+    
+    // Partner accepts
+    Timer(const Duration(seconds: 4), () {
+      if (!mounted) return;
+      setState(() {
+        _partnerStatus = PartnerStatus.accepted;
+        _partnerPosition = _createPartnerPosition();
+      });
+      
+      if (_cardController.status == AnimationStatus.dismissed) {
+        _cardController.forward();
+      }
+      _updateMapMarkers();
+      _calculateDistance();
+    });
+    
+    // Partner approaching
+    Timer(const Duration(seconds: 6), () {
+      if (!mounted) return;
+      setState(() => _partnerStatus = PartnerStatus.approaching);
+    });
+  }
+
+  Position? _createPartnerPosition() {
+    final my = _myPosition;
+    if (my == null) return null;
+    
+    final random = Random();
+    const variance = 0.004;
+    
+    return Position(
+      latitude: my.latitude + (random.nextDouble() - 0.5) * variance,
+      longitude: my.longitude + (random.nextDouble() - 0.5) * variance,
+      timestamp: DateTime.now(),
+      accuracy: 10.0,
+      altitude: 0.0,
+      heading: 0.0,
+      speed: 0.0,
+      speedAccuracy: 0.0,
+      altitudeAccuracy: 0.0,
+      headingAccuracy: 0.0,
+    );
+  }
+
+  void _onMapCreated(GoogleMapController controller) {
+    _mapController = controller;
+    final position = _myPosition;
+    if (position != null) {
+      controller.animateCamera(CameraUpdate.newLatLngZoom(
+        LatLng(position.latitude, position.longitude),
+        15.0,
+      ));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF1a1a2e),
-              Color(0xFF16213e),
-              Color(0xFF0f0f1e),
-            ],
+      body: Stack(
+        children: [
+          // Fullscreen Google Map
+          GoogleMap(
+            onMapCreated: _onMapCreated,
+            initialCameraPosition: const CameraPosition(
+              target: _universityCenter,
+              zoom: 16.0,
+            ),
+            markers: _markers,
+            polylines: _polylines,
+            myLocationEnabled: true,
+            myLocationButtonEnabled: false,
+            mapType: MapType.normal,
+            zoomControlsEnabled: false,
+            compassEnabled: false,
+            mapToolbarEnabled: false,
+            buildingsEnabled: false,
+            indoorViewEnabled: false,
+            trafficEnabled: false,
+            liteModeEnabled: false,
+            rotateGesturesEnabled: false,
+            scrollGesturesEnabled: true,
+            zoomGesturesEnabled: true,
+            tiltGesturesEnabled: false,
+            minMaxZoomPreference: const MinMaxZoomPreference(10.0, 20.0),
           ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Title Section
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                child: Row(
-                  children: [
-                    GestureDetector(
-                      onTap: () => Navigator.pop(context),
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: Colors.deepPurple,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(
-                          Icons.arrow_back,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    const Expanded(
-                      child: Text(
-                        'Finding Partner',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w300,
-                          color: Colors.white,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+          
+          // Header overlay with no black bar behind
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: Padding(
+              padding: EdgeInsets.only(
+                top: MediaQuery.of(context).padding.top + 16,
+                left: 24,
+                right: 24,
+                bottom: 16,
               ),
-              
-              // Map Section
-              Expanded(
-                flex: 3,
-                child: Container(
-                  margin: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.1),
-                      width: 1,
-                    ),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(20),
-                    child: GoogleMap(
-                      onMapCreated: _onMapCreated,
-                      initialCameraPosition: const CameraPosition(
-                        target: _universityMalayaCenter,
-                        zoom: 16.0,
-                      ),
-                      markers: markers,
-                      polylines: polylines,
-                      myLocationEnabled: false, // We handle location markers manually
-                      mapType: MapType.normal,
-                      zoomControlsEnabled: false,
-                      compassEnabled: false,
-                      mapToolbarEnabled: false,
-                      buildingsEnabled: true,
-                      indoorViewEnabled: false,
-                      trafficEnabled: false,
-                      style: '''
-                      [
-                        {
-                          "elementType": "geometry",
-                          "stylers": [
-                            {
-                              "color": "#242f3e"
-                            }
-                          ]
-                        },
-                        {
-                          "elementType": "labels.text.fill",
-                          "stylers": [
-                            {
-                              "color": "#746855"
-                            }
-                          ]
-                        },
-                        {
-                          "elementType": "labels.text.stroke",
-                          "stylers": [
-                            {
-                              "color": "#242f3e"
-                            }
-                          ]
-                        },
-                        {
-                          "featureType": "road",
-                          "elementType": "geometry",
-                          "stylers": [
-                            {
-                              "color": "#38414e"
-                            }
-                          ]
-                        },
-                        {
-                          "featureType": "water",
-                          "elementType": "geometry",
-                          "stylers": [
-                            {
-                              "color": "#17263c"
-                            }
-                          ]
-                        }
-                      ]
-                      ''',
-                    ),
-                  ),
-                ),
-              ),
-              
-              // Status Section
-              Expanded(
-                flex: 2,
-                child: SlideTransition(
-                  position: _slideAnimation,
-                  child: Container(
-                    padding: const EdgeInsets.all(12), // Reduced from 16
-                    child: SingleChildScrollView( // Add scroll view to prevent overflow
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min, // Add this
-                        children: [
-                          // Partner Status Card
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(16), // Reduced from 20
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.05),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: Colors.white.withOpacity(0.1),
-                                width: 1,
-                              ),
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min, // Add this
-                              children: [
-                                // Partner Avatar with pulse animation
-                                AnimatedBuilder(
-                                  animation: _pulseAnimation,
-                                  builder: (context, child) {
-                                    return Transform.scale(
-                                      scale: partnerFound ? 1.0 : _pulseAnimation.value,
-                                      child: Container(
-                                        width: 70, // Reduced from 80
-                                        height: 70, // Reduced from 80
-                                        decoration: BoxDecoration(
-                                          gradient: LinearGradient(
-                                            colors: partnerAccepted 
-                                              ? [Colors.green, Colors.lightGreen]
-                                              : [Colors.deepPurple, Colors.purpleAccent],
-                                          ),
-                                          borderRadius: BorderRadius.circular(35), // Adjusted
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: (partnerAccepted ? Colors.green : Colors.deepPurple).withOpacity(0.3),
-                                              blurRadius: 20,
-                                              spreadRadius: partnerFound ? 0 : 5,
-                                            ),
-                                          ],
-                                        ),
-                                        child: Center(
-                                          child: partnerAccepted 
-                                            ? const Icon(Icons.check_circle, size: 35, color: Colors.white) // Reduced from 40
-                                            : Text(
-                                                widget.partner.profilePicture ?? widget.partner.name[0],
-                                                style: const TextStyle(
-                                                  fontSize: 26, // Reduced from 30
-                                                  fontWeight: FontWeight.bold,
-                                                  color: Colors.white,
-                                                ),
-                                              ),
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                                
-                                const SizedBox(height: 12), // Reduced from 16
-                                
-                                // Status Text
-                                Text(
-                                  partnerStatus,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 16, // Reduced from 18
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                                
-                                const SizedBox(height: 6), // Reduced from 8
-                                
-                                // Partner Info
-                                if (partnerFound) ...[
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Text(
-                                        widget.partner.name,
-                                        style: TextStyle(
-                                          color: Colors.white.withOpacity(0.8),
-                                          fontSize: 14, // Reduced from 16
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 6), // Reduced from 8
-                                      const Icon(Icons.star, color: Colors.amber, size: 14), // Reduced from 16
-                                      Text(
-                                        ' ${widget.partner.rating}',
-                                        style: TextStyle(
-                                          color: Colors.white.withOpacity(0.8),
-                                          fontSize: 12, // Reduced from 14
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                                
-                                // Distance and ETA (when partner is coming)
-                                if (partnerAccepted && distanceToPartner > 0) ...[
-                                  const SizedBox(height: 12), // Reduced from 16
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), // Reduced
-                                    decoration: BoxDecoration(
-                                      color: Colors.green.withOpacity(0.2),
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const Icon(Icons.directions_walk, color: Colors.green, size: 14), // Reduced from 16
-                                        const SizedBox(width: 6), // Reduced from 8
-                                        Text(
-                                          '${distanceToPartner.toInt()}m away',
-                                          style: const TextStyle(
-                                            color: Colors.green,
-                                            fontWeight: FontWeight.w600,
-                                            fontSize: 12, // Reduced from 14
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12), // Reduced from 16
-                                        const Icon(Icons.schedule, color: Colors.green, size: 14), // Reduced from 16
-                                        const SizedBox(width: 3), // Reduced from 4
-                                        Text(
-                                          '${estimatedArrivalMinutes}min',
-                                          style: const TextStyle(
-                                            color: Colors.green,
-                                            fontWeight: FontWeight.w600,
-                                            fontSize: 12, // Reduced from 14
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                          
-                          const SizedBox(height: 12), // Reduced from 16
-                          
-                          // Action Buttons
-                          if (partnerAccepted) ...[
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: ElevatedButton.icon(
-                                    onPressed: () => _callPartner(),
-                                    icon: const Icon(Icons.phone, color: Colors.white, size: 16), // Reduced size
-                                    label: const Text('Call', style: TextStyle(color: Colors.white, fontSize: 12)), // Reduced font
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.green,
-                                      padding: const EdgeInsets.symmetric(vertical: 10), // Reduced from 12
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 8), // Reduced from 12
-                                Expanded(
-                                  child: ElevatedButton.icon(
-                                    onPressed: () => _startWalk(),
-                                    icon: const Icon(Icons.directions_walk, color: Colors.white, size: 16), // Reduced size
-                                    label: const Text('Start Walk', style: TextStyle(color: Colors.white, fontSize: 12)), // Reduced font
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.deepPurple,
-                                      padding: const EdgeInsets.symmetric(vertical: 10), // Reduced from 12
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ] else ...[
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                onPressed: () => Navigator.pop(context),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.red.withOpacity(0.8),
-                                  padding: const EdgeInsets.symmetric(vertical: 10), // Reduced from 12
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                                child: const Text(
-                                  'Cancel Request',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 14, // Reduced from default
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                          
-                          // Additional Info
-                          const SizedBox(height: 8), // Reduced from 12
-                          Text(
-                            'Destination: ${widget.destination}',
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.6),
-                              fontSize: 12, // Reduced from 14
-                            ),
-                            textAlign: TextAlign.center,
+              child: Row(
+                children: [
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFB16EFF), Color(0xFF6C3EFF)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Color(0xFFB16EFF).withOpacity(0.3),
+                            blurRadius: 8,
+                            offset: Offset(0, 2),
                           ),
                         ],
                       ),
+                      child: const Icon(
+                        Icons.arrow_back,
+                        color: Colors.white,
+                        size: 22,
+                      ),
                     ),
                   ),
-                ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Waiting for Partner',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w400,
+                        color: Color.fromARGB(255, 105, 17, 206),
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
+                ],
               ),
+            ),
+          ),
+          
+          // Enhanced bottom sheet overlay with purple theme
+          _buildEnhancedBottomSheet(),
+          
+          // Safety button when partner is active
+          if (_partnerStatus.isActive) _buildSafetyButton(),
+        ],
+      ),
+    );
+  }
+
+  // Enhanced bottom sheet with better functionality
+  Widget _buildEnhancedBottomSheet() {
+    return Positioned(
+      bottom: 0,
+      left: 0,
+      right: 0,
+      child: SlideTransition(
+        position: _slideAnimation,
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFF181828),
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(24),
+              topRight: Radius.circular(24),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black54,
+                blurRadius: 20,
+                offset: Offset(0, -5),
+              ),
+            ],
+          ),
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildDragHandle(),
+                const SizedBox(height: 20),
+                if (_partnerStatus.isActive) 
+                  _buildPartnerFoundContent()
+                else 
+                  _buildSearchingContent(),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDragHandle() {
+    return Container(
+      width: 40,
+      height: 4,
+      decoration: BoxDecoration(
+        color: Colors.deepPurple[400],
+        borderRadius: BorderRadius.circular(2),
+      ),
+    );
+  }
+
+  Widget _buildSearchingContent() {
+    return Column(
+      children: [
+        // Only text for "Walking for Partner"
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.directions_walk, color: Colors.white, size: 28),
+            const SizedBox(width: 12),
+            const Text(
+              'Walking for Partner',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        AnimatedBuilder(
+          animation: _pulseAnimation,
+          builder: (context, child) => Transform.scale(
+            scale: _pulseAnimation.value,
+            child: Container(
+              width: 60,
+              height: 60,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.deepPurple, Colors.purpleAccent],
+                ),
+                borderRadius: BorderRadius.all(Radius.circular(30)),
+              ),
+              child: const Icon(
+                Icons.search,
+                color: Colors.white,
+                size: 30,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text(
+          _partnerStatus.message,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'We\'re finding the best walking partner for you',
+          style: TextStyle(
+            fontSize: 14,
+            color: Colors.purpleAccent[100],
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 24),
+        _buildCancelButton(),
+      ],
+    );
+  }
+
+  Widget _buildPartnerFoundContent() {
+    return Column(
+      children: [
+        _buildPartnerCard(),
+        const SizedBox(height: 20),
+        _buildStatusMessage(),
+        const SizedBox(height: 20),
+        _buildActionButtons(),
+        const SizedBox(height: 12),
+        _buildStartWalkButton(),
+      ],
+    );
+  }
+
+  Widget _buildPartnerCard() {
+    return AnimatedBuilder(
+      animation: _cardAnimation,
+      builder: (context, child) => Transform.scale(
+        scale: _cardAnimation.value,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Color(0xFF23234A),
+                Color(0xFF181828),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: Colors.deepPurple.withOpacity(0.3),
+            ),
+          ),
+          child: Row(
+            children: [
+              _buildPartnerAvatar(),
+              const SizedBox(width: 16),
+              Expanded(child: _buildPartnerInfo()),
+              if (_distanceToPartner > 0) _buildDistanceInfo(),
             ],
           ),
         ),
@@ -734,22 +646,581 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen> with Ticker
     );
   }
 
-  void _callPartner() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Calling ${widget.partner.name}...'),
-        backgroundColor: Colors.green,
-        duration: const Duration(seconds: 2),
+  Widget _buildPartnerAvatar() {
+    return Container(
+      width: 60,
+      height: 60,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.deepPurple, Colors.purpleAccent],
+        ),
+        borderRadius: BorderRadius.all(Radius.circular(30)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.deepPurple,
+            blurRadius: 10,
+            spreadRadius: 2,
+          ),
+        ],
       ),
+      child: widget.partner.profilePicture != null
+          ? ClipRRect(
+              borderRadius: BorderRadius.circular(30),
+              child: Image.network(
+                widget.partner.profilePicture!,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Center(
+                    child: Text(
+                      widget.partner.name[0].toUpperCase(),
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            )
+          : Center(
+              child: Text(
+                widget.partner.name[0].toUpperCase(),
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+    );
+  }
+
+  Widget _buildPartnerInfo() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              widget.partner.name,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
+            ),
+            if (widget.partner.isVerified) ...[
+              const SizedBox(width: 8),
+              const Icon(
+                Icons.verified,
+                color: Colors.blue,
+                size: 18,
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 4),
+        Row(
+          children: [
+            const Icon(Icons.star, color: Colors.amber, size: 16),
+            const SizedBox(width: 4),
+            Text(
+              '${widget.partner.rating}',
+              style: const TextStyle(
+                fontSize: 14,
+                color: Colors.white70,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.deepPurple.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.deepPurple.withOpacity(0.3)),
+              ),
+              child: Text(
+                widget.partner.department,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDistanceInfo() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Text(
+          '${_distanceToPartner.toInt()}m',
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
+        ),
+        Text(
+          '$_estimatedArrival min',
+          style: TextStyle(
+            fontSize: 14,
+            color: Colors.grey[600],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatusMessage() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Colors.deepPurple.withOpacity(0.1),
+            Colors.purpleAccent.withOpacity(0.05),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: Colors.deepPurple,
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              _partnerStatus.message,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButtons() {
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: _callPartner,
+            icon: const Icon(Icons.phone, size: 20, color: Colors.white),
+            label: const Text('Call', style: TextStyle(color: Colors.white)),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.white,
+              side: const BorderSide(color: Colors.deepPurple),
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: _messagePartner,
+            icon: const Icon(Icons.message, size: 20, color: Colors.white),
+            label: const Text('Message', style: TextStyle(color: Colors.white)),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.white,
+              side: const BorderSide(color: Colors.deepPurple),
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStartWalkButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: _startWalk,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.deepPurple,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          elevation: 0,
+        ),
+        child: const Text(
+          'Start Walking Together',
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 16,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCancelButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: () => Navigator.pop(context),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF23234A),
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          elevation: 0,
+        ),
+        child: const Text(
+          'Cancel Request',
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 16,
+            color: Colors.white,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSafetyButton() {
+    return Positioned(
+      right: 16,
+      bottom: 320,
+      child: FloatingActionButton(
+        onPressed: _openSafetyCenter,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.red,
+        elevation: 8,
+        child: const Icon(Icons.shield_outlined),
+      ),
+    );
+  }
+
+  // Action methods
+  void _callPartner() {
+    _showSnackBar('Calling ${widget.partner.name}...');
+  }
+
+  void _messagePartner() {
+    _showSnackBar('Opening chat with ${widget.partner.name}...');
+  }
+
+  void _openSafetyCenter() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => const SafetyCenterSheet(),
     );
   }
 
   void _startWalk() {
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ActiveWalkScreen(partner: widget.partner),
+    showDialog(
+      context: context,
+      builder: (context) => StartWalkDialog(
+        partner: widget.partner,
+        destination: widget.destination,
+        onConfirm: () {
+          Navigator.pop(context);
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ActiveWalkScreen(partner: widget.partner),
+            ),
+          );
+        },
       ),
+    );
+  }
+
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.deepPurple,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+}
+
+// Support classes and constants
+enum PartnerStatus {
+  searching('Looking for your walking partner...'),
+  found('Walking partner found!'),
+  accepted('Partner is on the way'),
+  approaching('Partner is walking to you');
+
+  const PartnerStatus(this.message);
+  final String message;
+
+  bool get isActive => this == accepted || this == approaching;
+}
+
+class DestinationMap {
+  static const Map<String, LatLng> locations = {
+    'UM Main Library': LatLng(3.1235, 101.6545),
+    'Student Center': LatLng(3.1220, 101.6530),
+    'Engineering Faculty': LatLng(3.1240, 101.6555),
+    'Sports Complex': LatLng(3.1265, 101.6525),
+    'Perpustakaan Utama UM': LatLng(3.1235, 101.6545),
+    'Student Affairs Division': LatLng(3.1250, 101.6540),
+    'Faculty of Engineering': LatLng(3.1240, 101.6555),
+    'UM Cafeteria Central': LatLng(3.1225, 101.6535),
+    'UM Sports Centre': LatLng(3.1265, 101.6525),
+    'Kolej Kediaman 4th College': LatLng(3.1180, 101.6570),
+  };
+}
+
+// Separate widgets for better organization
+class SafetyCenterSheet extends StatelessWidget {
+  const SafetyCenterSheet({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(24),
+          topRight: Radius.circular(24),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey[300],
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 24),
+          const Icon(Icons.shield_outlined, color: Colors.red, size: 48),
+          const SizedBox(height: 16),
+          const Text(
+            'Safety Center',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Need help? Access emergency features here',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[600],
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _callEmergency(context);
+                  },
+                  icon: const Icon(Icons.phone, color: Colors.white),
+                  label: const Text('Call 999'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _shareLocation(context);
+                  },
+                  icon: const Icon(Icons.share_location),
+                  label: const Text('Share Location'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.deepPurple,
+                    side: const BorderSide(color: Colors.deepPurple),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  static void _callEmergency(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.phone, color: Colors.red, size: 24),
+            SizedBox(width: 8),
+            Text('Emergency Call'),
+          ],
+        ),
+        content: const Text('This will call emergency services (999). Do you want to proceed?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Calling emergency services...'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Call Now', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static void _shareLocation(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Location shared with emergency contacts'),
+        backgroundColor: Colors.deepPurple,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+}
+
+class StartWalkDialog extends StatelessWidget {
+  final UserProfile partner;
+  final String destination;
+  final VoidCallback onConfirm;
+
+  const StartWalkDialog({
+    super.key,
+    required this.partner,
+    required this.destination,
+    required this.onConfirm,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: const Row(
+        children: [
+          Icon(Icons.directions_walk, color: Colors.deepPurple, size: 24),
+          SizedBox(width: 8),
+          Text('Start Walking'),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Ready to start walking with ${partner.name}?'),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey[100],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.location_on, size: 16, color: Colors.green),
+                    SizedBox(width: 4),
+                    Text('From: ', style: TextStyle(fontWeight: FontWeight.w500)),
+                    Text('Your current location'),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const Icon(Icons.flag, size: 16, color: Colors.red),
+                    const SizedBox(width: 4),
+                    const Text('To: ', style: TextStyle(fontWeight: FontWeight.w500)),
+                    Text(destination),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                const Row(
+                  children: [
+                    Icon(Icons.access_time, size: 16, color: Colors.blue),
+                    SizedBox(width: 4),
+                    Text('ETA: ', style: TextStyle(fontWeight: FontWeight.w500)),
+                    Text('15 min walk'),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Not Yet'),
+        ),
+        ElevatedButton(
+          onPressed: onConfirm,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.deepPurple,
+            foregroundColor: Colors.white,
+          ),
+          child: const Text('Start Walking'),
+        ),
+      ],
     );
   }
 }
