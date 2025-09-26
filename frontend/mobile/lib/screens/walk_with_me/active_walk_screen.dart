@@ -869,7 +869,7 @@ class _ActiveWalkScreenState extends State<ActiveWalkScreen> {
                       width: 40,
                       height: 40,
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.1),
+                          color: Color(0xFF8F5CFF),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: IconButton(
