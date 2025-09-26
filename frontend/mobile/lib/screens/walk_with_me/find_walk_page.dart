@@ -174,7 +174,7 @@ class _FindWalkPageState extends State<FindWalkPage> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Find verified walking partners for your campus journey',
+            'Searching your partner\'s location',
             style: TextStyle(
               fontSize: 16,
               color: Colors.white.withOpacity(0.7),

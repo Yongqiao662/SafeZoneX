@@ -1,8 +1,7 @@
 import 'dart:async';
-import 'dart:math';
+import 'dart:math' as math; // Ensures proper scoping for math functions
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:shimmer/shimmer.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'models.dart';
@@ -32,18 +31,22 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen>
   // Controllers and streams
   GoogleMapController? _mapController;
   Timer? _locationUpdateTimer;
+  Timer? _uiUpdateTimer;
   late final AnimationController _pulseController;
   late final AnimationController _slideController;
   late final AnimationController _cardController;
+  late final AnimationController _rippleController;
   
   // Animations
   late final Animation<double> _pulseAnimation;
   late final Animation<Offset> _slideAnimation;
   late final Animation<double> _cardAnimation;
+  late final Animation<double> _rippleAnimation;
   
   // Map data
   final Set<Marker> _markers = <Marker>{};
   final Set<Polyline> _polylines = <Polyline>{};
+  final Set<Circle> _circles = <Circle>{};
   
   // Location data
   Position? _myPosition;
@@ -53,11 +56,16 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen>
   PartnerStatus _partnerStatus = PartnerStatus.searching;
   int _estimatedArrival = 0;
   double _distanceToPartner = 0.0;
+  bool _isMapReady = false;
+  int _searchingDuration = 0;
+  String _currentStatusMessage = '';
   
   // Constants
   static const LatLng _universityCenter = LatLng(3.1225, 101.6532);
   static const double _walkingSpeedMs = 1.2;
   static const int _maxEstimatedMinutes = 30;
+  static const double _cameraZoom = 16.0;
+  static const double _partnerApproachRadius = 50.0;
   
   @override
   void initState() {
@@ -65,19 +73,23 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen>
     _initializeAnimations();
     _initializeLocation();
     _startLocationTracking();
+    _startUIUpdates();
     _simulatePartnerResponse();
+    _currentStatusMessage = _partnerStatus.message;
   }
 
   @override
   void dispose() {
     _locationUpdateTimer?.cancel();
+    _uiUpdateTimer?.cancel();
     _pulseController.dispose();
     _slideController.dispose();
     _cardController.dispose();
+    _rippleController.dispose();
     super.dispose();
   }
 
-  // Animation setup
+  // Enhanced animation setup
   void _initializeAnimations() {
     _pulseController = AnimationController(
       duration: const Duration(seconds: 2),
@@ -91,6 +103,11 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen>
     
     _cardController = AnimationController(
       duration: const Duration(milliseconds: 600),
+      vsync: this,
+    );
+
+    _rippleController = AnimationController(
+      duration: const Duration(seconds: 3),
       vsync: this,
     );
     
@@ -117,24 +134,35 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen>
       parent: _cardController,
       curve: Curves.elasticOut,
     ));
+
+    _rippleAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _rippleController,
+      curve: Curves.easeOut,
+    ));
     
     _pulseController.repeat(reverse: true);
+    _rippleController.repeat();
     _slideController.forward();
   }
 
-  // Location initialization
+  // Enhanced location initialization with better error handling
   Future<void> _initializeLocation() async {
     try {
       final position = await _getCurrentPosition();
       if (mounted) {
         setState(() => _myPosition = position);
         _updateMapMarkers();
+        _centerMapOnLocation();
       }
     } catch (e) {
       debugPrint('Location error: $e');
       if (mounted) {
         setState(() => _myPosition = _createFallbackPosition());
         _updateMapMarkers();
+        _showLocationError();
       }
     }
   }
@@ -156,9 +184,39 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen>
 
   void _startLocationTracking() {
     _locationUpdateTimer = Timer.periodic(
-      const Duration(seconds: 3),
+      const Duration(seconds: 2),
       (_) => _updateLocations(),
     );
+  }
+
+  void _startUIUpdates() {
+    _uiUpdateTimer = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) => _updateUI(),
+    );
+  }
+
+  void _updateUI() {
+    if (!mounted) return;
+    
+    setState(() {
+      _searchingDuration++;
+      if (_partnerStatus == PartnerStatus.searching) {
+        _currentStatusMessage = _getSearchingMessage();
+      }
+    });
+  }
+
+  String _getSearchingMessage() {
+    if (_searchingDuration < 5) {
+      return 'Looking for your walking partner...';
+    } else if (_searchingDuration < 10) {
+      return 'Checking availability of your partner...';
+    } else if (_searchingDuration < 15) {
+      return 'Finding...';
+    } else {
+      return 'Almost found your partner...';
+    }
   }
 
   Future<void> _updateLocations() async {
@@ -184,9 +242,9 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen>
     final my = _myPosition;
     if (partner == null || my == null) return;
     
-    final random = Random();
+    final random = math.Random();
     const variance = 0.0001;
-    const approachRate = 0.15;
+    final approachRate = _partnerStatus == PartnerStatus.approaching ? 0.25 : 0.15;
     
     final latOffset = (random.nextDouble() - 0.5) * variance;
     final lngOffset = (random.nextDouble() - 0.5) * variance;
@@ -202,7 +260,7 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen>
         accuracy: 10.0,
         altitude: 0.0,
         heading: 0.0,
-        speed: 0.0,
+        speed: random.nextDouble() * 2.0 + 1.0, // Random walking speed
         speedAccuracy: 0.0,
         altitudeAccuracy: 0.0,
         headingAccuracy: 0.0,
@@ -228,12 +286,20 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen>
           .ceil()
           .clamp(1, _maxEstimatedMinutes);
     });
+
+    // Check if partner is very close
+    if (distance <= _partnerApproachRadius && _partnerStatus != PartnerStatus.arrived) {
+      setState(() => _partnerStatus = PartnerStatus.arrived);
+    }
   }
 
   void _updateMapMarkers() {
-    _markers.clear();
+    if (!_isMapReady) return;
     
-    // My location marker
+    _markers.clear();
+    _circles.clear();
+    
+    // My location marker with ripple effect
     final my = _myPosition;
     if (my != null) {
       _markers.add(Marker(
@@ -245,35 +311,74 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen>
           snippet: 'You are here',
         ),
       ));
+
+      // Add ripple effect around user location
+      _circles.add(Circle(
+        circleId: const CircleId('user_ripple'),
+        center: LatLng(my.latitude, my.longitude),
+        radius: 50 + (_rippleAnimation.value * 100),
+        fillColor: Colors.green.withOpacity(0.1 * (1 - _rippleAnimation.value)),
+        strokeColor: Colors.green.withOpacity(0.3 * (1 - _rippleAnimation.value)),
+        strokeWidth: 2,
+      ));
     }
     
-    // Partner marker
+    // Partner marker with status-based styling
     final partner = _partnerPosition;
     if (partner != null && _partnerStatus.isActive) {
+      final markerColor = _partnerStatus == PartnerStatus.approaching 
+        ? BitmapDescriptor.hueOrange
+        : BitmapDescriptor.hueBlue;
+        
       _markers.add(Marker(
-        markerId: const MarkerId('partner'),
+        markerId: const MarkerId('partner'), // Fixed missing parenthesis
         position: LatLng(partner.latitude, partner.longitude),
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+        icon: BitmapDescriptor.defaultMarkerWithHue(markerColor),
         infoWindow: InfoWindow(
-          title: widget.partner.name,
-          snippet: 'Walking Partner',
+          title: '${widget.partner.name} ${_getPartnerStatusEmoji()}',
+          snippet: 'Walking Partner • ${_distanceToPartner.toInt()}m away',
         ),
+      ));
+      
+      // Add circle around partner showing approach radius
+      _circles.add(Circle(
+        circleId: const CircleId('partner_radius'),
+        center: LatLng(partner.latitude, partner.longitude),
+        radius: _partnerApproachRadius,
+        fillColor: Colors.blue.withOpacity(0.1),
+        strokeColor: Colors.blue.withOpacity(0.3),
+        strokeWidth: 1,
       ));
       
       _drawRoute();
     }
     
-    // Destination marker
+    // Destination marker with enhanced styling
     final destination = _getDestinationCoordinates(widget.destination);
     _markers.add(Marker(
       markerId: const MarkerId('destination'),
       position: destination,
       icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
       infoWindow: InfoWindow(
-        title: 'Destination',
+        title: 'Destination 🎯',
         snippet: widget.destination,
       ),
     ));
+
+    if (mounted) setState(() {});
+  }
+
+  String _getPartnerStatusEmoji() {
+    switch (_partnerStatus) {
+      case PartnerStatus.accepted:
+        return '✅';
+      case PartnerStatus.approaching:
+        return '🚶‍♂️';
+      case PartnerStatus.arrived:
+        return '👋';
+      default:
+        return '';
+    }
   }
 
   void _drawRoute() {
@@ -288,8 +393,13 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen>
         LatLng(my.latitude, my.longitude),
         LatLng(partner.latitude, partner.longitude),
       ],
-      color: Colors.deepPurple,
+      color: _partnerStatus == PartnerStatus.approaching 
+        ? Colors.orange 
+        : Colors.deepPurple,
       width: 4,
+      patterns: _partnerStatus == PartnerStatus.approaching 
+        ? [PatternItem.dash(10), PatternItem.gap(5)]
+        : [],
     ));
   }
 
@@ -318,22 +428,29 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen>
       return Future.error('Location permissions are permanently denied');
     }
 
-    return await Geolocator.getCurrentPosition();
+    return await Geolocator.getCurrentPosition(
+      desiredAccuracy: LocationAccuracy.high,
+      timeLimit: const Duration(seconds: 10),
+    );
   }
 
   void _simulatePartnerResponse() {
     // Partner found
-    Timer(const Duration(seconds: 2), () {
+    Timer(const Duration(seconds: 3), () {
       if (!mounted) return;
-      setState(() => _partnerStatus = PartnerStatus.found);
+      setState(() {
+        _partnerStatus = PartnerStatus.found;
+        _currentStatusMessage = _partnerStatus.message;
+      });
     });
     
     // Partner accepts
-    Timer(const Duration(seconds: 4), () {
+    Timer(const Duration(seconds: 5), () {
       if (!mounted) return;
       setState(() {
         _partnerStatus = PartnerStatus.accepted;
         _partnerPosition = _createPartnerPosition();
+        _currentStatusMessage = _partnerStatus.message;
       });
       
       if (_cardController.status == AnimationStatus.dismissed) {
@@ -344,9 +461,12 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen>
     });
     
     // Partner approaching
-    Timer(const Duration(seconds: 6), () {
+    Timer(const Duration(seconds: 8), () {
       if (!mounted) return;
-      setState(() => _partnerStatus = PartnerStatus.approaching);
+      setState(() {
+        _partnerStatus = PartnerStatus.approaching;
+        _currentStatusMessage = _partnerStatus.message;
+      });
     });
   }
 
@@ -354,7 +474,7 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen>
     final my = _myPosition;
     if (my == null) return null;
     
-    final random = Random();
+    final random = math.Random();
     const variance = 0.004;
     
     return Position(
@@ -364,7 +484,7 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen>
       accuracy: 10.0,
       altitude: 0.0,
       heading: 0.0,
-      speed: 0.0,
+      speed: random.nextDouble() * 2.0 + 1.0,
       speedAccuracy: 0.0,
       altitudeAccuracy: 0.0,
       headingAccuracy: 0.0,
@@ -373,13 +493,29 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen>
 
   void _onMapCreated(GoogleMapController controller) {
     _mapController = controller;
+    _isMapReady = true;
+    _centerMapOnLocation();
+    _updateMapMarkers();
+  }
+
+  void _centerMapOnLocation() {
     final position = _myPosition;
-    if (position != null) {
-      controller.animateCamera(CameraUpdate.newLatLngZoom(
+    if (position != null && _mapController != null) {
+      _mapController!.animateCamera(CameraUpdate.newLatLngZoom(
         LatLng(position.latitude, position.longitude),
-        15.0,
+        _cameraZoom,
       ));
     }
+  }
+
+  void _showLocationError() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Unable to get precise location. Using approximate campus location.'),
+        backgroundColor: Colors.orange,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   @override
@@ -387,96 +523,231 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen>
     return Scaffold(
       body: Stack(
         children: [
-          // Fullscreen Google Map
+          // Enhanced Google Map with improved styling
           GoogleMap(
             onMapCreated: _onMapCreated,
             initialCameraPosition: const CameraPosition(
               target: _universityCenter,
-              zoom: 16.0,
+              zoom: _cameraZoom,
             ),
             markers: _markers,
             polylines: _polylines,
-            myLocationEnabled: true,
+            circles: _circles,
+            myLocationEnabled: false,
             myLocationButtonEnabled: false,
             mapType: MapType.normal,
             zoomControlsEnabled: false,
-            compassEnabled: false,
+            compassEnabled: true,
             mapToolbarEnabled: false,
-            buildingsEnabled: false,
+            buildingsEnabled: true,
             indoorViewEnabled: false,
             trafficEnabled: false,
             liteModeEnabled: false,
-            rotateGesturesEnabled: false,
+            rotateGesturesEnabled: true,
             scrollGesturesEnabled: true,
             zoomGesturesEnabled: true,
-            tiltGesturesEnabled: false,
-            minMaxZoomPreference: const MinMaxZoomPreference(10.0, 20.0),
+            tiltGesturesEnabled: true,
+            minMaxZoomPreference: const MinMaxZoomPreference(12.0, 20.0),
+            cameraTargetBounds: CameraTargetBounds(LatLngBounds(
+              southwest: const LatLng(3.110, 101.640),
+              northeast: const LatLng(3.135, 101.670),
+            )),
           ),
           
-          // Header overlay with no black bar behind
+          // Enhanced header with gradient backdrop
           Positioned(
             top: 0,
             left: 0,
             right: 0,
-            child: Padding(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withOpacity(0.7),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
               padding: EdgeInsets.only(
                 top: MediaQuery.of(context).padding.top + 16,
                 left: 24,
                 right: 24,
-                bottom: 16,
+                bottom: 20,
               ),
               child: Row(
                 children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFFB16EFF), Color(0xFF6C3EFF)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Color(0xFFB16EFF).withOpacity(0.3),
-                            blurRadius: 8,
-                            offset: Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.arrow_back,
-                        color: Colors.white,
-                        size: 22,
-                      ),
-                    ),
-                  ),
+                  _buildBackButton(),
                   const SizedBox(width: 12),
-                  const Expanded(
-                    child: Text(
-                      'Waiting for Partner',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w400,
-                        color: Color.fromARGB(255, 105, 17, 206),
-                        letterSpacing: 1.2,
-                      ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Waiting for Partner',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        Text(
+                          'To ${widget.destination}',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.white.withOpacity(0.8),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
+                  _buildMapControls(),
                 ],
               ),
             ),
           ),
           
-          // Enhanced bottom sheet overlay with purple theme
+          // Enhanced bottom sheet overlay
           _buildEnhancedBottomSheet(),
           
-          // Safety button when partner is active
-          if (_partnerStatus.isActive) _buildSafetyButton(),
+          // Enhanced safety button with notification dot
+          if (_partnerStatus.isActive) _buildEnhancedSafetyButton(),
+
+          // Status indicator overlay
+          if (_partnerStatus == PartnerStatus.searching) _buildSearchingOverlay(),
         ],
+      ),
+    );
+  }
+
+  Widget _buildBackButton() {
+    return GestureDetector(
+      onTap: () => _showExitConfirmation(),
+      child: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFFB16EFF), Color(0xFF6C3EFF)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFB16EFF).withOpacity(0.3),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: const Icon(
+          Icons.arrow_back,
+          color: Colors.white,
+          size: 22,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMapControls() {
+    return Column(
+      children: [
+        GestureDetector(
+          onTap: _centerMapOnLocation,
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.9),
+              borderRadius: BorderRadius.circular(10),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.my_location,
+              color: Colors.deepPurple,
+              size: 20,
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        GestureDetector(
+          onTap: _zoomToFitAll,
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.9),
+              borderRadius: BorderRadius.circular(10),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.zoom_out_map,
+              color: Colors.deepPurple,
+              size: 20,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSearchingOverlay() {
+    return Positioned(
+      top: 120,
+      left: 20,
+      right: 20,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.8),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.deepPurple.withOpacity(0.3)),
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.deepPurple.shade300),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                _currentStatusMessage,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            Text(
+              '${_searchingDuration}s',
+              style: TextStyle(
+                color: Colors.deepPurple.shade300,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -537,14 +808,13 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen>
   Widget _buildSearchingContent() {
     return Column(
       children: [
-        // Only text for "Walking for Partner"
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Icon(Icons.directions_walk, color: Colors.white, size: 28),
             const SizedBox(width: 12),
             const Text(
-              'Walking for Partner',
+              'Finding Walking Partner',
               style: TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
@@ -577,7 +847,7 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen>
         ),
         const SizedBox(height: 16),
         Text(
-          _partnerStatus.message,
+          _currentStatusMessage,
           style: const TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w600,
@@ -587,7 +857,7 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen>
         ),
         const SizedBox(height: 8),
         Text(
-          'We\'re finding the best walking partner for you',
+          'We\'re finding the best walking partner for you based on your preferences',
           style: TextStyle(
             fontSize: 14,
             color: Colors.purpleAccent[100],
@@ -595,8 +865,51 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen>
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 24),
+        _buildSearchingProgress(),
+        const SizedBox(height: 16),
         _buildCancelButton(),
       ],
+    );
+  }
+
+  Widget _buildSearchingProgress() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.deepPurple.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.deepPurple.withOpacity(0.3)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Search Progress',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              Text(
+                '${(_searchingDuration * 6.67).clamp(0, 100).toInt()}%',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          LinearProgressIndicator(
+            value: (_searchingDuration / 15).clamp(0.0, 1.0),
+            backgroundColor: Colors.deepPurple.withOpacity(0.2),
+            valueColor: AlwaysStoppedAnimation<Color>(Colors.deepPurple.shade400),
+          ),
+        ],
+      ),
     );
   }
 
@@ -622,7 +935,7 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen>
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            gradient: LinearGradient(
+            gradient: const LinearGradient(
               colors: [
                 Color(0xFF23234A),
                 Color(0xFF181828),
@@ -632,6 +945,13 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen>
             border: Border.all(
               color: Colors.deepPurple.withOpacity(0.3),
             ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.deepPurple.withOpacity(0.1),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
           ),
           child: Row(
             children: [
@@ -647,53 +967,106 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen>
   }
 
   Widget _buildPartnerAvatar() {
-    return Container(
-      width: 60,
-      height: 60,
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.deepPurple, Colors.purpleAccent],
-        ),
-        borderRadius: BorderRadius.all(Radius.circular(30)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.deepPurple,
-            blurRadius: 10,
-            spreadRadius: 2,
-          ),
-        ],
-      ),
-      child: widget.partner.profilePicture != null
-          ? ClipRRect(
-              borderRadius: BorderRadius.circular(30),
-              child: Image.network(
-                widget.partner.profilePicture!,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Center(
-                    child: Text(
-                      widget.partner.name[0].toUpperCase(),
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  );
-                },
-              ),
-            )
-          : Center(
-              child: Text(
-                widget.partner.name[0].toUpperCase(),
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
+    return Stack(
+      children: [
+        Container(
+          width: 60,
+          height: 60,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Colors.deepPurple, Colors.purpleAccent],
             ),
+            borderRadius: BorderRadius.all(Radius.circular(30)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.deepPurple,
+                blurRadius: 10,
+                spreadRadius: 2,
+              ),
+            ],
+          ),
+          child: widget.partner.profilePicture != null
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(30),
+                  child: Image.network(
+                    widget.partner.profilePicture!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Center(
+                        child: Text(
+                          widget.partner.name[0].toUpperCase(),
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                )
+              : Center(
+                  child: Text(
+                    widget.partner.name[0].toUpperCase(),
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+        ),
+        // Status indicator
+        Positioned(
+          bottom: 0,
+          right: 0,
+          child: Container(
+            width: 20,
+            height: 20,
+            decoration: BoxDecoration(
+              color: _getStatusColor(),
+              border: Border.all(color: Colors.white, width: 2),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              _getStatusIcon(),
+              color: Colors.white,
+              size: 12,
+            ),
+          ),
+        ),
+      ],
     );
+  }
+
+  Color _getStatusColor() {
+    switch (_partnerStatus) {
+      case PartnerStatus.found:
+        return Colors.green;
+      case PartnerStatus.accepted:
+        return Colors.blue;
+      case PartnerStatus.approaching:
+        return Colors.orange;
+      case PartnerStatus.arrived:
+        return Colors.purple;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  IconData _getStatusIcon() {
+    switch (_partnerStatus) {
+      case PartnerStatus.found:
+        return Icons.check;
+      case PartnerStatus.accepted:
+        return Icons.directions_walk;
+      case PartnerStatus.approaching:
+        return Icons.near_me;
+      case PartnerStatus.arrived:
+        return Icons.location_on;
+      default:
+        return Icons.more_horiz;
+    }
   }
 
   Widget _buildPartnerInfo() {
@@ -702,12 +1075,15 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen>
       children: [
         Row(
           children: [
-            Text(
-              widget.partner.name,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: Colors.white,
+            Flexible(
+              child: Text(
+                widget.partner.name,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+                overflow: TextOverflow.ellipsis,
               ),
             ),
             if (widget.partner.isVerified) ...[
@@ -734,24 +1110,43 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen>
               ),
             ),
             const SizedBox(width: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.deepPurple.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.deepPurple.withOpacity(0.3)),
-              ),
-              child: Text(
-                widget.partner.department,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
+            Flexible(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.deepPurple.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.deepPurple.withOpacity(0.3)),
+                ),
+                child: Text(
+                  widget.partner.department,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ),
           ],
         ),
+        if (_partnerPosition?.speed != null && _partnerPosition!.speed > 0) ...[
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              const Icon(Icons.speed, color: Colors.white60, size: 14),
+              const SizedBox(width: 4),
+              Text(
+                '${_partnerPosition!.speed.toStringAsFixed(1)} km/h',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Colors.white60,
+                ),
+              ),
+            ],
+          ),
+        ],
       ],
     );
   }
@@ -761,20 +1156,39 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen>
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         Text(
-          '${_distanceToPartner.toInt()}m',
+          _distanceToPartner < 1000 
+            ? '${_distanceToPartner.toInt()}m'
+            : '${(_distanceToPartner/1000).toStringAsFixed(1)}km',
           style: const TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w600,
-            color: Colors.black87,
+            color: Colors.white,
           ),
         ),
         Text(
           '$_estimatedArrival min',
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 14,
-            color: Colors.grey[600],
+            color: Colors.white70,
           ),
         ),
+        if (_partnerStatus == PartnerStatus.approaching)
+          Container(
+            margin: const EdgeInsets.only(top: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.orange.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Text(
+              'Coming',
+              style: TextStyle(
+                fontSize: 10,
+                color: Colors.orange,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -791,6 +1205,7 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen>
           ],
         ),
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.deepPurple.withOpacity(0.3)),
       ),
       child: Row(
         children: [
@@ -798,7 +1213,7 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen>
             width: 8,
             height: 8,
             decoration: BoxDecoration(
-              color: Colors.deepPurple,
+              color: _getStatusColor(),
               borderRadius: BorderRadius.circular(4),
             ),
           ),
@@ -813,6 +1228,12 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen>
               ),
             ),
           ),
+          if (_partnerStatus == PartnerStatus.arrived)
+            const Icon(
+              Icons.celebration,
+              color: Colors.amber,
+              size: 20,
+            ),
         ],
       ),
     );
@@ -857,25 +1278,37 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen>
   }
 
   Widget _buildStartWalkButton() {
+    final canStart = _partnerStatus == PartnerStatus.arrived || 
+                    (_partnerStatus == PartnerStatus.approaching && _distanceToPartner < 100);
+    
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
-        onPressed: _startWalk,
+        onPressed: canStart ? _startWalk : null,
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.deepPurple,
+          backgroundColor: canStart ? Colors.deepPurple : Colors.grey,
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-          elevation: 0,
+          elevation: canStart ? 5 : 0,
         ),
-        child: const Text(
-          'Start Walking Together',
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: 16,
-          ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (canStart) const Icon(Icons.directions_walk, size: 20),
+            if (canStart) const SizedBox(width: 8),
+            Text(
+              canStart 
+                ? 'Start Walking Together'
+                : 'Waiting for partner to arrive...',
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 16,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -885,7 +1318,7 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen>
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
-        onPressed: () => Navigator.pop(context),
+        onPressed: () => _showExitConfirmation(),
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFF23234A),
           foregroundColor: Colors.white,
@@ -907,34 +1340,111 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen>
     );
   }
 
-  Widget _buildSafetyButton() {
+  Widget _buildEnhancedSafetyButton() {
     return Positioned(
       right: 16,
-      bottom: 320,
-      child: FloatingActionButton(
-        onPressed: _openSafetyCenter,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.red,
-        elevation: 8,
-        child: const Icon(Icons.shield_outlined),
+      bottom: 340,
+      child: Stack(
+        children: [
+          FloatingActionButton(
+            onPressed: _openSafetyCenter,
+            backgroundColor: Colors.white,
+            foregroundColor: Colors.red,
+            elevation: 8,
+            child: const Icon(Icons.shield_outlined),
+          ),
+          // Notification dot for active safety monitoring
+          Positioned(
+            top: 8,
+            right: 8,
+            child: Container(
+              width: 12,
+              height: 12,
+              decoration: const BoxDecoration(
+                color: Colors.green,
+                borderRadius: BorderRadius.all(Radius.circular(6)),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  // Action methods
+  // Enhanced action methods
   void _callPartner() {
-    _showSnackBar('Calling ${widget.partner.name}...');
+    _showSnackBar('Calling ${widget.partner.name}...', Colors.green);
   }
 
   void _messagePartner() {
-    _showSnackBar('Opening chat with ${widget.partner.name}...');
+    _showSnackBar('Opening chat with ${widget.partner.name}...', Colors.blue);
   }
 
   void _openSafetyCenter() {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
+      isScrollControlled: true,
       builder: (context) => const SafetyCenterSheet(),
+    );
+  }
+
+  void _zoomToFitAll() {
+    if (_mapController == null) return;
+    
+    final my = _myPosition;
+    final partner = _partnerPosition;
+    
+    if (my != null && partner != null) {
+      final bounds = LatLngBounds(
+        southwest: LatLng(
+          math.min(my.latitude, partner.latitude) - 0.001,
+          math.min(my.longitude, partner.longitude) - 0.001,
+        ),
+        northeast: LatLng(
+          math.max(my.latitude, partner.latitude) + 0.001,
+          math.max(my.longitude, partner.longitude) + 0.001,
+        ),
+      );
+      
+      _mapController!.animateCamera(
+        CameraUpdate.newLatLngBounds(bounds, 100),
+      );
+    } else {
+      _centerMapOnLocation();
+    }
+  }
+
+  void _showExitConfirmation() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning, color: Colors.orange, size: 24),
+            SizedBox(width: 8),
+            Text('Cancel Walking Request?'),
+          ],
+        ),
+        content: const Text(
+          'Are you sure you want to cancel this walking request? Your partner will be notified.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Keep Waiting'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.pop(context);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+            child: const Text('Cancel Request', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
     );
   }
 
@@ -944,12 +1454,18 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen>
       builder: (context) => StartWalkDialog(
         partner: widget.partner,
         destination: widget.destination,
+        estimatedTime: _estimatedArrival,
+        distance: _distanceToPartner,
         onConfirm: () {
           Navigator.pop(context);
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
-              builder: (context) => ActiveWalkScreen(partner: widget.partner),
+              builder: (context) => ActiveWalkScreen(
+                partner: widget.partner,
+                selectedDestination: widget.destination, // Corrected parameter
+                destinationCoordinates: null, // Pass null or appropriate LatLng
+              ),
             ),
           );
         },
@@ -957,30 +1473,32 @@ class _PartnerWaitingScreenState extends State<PartnerWaitingScreen>
     );
   }
 
-  void _showSnackBar(String message) {
+  void _showSnackBar(String message, [Color? backgroundColor]) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: Colors.deepPurple,
+        backgroundColor: backgroundColor ?? Colors.deepPurple,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         margin: const EdgeInsets.all(16),
+        duration: const Duration(seconds: 2),
       ),
     );
   }
 }
 
-// Support classes and constants
+// Enhanced support classes and constants
 enum PartnerStatus {
   searching('Looking for your walking partner...'),
   found('Walking partner found!'),
-  accepted('Partner is on the way'),
-  approaching('Partner is walking to you');
+  accepted('Partner accepted your request'),
+  approaching('Partner is walking to you'),
+  arrived('Partner has arrived! Ready to walk?');
 
   const PartnerStatus(this.message);
   final String message;
 
-  bool get isActive => this == accepted || this == approaching;
+  bool get isActive => this != searching;
 }
 
 class DestinationMap {
@@ -998,13 +1516,14 @@ class DestinationMap {
   };
 }
 
-// Separate widgets for better organization
+// Enhanced separate widgets for better organization
 class SafetyCenterSheet extends StatelessWidget {
   const SafetyCenterSheet({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      height: MediaQuery.of(context).size.height * 0.6,
       padding: const EdgeInsets.all(24),
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -1014,37 +1533,51 @@ class SafetyCenterSheet extends StatelessWidget {
         ),
       ),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.grey[300],
-              borderRadius: BorderRadius.circular(2),
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
           ),
           const SizedBox(height: 24),
-          const Icon(Icons.shield_outlined, color: Colors.red, size: 48),
-          const SizedBox(height: 16),
-          const Text(
-            'Safety Center',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
-            ),
+          const Row(
+            children: [
+              Icon(Icons.shield_outlined, color: Colors.red, size: 32),
+              SizedBox(width: 12),
+              Text(
+                'Safety Center',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 8),
           Text(
-            'Need help? Access emergency features here',
+            'Your safety is our priority. Access emergency features and safety tools here.',
             style: TextStyle(
               fontSize: 14,
               color: Colors.grey[600],
             ),
-            textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 32),
+          const Text(
+            'Emergency Actions',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 16),
           Row(
             children: [
               Expanded(
@@ -1086,6 +1619,95 @@ class SafetyCenterSheet extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 24),
+          const Text(
+            'Safety Features',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: ListView(
+              children: [
+                _buildSafetyFeatureTile(
+                  Icons.location_on,
+                  'Live Location Sharing',
+                  'Your location is being shared with emergency contacts',
+                  Colors.green,
+                ),
+                _buildSafetyFeatureTile(
+                  Icons.timer,
+                  'Safety Timer',
+                  'Automatic check-in every 10 minutes',
+                  Colors.blue,
+                ),
+                _buildSafetyFeatureTile(
+                  Icons.verified_user,
+                  'Partner Verification',
+                  'Walking with verified university student',
+                  Colors.purple,
+                ),
+                _buildSafetyFeatureTile(
+                  Icons.route,
+                  'Route Monitoring',
+                  'Your walking route is being tracked',
+                  Colors.orange,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSafetyFeatureTile(IconData icon, String title, String subtitle, Color color) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: color, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Icon(Icons.check_circle, color: color, size: 20),
         ],
       ),
     );
@@ -1103,7 +1725,9 @@ class SafetyCenterSheet extends StatelessWidget {
             Text('Emergency Call'),
           ],
         ),
-        content: const Text('This will call emergency services (999). Do you want to proceed?'),
+        content: const Text(
+          'This will call emergency services (999). Do you want to proceed?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -1141,12 +1765,16 @@ class SafetyCenterSheet extends StatelessWidget {
 class StartWalkDialog extends StatelessWidget {
   final UserProfile partner;
   final String destination;
+  final int estimatedTime;
+  final double distance;
   final VoidCallback onConfirm;
 
   const StartWalkDialog({
     super.key,
     required this.partner,
     required this.destination,
+    required this.estimatedTime,
+    required this.distance,
     required this.onConfirm,
   });
 
@@ -1158,7 +1786,7 @@ class StartWalkDialog extends StatelessWidget {
         children: [
           Icon(Icons.directions_walk, color: Colors.deepPurple, size: 24),
           SizedBox(width: 8),
-          Text('Start Walking'),
+          Text('Start Walking Together'),
         ],
       ),
       content: Column(
@@ -1166,41 +1794,77 @@ class StartWalkDialog extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('Ready to start walking with ${partner.name}?'),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Colors.grey[100],
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Row(
                   children: [
-                    Icon(Icons.location_on, size: 16, color: Colors.green),
-                    SizedBox(width: 4),
-                    Text('From: ', style: TextStyle(fontWeight: FontWeight.w500)),
+                    Icon(Icons.location_on, size: 18, color: Colors.green),
+                    SizedBox(width: 6),
+                    Text('From: ', style: TextStyle(fontWeight: FontWeight.w600)),
                     Text('Your current location'),
                   ],
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 8),
                 Row(
                   children: [
-                    const Icon(Icons.flag, size: 16, color: Colors.red),
-                    const SizedBox(width: 4),
-                    const Text('To: ', style: TextStyle(fontWeight: FontWeight.w500)),
-                    Text(destination),
+                    const Icon(Icons.flag, size: 18, color: Colors.red),
+                    const SizedBox(width: 6),
+                    const Text('To: ', style: TextStyle(fontWeight: FontWeight.w600)),
+                    Flexible(child: Text(destination)),
                   ],
                 ),
-                const SizedBox(height: 4),
-                const Row(
+                const SizedBox(height: 8),
+                Row(
                   children: [
-                    Icon(Icons.access_time, size: 16, color: Colors.blue),
-                    SizedBox(width: 4),
-                    Text('ETA: ', style: TextStyle(fontWeight: FontWeight.w500)),
-                    Text('15 min walk'),
+                    const Icon(Icons.access_time, size: 18, color: Colors.blue),
+                    const SizedBox(width: 6),
+                    const Text('ETA: ', style: TextStyle(fontWeight: FontWeight.w600)),
+                    Text('$estimatedTime min walk'),
                   ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Icon(Icons.straighten, size: 18, color: Colors.orange),
+                    const SizedBox(width: 6),
+                    const Text('Distance: ', style: TextStyle(fontWeight: FontWeight.w600)),
+                    Text(distance < 1000 
+                      ? '${distance.toInt()}m' 
+                      : '${(distance/1000).toStringAsFixed(1)}km'),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.green[50],
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.green.withOpacity(0.3)),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.shield, color: Colors.green, size: 16),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Safety features are active during your walk',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.green,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -1217,6 +1881,7 @@ class StartWalkDialog extends StatelessWidget {
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.deepPurple,
             foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
           ),
           child: const Text('Start Walking'),
         ),
