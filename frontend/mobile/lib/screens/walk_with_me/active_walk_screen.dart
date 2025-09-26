@@ -295,15 +295,19 @@ class _ActiveWalkScreenState extends State<ActiveWalkScreen> {
     final double baseLng = position.longitude;
     
     final campusLocations = [
-      {'name': 'Main Campus Building', 'lat': baseLat + 0.0001, 'lng': baseLng + 0.0001},
-      {'name': 'Library Complex', 'lat': baseLat + 0.0002, 'lng': baseLng + 0.0002},
-      {'name': 'Student Union', 'lat': baseLat - 0.0003, 'lng': baseLng + 0.0005},
-      {'name': 'Engineering Building', 'lat': baseLat + 0.0004, 'lng': baseLng + 0.0002},
-      {'name': 'Sports Center', 'lat': baseLat - 0.0008, 'lng': baseLng - 0.0005},
-      {'name': 'Administration Office', 'lat': baseLat + 0.0005, 'lng': baseLng - 0.0003},
-      {'name': 'Cafeteria', 'lat': baseLat - 0.0002, 'lng': baseLng + 0.0003},
-      {'name': 'Dormitory Complex', 'lat': baseLat + 0.0007, 'lng': baseLng - 0.0010},
-    ];
+    // Keep the dynamic user-based main campus
+    {'name': 'Main Campus Building', 'lat': baseLat, 'lng': baseLng},
+
+  // Real Universiti Malaya landmarks
+ {'name': 'Library Complex', 'lat': 3.1203, 'lng': 101.6539},       // UM Main Library
+  {'name': 'Student Union', 'lat': 3.11850945, 'lng': 101.65275832}, // UM Centre (H09)
+  {'name': 'Engineering Building', 'lat': 3.1187, 'lng': 101.6535},  // Approx Faculty of Engineering
+  {'name': 'Sports Center', 'lat': 3.1226, 'lng': 101.6592},         // UM Arena/Sports Centre
+  {'name': 'Administration Office', 'lat': 3.1197, 'lng': 101.6564}, // Chancellery vicinity
+  {'name': 'Cafeteria', 'lat': 3.1211, 'lng': 101.6553},             // Near main canteen
+  {'name': 'Dormitory Complex', 'lat': 3.1240, 'lng': 101.6599},     // UM Innovation/Dorm vicinity
+];
+
 
     double minDistance = double.infinity;
     String closestLocation = "Campus Area";
@@ -527,34 +531,43 @@ class _ActiveWalkScreenState extends State<ActiveWalkScreen> {
 
   // Call this method to start navigation to the selected destination
   void _startNavigation() {
-    if (currentPosition != null && destinationCoordinates != null) {
+    // List of campus locations
+    final List<Map<String, dynamic>> campusLocations = [
+      {'name': 'Main Campus Building', 'lat': 3.1225, 'lng': 101.6532},
+      {'name': 'Perpustakaan Utama UM (Library)', 'lat': 3.1203, 'lng': 101.6539},
+      {'name': 'Student Affairs Division', 'lat': 3.1198, 'lng': 101.6540},  // approximate
+      {'name': 'Faculty of Engineering', 'lat': 3.1210, 'lng': 101.6535},      // approximate
+      {'name': 'UM Cafeteria Central', 'lat': 3.1195, 'lng': 101.6538},        // approximate
+      {'name': 'UM Sports Centre', 'lat': 3.1226, 'lng': 101.6592},           // approximate
+      {'name': 'Kolej Kediaman 4th College', 'lat': 3.1240, 'lng': 101.6599},  // approximate
+    ];
+
+    if (currentPosition != null) {
       LatLng currentPos = LatLng(currentPosition!.latitude, currentPosition!.longitude);
-      
-      // Use the destination passed from previous screen
-      _addDestinationMarker(destinationCoordinates!, destination);
-      
-      // Get directions to the selected destination
-      _getDirections(currentPos, destinationCoordinates!);
-    } else if (currentPosition != null) {
-      // Fallback: Use sample destinations if no destination was selected
-      List<Map<String, dynamic>> fallbackDestinations = [
-        {'name': 'UM Main Library', 'position': const LatLng(3.1235, 101.6545)},
-        {'name': 'Student Center', 'position': const LatLng(3.1220, 101.6530)},
-        {'name': 'Engineering Faculty', 'position': const LatLng(3.1240, 101.6555)},
-        {'name': 'Sports Complex', 'position': const LatLng(3.1265, 101.6525)},
-      ];
-      
-      // Use first fallback destination
-      LatLng fallbackDestination = fallbackDestinations[0]['position'];
-      String fallbackName = fallbackDestinations[0]['name'];
-      
+      LatLng? destCoords;
+      String destName = destination;
+
+      // Try to find the selected destination in the campusLocations list
+      if (destination.isNotEmpty && destination != "Selected Destination" && destination != "Loading destination...") {
+        final match = campusLocations.firstWhere(
+          (loc) => loc['name'] == destination,
+          orElse: () => campusLocations[0],
+        );
+        destCoords = LatLng(match['lat'], match['lng']);
+        destName = match['name'];
+      } else {
+        // Use first campus location as fallback
+        destCoords = LatLng(campusLocations[0]['lat'], campusLocations[0]['lng']);
+        destName = campusLocations[0]['name'];
+      }
+
       setState(() {
-        destination = fallbackName;
-        destinationCoordinates = fallbackDestination;
+        destination = destName;
+        destinationCoordinates = destCoords;
       });
-      
-      _addDestinationMarker(fallbackDestination, fallbackName);
-      _getDirections(LatLng(currentPosition!.latitude, currentPosition!.longitude), fallbackDestination);
+
+  _addDestinationMarker(destCoords, destName);
+      _getDirections(currentPos, destCoords);
     }
   }
 
@@ -564,20 +577,25 @@ class _ActiveWalkScreenState extends State<ActiveWalkScreen> {
   }
 
   String _calculateETA() {
-    if (totalDistance == 0 || walkDuration == 0) {
+    // If route distance is not available, show calculating
+    if (totalRouteDistance == 0.0) {
       return "Calculating...";
     }
-    
+
     double remainingDistance = (totalRouteDistance * 1000) - totalDistance; // in meters
-    double currentSpeed = totalDistance / walkDuration; // m/s
-    
+
+    // If no movement yet, estimate using average walking speed (1.2 m/s)
+    double currentSpeed = walkDuration > 0 && totalDistance > 0
+        ? totalDistance / walkDuration
+        : 1.2;
+
     if (currentSpeed <= 0) {
-      return "Calculating...";
+      currentSpeed = 1.2; // fallback to average speed
     }
-    
+
     int etaSeconds = (remainingDistance / currentSpeed).round();
     int etaMinutes = etaSeconds ~/ 60;
-    
+
     if (etaMinutes < 1) {
       return "< 1 min";
     } else if (etaMinutes < 60) {

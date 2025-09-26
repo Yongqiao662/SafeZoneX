@@ -1503,17 +1503,15 @@ enum PartnerStatus {
 
 class DestinationMap {
   static const Map<String, LatLng> locations = {
-    'UM Main Library': LatLng(3.1235, 101.6545),
-    'Student Center': LatLng(3.1220, 101.6530),
-    'Engineering Faculty': LatLng(3.1240, 101.6555),
-    'Sports Complex': LatLng(3.1265, 101.6525),
-    'Perpustakaan Utama UM': LatLng(3.1235, 101.6545),
-    'Student Affairs Division': LatLng(3.1250, 101.6540),
-    'Faculty of Engineering': LatLng(3.1240, 101.6555),
-    'UM Cafeteria Central': LatLng(3.1225, 101.6535),
-    'UM Sports Centre': LatLng(3.1265, 101.6525),
-    'Kolej Kediaman 4th College': LatLng(3.1180, 101.6570),
+    'Main Campus Building': LatLng(3.1225, 101.6532),
+    'Perpustakaan Utama UM (Library)': LatLng(3.1203, 101.6539),
+    'Student Affairs Division': LatLng(3.1198, 101.6540),
+    'Faculty of Engineering': LatLng(3.1210, 101.6535),
+    'UM Cafeteria Central': LatLng(3.1195, 101.6538),
+    'UM Sports Centre': LatLng(3.1226, 101.6592),
+    'Kolej Kediaman 4th College': LatLng(3.1240, 101.6599),
   };
+  
 }
 
 // Enhanced separate widgets for better organization

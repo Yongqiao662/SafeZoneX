@@ -33,12 +33,13 @@ class _FindWalkPageState extends State<FindWalkPage> {
   // 2. Set to actual campus coordinates
   // 3. Configured per institution
   final List<CampusLocation> campusLocations = [
-    CampusLocation(name: 'Perpustakaan Utama UM', category: 'Library', lat: 3.1235, lng: 101.6545, building: 'Main Library Building'),
-    CampusLocation(name: 'Student Affairs Division', category: 'Social', lat: 3.1250, lng: 101.6540, building: 'Administration Complex'),
-    CampusLocation(name: 'Faculty of Engineering', category: 'Academic', lat: 3.1240, lng: 101.6555, building: 'Engineering Complex'),
-    CampusLocation(name: 'UM Cafeteria Central', category: 'Dining', lat: 3.1225, lng: 101.6535, building: 'Student Center'),
-    CampusLocation(name: 'UM Sports Centre', category: 'Recreation', lat: 3.1265, lng: 101.6525, building: 'Sports Complex'),
-    CampusLocation(name: 'Kolej Kediaman 4th College', category: 'Housing', lat: 3.1180, lng: 101.6570, building: 'Residential College'),
+    CampusLocation(name: 'Main Campus Building', category: 'Academic', lat: 3.1225, lng: 101.6532, building: 'Main Campus'),
+    CampusLocation(name: 'Perpustakaan Utama UM (Library)', category: 'Library', lat: 3.1203, lng: 101.6539, building: 'Main Library Building'),
+    CampusLocation(name: 'Student Affairs Division', category: 'Social', lat: 3.1198, lng: 101.6540, building: 'Administration Complex'),
+    CampusLocation(name: 'Faculty of Engineering', category: 'Academic', lat: 3.1210, lng: 101.6535, building: 'Engineering Complex'),
+    CampusLocation(name: 'UM Cafeteria Central', category: 'Dining', lat: 3.1195, lng: 101.6538, building: 'Student Center'),
+    CampusLocation(name: 'UM Sports Centre', category: 'Recreation', lat: 3.1226, lng: 101.6592, building: 'Sports Complex'),
+    CampusLocation(name: 'Kolej Kediaman 4th College', category: 'Housing', lat: 3.1240, lng: 101.6599, building: 'Residential College'),
   ];
 
   @override
