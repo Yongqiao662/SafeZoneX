@@ -1,6 +1,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import '../services/auth_service.dart'; // Make sure this exists and is implemented
 import 'main_dashboard_screen.dart';
 import 'personal_details_screen.dart';
@@ -35,7 +36,12 @@ class _LoginScreenState extends State<LoginScreen>
 
   final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: ['email', 'profile'],
-    serverClientId: '413218401489-td2q4g9cnvoudh69fm0tketpobb7g5ah.apps.googleusercontent.com',
+    clientId: kIsWeb
+        ? '413218401489-td2q4g9cnvoudh69fm0tketpobb7g5ah.apps.googleusercontent.com'
+        : null,
+    serverClientId: !kIsWeb
+        ? '413218401489-td2q4g9cnvoudh69fm0tketpobb7g5ah.apps.googleusercontent.com'
+        : null,
   );
 
   @override
