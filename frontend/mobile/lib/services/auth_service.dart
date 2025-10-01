@@ -25,8 +25,10 @@ class AuthService {
     if (token != null && userJson != null) {
       _authToken = token;
       _currentUser = json.decode(userJson);
+      print('AuthService initialized: User = ${_currentUser?['name']}, Token exists = ${_authToken != null}');
       return true;
     }
+    print('AuthService initialized: No existing session');
     return false;
   }
 
@@ -102,6 +104,13 @@ class AuthService {
     }
   }
 
+  /// NEW: Save user profile after completing registration
+  Future<void> saveUserProfile(Map<String, dynamic> userData) async {
+    print('Saving user profile to AuthService: ${userData['name']}');
+    await _saveAuthData('user_session_token', userData);
+    print('User profile saved. isAuthenticated = $isAuthenticated');
+  }
+
   /// Sign out
   Future<void> signOut() async {
     final prefs = await SharedPreferences.getInstance();
@@ -124,10 +133,14 @@ class AuthService {
 
   /// Get user profile for reports (compatible with existing code)
   Map<String, dynamic>? getUserProfile() {
-    if (_currentUser == null) return null;
+    if (_currentUser == null) {
+      print('getUserProfile: No current user found');
+      return null;
+    }
     
+    print('getUserProfile: Found user ${_currentUser!['name']}');
     return {
-      'userId': _currentUser!['_id'] ?? _currentUser!['id'],
+      'userId': _currentUser!['_id'] ?? _currentUser!['id'] ?? _currentUser!['studentId'],
       'userName': _currentUser!['name'] ?? _currentUser!['displayName'],
       'userPhone': _currentUser!['phone'] ?? '',
       'email': _currentUser!['email'],

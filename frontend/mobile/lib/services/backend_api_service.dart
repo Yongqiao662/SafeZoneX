@@ -33,6 +33,13 @@ class BackendApiService {
       final latitude = location['latitude'] ?? location['lat'] ?? 3.12194;
       final longitude = location['longitude'] ?? location['lng'] ?? 101.6569867;
       final address = metadata?['locationName'] ?? 'Test Location';
+      
+      // Get evidence images from metadata
+      final evidenceImages = metadata?['evidenceImages'] ?? [];
+      
+      print('📤 BackendApiService: Preparing report submission');
+      print('   Images to send: ${evidenceImages.length}');
+      
       final body = {
         'description': text.isNotEmpty ? text : 'Test report description',
         'location': {
@@ -46,21 +53,29 @@ class BackendApiService {
         'userId': userProfile?['userId'] ?? 'test_user_123',
         'userName': userProfile?['userName'] ?? 'Test User',
         'userPhone': userProfile?['userPhone'] ?? '+60123456789',
-        // 'evidenceImages': [], // Images omitted for now
+        'evidenceImages': evidenceImages, // Include images
       };
 
+      print('📤 Sending request to: ${baseUrl}/api/report');
+      
       final response = await http.post(
         Uri.parse('${baseUrl}/api/report'),
         headers: _headers,
         body: json.encode(body),
       );
 
+      print('📥 Response status: ${response.statusCode}');
+
       if (response.statusCode == 200) {
-        return json.decode(response.body);
+        final result = json.decode(response.body);
+        print('✅ Report submitted successfully');
+        return result;
       } else {
+        print('❌ Server error: ${response.statusCode} - ${response.body}');
         return {'success': false, 'message': 'Failed to submit report: ${response.reasonPhrase}'};
       }
     } catch (e) {
+      print('❌ Exception in submitSecurityReport: $e');
       return {'success': false, 'message': 'Error: $e'};
     }
   }
@@ -145,131 +160,130 @@ class BackendApiService {
   }
 
   /// Authenticate user with Google token
-     /// Authenticate user with Google token
-Future<Map<String, dynamic>> authenticateWithGoogle({
-  required String idToken,
-  required String accessToken,
-}) async {
-  final payload = {
-    'idToken': idToken,
-    'accessToken': accessToken,
-    'authProvider': 'google',
-  };
+  Future<Map<String, dynamic>> authenticateWithGoogle({
+    required String idToken,
+    required String accessToken,
+  }) async {
+    final payload = {
+      'idToken': idToken,
+      'accessToken': accessToken,
+      'authProvider': 'google',
+    };
 
-  try {
-    final response = await http.post(
-      Uri.parse('${baseUrl}/api/auth/google'),
-      headers: _headers,
-      body: json.encode(payload),
-    );
+    try {
+      final response = await http.post(
+        Uri.parse('${baseUrl}/api/auth/google'),
+        headers: _headers,
+        body: json.encode(payload),
+      );
 
-    print('🔐 Authenticating with Google...');
-    if (response.statusCode == 200) {
-      final result = json.decode(response.body);
-      return {
-        'success': true,
-        'user': result['user'],
-        'token': result['token'],
-        'message': 'Google authentication successful'
-      };
-    } else {
-      final error = json.decode(response.body);
+      print('🔐 Authenticating with Google...');
+      if (response.statusCode == 200) {
+        final result = json.decode(response.body);
+        return {
+          'success': true,
+          'user': result['user'],
+          'token': result['token'],
+          'message': 'Google authentication successful'
+        };
+      } else {
+        final error = json.decode(response.body);
+        return {
+          'success': false,
+          'message': error['message'] ?? 'Google authentication failed'
+        };
+      }
+    } catch (e) {
       return {
         'success': false,
-        'message': error['message'] ?? 'Google authentication failed'
+        'message': 'Google authentication error: $e'
       };
     }
-  } catch (e) {
-    return {
-      'success': false,
-      'message': 'Google authentication error: $e'
-    };
   }
-}
 
-/// Create new user account with email verification
-Future<Map<String, dynamic>> createUserAccount({
-  required String email,
-  String? password,
-  Map<String, dynamic>? googleData,
-}) async {
-  final payload = {
-    'email': email,
-    'password': password,
-    'authProvider': googleData != null ? 'google' : 'email',
-    'googleData': googleData,
-    'university': 'University Malaya', // Set default university
-  };
+  /// Create new user account with email verification
+  Future<Map<String, dynamic>> createUserAccount({
+    required String email,
+    String? password,
+    Map<String, dynamic>? googleData,
+  }) async {
+    final payload = {
+      'email': email,
+      'password': password,
+      'authProvider': googleData != null ? 'google' : 'email',
+      'googleData': googleData,
+      'university': 'University Malaya', // Set default university
+    };
 
-  try {
-    final response = await http.post(
-      Uri.parse('${baseUrl}/api/auth/register'),
-      headers: _headers,
-      body: json.encode(payload),
-    );
+    try {
+      final response = await http.post(
+        Uri.parse('${baseUrl}/api/auth/register'),
+        headers: _headers,
+        body: json.encode(payload),
+      );
 
-    print('👤 Creating user account...');
-    if (response.statusCode == 201) {
-      final result = json.decode(response.body);
-      return {
-        'success': true,
-        'user': result['user'],
-        'requiresVerification': result['requiresVerification'] ?? false,
-        'message': 'Account created successfully'
-      };
-    } else {
-      final error = json.decode(response.body);
+      print('👤 Creating user account...');
+      if (response.statusCode == 201) {
+        final result = json.decode(response.body);
+        return {
+          'success': true,
+          'user': result['user'],
+          'requiresVerification': result['requiresVerification'] ?? false,
+          'message': 'Account created successfully'
+        };
+      } else {
+        final error = json.decode(response.body);
+        return {
+          'success': false,
+          'message': error['message'] ?? 'Account creation failed'
+        };
+      }
+    } catch (e) {
       return {
         'success': false,
-        'message': error['message'] ?? 'Account creation failed'
+        'message': 'Account creation error: $e'
       };
     }
-  } catch (e) {
-    return {
-      'success': false,
-      'message': 'Account creation error: $e'
-    };
   }
-}
 
-/// Login with email and password
-Future<Map<String, dynamic>> loginWithEmail({
-  required String email,
-  required String password,
-}) async {
-  final payload = {
-    'email': email,
-    'password': password,
-  };
+  /// Login with email and password
+  Future<Map<String, dynamic>> loginWithEmail({
+    required String email,
+    required String password,
+  }) async {
+    final payload = {
+      'email': email,
+      'password': password,
+    };
 
-  try {
-    final response = await http.post(
-      Uri.parse('${baseUrl}/api/auth/login'),
-      headers: _headers,
-      body: json.encode(payload),
-    );
+    try {
+      final response = await http.post(
+        Uri.parse('${baseUrl}/api/auth/login'),
+        headers: _headers,
+        body: json.encode(payload),
+      );
 
-    print('🔑 Logging in with email...');
-    if (response.statusCode == 200) {
-      final result = json.decode(response.body);
-      return {
-        'success': true,
-        'user': result['user'],
-        'token': result['token'],
-        'message': 'Login successful'
-      };
-    } else {
-      final error = json.decode(response.body);
+      print('🔑 Logging in with email...');
+      if (response.statusCode == 200) {
+        final result = json.decode(response.body);
+        return {
+          'success': true,
+          'user': result['user'],
+          'token': result['token'],
+          'message': 'Login successful'
+        };
+      } else {
+        final error = json.decode(response.body);
+        return {
+          'success': false,
+          'message': error['message'] ?? 'Login failed'
+        };
+      }
+    } catch (e) {
       return {
         'success': false,
-        'message': error['message'] ?? 'Login failed'
+        'message': 'Login error: $e'
       };
     }
-  } catch (e) {
-    return {
-      'success': false,
-      'message': 'Login error: $e'
-    };
   }
-}
 }

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import '../services/websocket_service.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -27,8 +28,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
   String _currentLocationName = "Getting location...";
   final TextEditingController _descriptionController = TextEditingController();
   bool _isGettingLocation = false;
+  bool _isLoading = false;
   
-  // Campus locations for manual selection
   final List<Map<String, dynamic>> _campusLocations = [
     {
       'name': 'UM Security Office - Main Campus',
@@ -162,7 +163,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
     super.dispose();
   }
 
-  // IMPROVED GPS location method
   Future<void> _getCurrentLocation() async {
     setState(() {
       _isGettingLocation = true;
@@ -172,7 +172,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
     try {
       print('🌍 Starting location acquisition...');
 
-      // Check if location services are enabled
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         print('❌ Location services disabled');
@@ -183,7 +182,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
         return;
       }
 
-      // Check and request permissions
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
@@ -208,10 +206,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
       print('✅ Location permissions granted');
 
-      // Get current position with high accuracy
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
-        timeLimit: Duration(seconds: 15), // Increased timeout
+        timeLimit: Duration(seconds: 15),
       );
 
       print('📍 GPS coordinates received: ${position.latitude}, ${position.longitude}');
@@ -231,7 +228,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
       setState(() {
         _currentLocationName = "GPS unavailable - Using campus location";
         _isGettingLocation = false;
-        // Set fallback to University Malaya coordinates
         _currentPosition = Position(
           latitude: 3.1319,
           longitude: 101.6841,
@@ -406,140 +402,249 @@ class _ReportsScreenState extends State<ReportsScreen> {
     );
   }
 
-  // IMPROVED submit report with better location handling
-  void _submitReport() async {
-    print('=== SUBMIT REPORT DEBUG ===');
+void _submitReport() async {
+  print('=== SUBMIT REPORT DEBUG START ===');
+  
+  if (_selectedActivity == null) {
+    print('❌ Validation failed: No activity selected');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Please select a type of suspicious activity'),
+        backgroundColor: Colors.orange,
+      ),
+    );
+    return;
+  }
+
+  if (_descriptionController.text.trim().isEmpty) {
+    print('❌ Validation failed: No description');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Please provide a description'),
+        backgroundColor: Colors.orange,
+      ),
+    );
+    return;
+  }
+
+  setState(() => _isLoading = true);
+
+  try {
+    final authService = AuthService();
+    final userProfile = authService.getUserProfile();
     
-    if (_selectedActivity == null) {
+    if (userProfile == null) {
+      print('❌ No authenticated user found');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Please select a type of suspicious activity'),
-          backgroundColor: Colors.orange,
+          content: Text('Please log in to submit reports'),
+          backgroundColor: Colors.red,
         ),
       );
+      setState(() => _isLoading = false);
       return;
     }
 
-    if (_descriptionController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Please provide a description'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
-    }
+    print('✅ User authenticated:');
+    print('   UserID: ${userProfile['userId']}');
+    print('   Name: ${userProfile['userName']}');
+    print('   Phone: ${userProfile['userPhone']}');
 
-    // If GPS location is still being acquired, wait or use fallback
     if (_isGettingLocation) {
-      print('⏳ Still getting location, trying once more...');
-      await _getCurrentLocation();
+      print('⏳ Waiting for location...');
+      await Future.delayed(Duration(seconds: 2));
     }
 
-    // Get user profile
-    final userProfile = {
-      'userId': 'test_user_123',
-      'userName': 'Test User',
-      'userPhone': '+60123456789',
-    };
-
-    // IMPROVED location data handling
     Map<String, double> locationData;
-
     if (_currentPosition != null) {
       locationData = {
         'latitude': _currentPosition!.latitude,
         'longitude': _currentPosition!.longitude,
       };
-      print('✅ Using GPS coordinates: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}');
+      print('✅ Using GPS: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}');
     } else {
-      // Force get fresh location one more time
-      print('⚠️ No GPS position, forcing fresh location...');
-      final locationService = LocationTrackingService();
-      await locationService.initialize();
-      await locationService.getCurrentLocation();
-      final emergencyData = locationService.getEmergencyLocationData();
-      
       locationData = {
-        'latitude': (emergencyData['latitude'] != 0.0 ? emergencyData['latitude'] : 3.1319).toDouble(),
-        'longitude': (emergencyData['longitude'] != 0.0 ? emergencyData['longitude'] : 101.6841).toDouble(),
+        'latitude': 3.1319,
+        'longitude': 101.6841,
       };
-      print('📍 Using location service coordinates: ${locationData['latitude']}, ${locationData['longitude']}');
+      print('⚠️ Using fallback location: UM Campus');
     }
 
-    print('📤 Final location data: $locationData');
+    String priority = 'medium';
+    if (_selectedActivity == 'Theft/Robbery' || 
+        _selectedActivity == 'Drug Activity' || 
+        _selectedActivity == 'Harassment') {
+      priority = 'high';
+    } else if (_selectedActivity == 'Safety Hazard' || 
+               _selectedActivity == 'Unauthorized Access') {
+      priority = 'critical';
+    }
+
+    // Convert image to base64 if exists
+    List<String> imagesList = [];
+    if (_selectedImage != null) {
+      try {
+        print('📷 Converting image to base64...');
+        final bytes = await File(_selectedImage!.path).readAsBytes();
+        final base64Image = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+        imagesList.add(base64Image);
+        print('✅ Image converted: ${base64Image.substring(0, 50)}...');
+      } catch (e) {
+        print('❌ Error encoding image: $e');
+      }
+    } else {
+      print('ℹ️ No image selected');
+    }
+
+    print('📤 Submitting report with:');
+    print('   Activity: $_selectedActivity');
+    print('   Priority: $priority');
+    print('   Location: $locationData');
+    print('   Images: ${imagesList.length}');
+    print('   Description: ${_descriptionController.text.substring(0, _descriptionController.text.length > 50 ? 50 : _descriptionController.text.length)}...');
 
     final apiService = BackendApiService();
-    apiService.submitSecurityReport(
+    final result = await apiService.submitSecurityReport(
       text: _descriptionController.text.trim(),
       location: locationData,
       userProfile: userProfile,
       metadata: {
         'activityType': _selectedActivity,
-        'locationName': _selectedLocation,
+        'locationName': _selectedLocation ?? 'Unknown',
         'alertType': _selectedActivity,
-        'priority': 'normal',
+        'priority': priority,
+        'evidenceImages': imagesList,
       },
-    ).then((result) {
-      print('API Response: $result');
-      if (result['success'] == true) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            backgroundColor: Color(0xFF1a1a2e),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.green, size: 28),
-                SizedBox(width: 12),
-                Text(
+    );
+
+    print('📥 API Response: $result');
+
+    if (result['success'] == true) {
+      print('✅ Report submitted successfully!');
+      
+      final aiAnalysis = result['aiAnalysis'];
+      String statusMessage = 'Report submitted successfully!';
+      
+      if (aiAnalysis != null) {
+        final confidence = aiAnalysis['confidence'];
+        if (confidence >= 70) {
+          statusMessage = 'Report verified and sent to security! (High confidence: ${confidence.toStringAsFixed(0)}%)';
+        } else if (confidence >= 50) {
+          statusMessage = 'Report submitted for review. (Confidence: ${confidence.toStringAsFixed(0)}%)';
+        } else {
+          statusMessage = 'Report submitted but needs verification. Security will review manually.';
+        }
+      }
+
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: Color(0xFF1a1a2e),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.green, size: 28),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
                   'Report Submitted',
                   style: TextStyle(color: Colors.white, fontSize: 18),
                 ),
-              ],
-            ),
-            content: Text(
-              'Thank you for keeping our campus safe. Security has been notified and will investigate.',
-              style: TextStyle(color: Colors.white70),
-            ),
-            actions: [
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  setState(() {
-                    _selectedImage = null;
-                    _selectedActivity = null;
-                    _descriptionController.clear();
-                  });
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                child: Text('OK', style: TextStyle(color: Colors.white)),
               ),
             ],
           ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to submit report. Please try again.'),
-            backgroundColor: Colors.red,
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                statusMessage,
+                style: TextStyle(color: Colors.white70, fontSize: 14),
+              ),
+              if (imagesList.isNotEmpty) ...[
+                SizedBox(height: 8),
+                Text(
+                  '${imagesList.length} photo(s) uploaded',
+                  style: TextStyle(color: Colors.blue, fontSize: 12),
+                ),
+              ],
+              if (aiAnalysis != null) ...[
+                SizedBox(height: 12),
+                Container(
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'AI Analysis',
+                        style: TextStyle(
+                          color: Colors.blue,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        aiAnalysis['details'] ?? 'Analyzing...',
+                        style: TextStyle(color: Colors.white60, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
           ),
-        );
-      }
-    }).catchError((e) {
-      print('API Error: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error submitting report: $e'),
-          backgroundColor: Colors.red,
+          actions: [
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                setState(() {
+                  _selectedImage = null;
+                  _selectedActivity = null;
+                  _selectedLocation = null;
+                  _descriptionController.clear();
+                });
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: Text('OK', style: TextStyle(color: Colors.white)),
+            ),
+          ],
         ),
       );
-    });
+    } else {
+      print('❌ API returned failure: ${result['error'] ?? 'Unknown error'}');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to submit report: ${result['error'] ?? 'Unknown error'}'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 5),
+        ),
+      );
+    }
+  } catch (e, stackTrace) {
+    print('❌ EXCEPTION during submit:');
+    print('Error: $e');
+    print('Stack trace: $stackTrace');
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Error submitting report: $e'),
+        backgroundColor: Colors.red,
+        duration: Duration(seconds: 5),
+      ),
+    );
+  } finally {
+    setState(() => _isLoading = false);
+    print('=== SUBMIT REPORT DEBUG END ===');
   }
-
+}
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -922,7 +1027,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed: _submitReport,
+                          onPressed: _isLoading ? null : _submitReport,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.deepPurple,
                             padding: EdgeInsets.symmetric(vertical: 16),
@@ -930,14 +1035,23 @@ class _ReportsScreenState extends State<ReportsScreen> {
                               borderRadius: BorderRadius.circular(12),
                             ),
                           ),
-                          child: Text(
-                            'Submit Report',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
+                          child: _isLoading
+                              ? SizedBox(
+                                  height: 24,
+                                  width: 24,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.5,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                  ),
+                                )
+                              : Text(
+                                  'Submit Report',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
                         ),
                       ),
 

@@ -315,81 +315,108 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen>
   }
 
   // Save data and navigate to MainDashboardScreen
-  void _saveAndComplete() async {
-    if (_formKey.currentState!.validate()) {
-      if (_selectedYear.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please select your year of study'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        return;
-      }
+ void _saveAndComplete() async {
+  if (_formKey.currentState!.validate()) {
+    if (_selectedYear.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select your year of study'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    
+    if (_selectedFaculty.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select your faculty'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      print('=== SAVING USER PROFILE ===');
       
-      if (_selectedFaculty.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please select your faculty'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        return;
-      }
+      // Create user data object
+      final userData = {
+        '_id': _studentIdController.text.trim(),
+        'id': _studentIdController.text.trim(),
+        'studentId': _studentIdController.text.trim(),
+        'name': _nameController.text.trim(),
+        'email': _emailController.text.trim(),
+        'phone': _phoneController.text.trim(),
+        'faculty': _selectedFaculty,
+        'year': _selectedYear,
+        'course': _courseController.text.trim(),
+      };
 
+      print('User data prepared: ${userData['name']}, ${userData['phone']}');
+
+      // CRITICAL: Save to AuthService first
+      final authService = AuthService();
+      await authService.saveUserProfile(userData);
+      print('Saved to AuthService');
+
+      // Then save to local preferences for backward compatibility
+      await UserPreferences.saveUserData(
+        name: _nameController.text.trim(),
+        email: _emailController.text.trim(),
+        phone: _phoneController.text.trim(),
+        studentId: _studentIdController.text.trim(),
+        selectedYear: _selectedYear,
+        selectedFaculty: _selectedFaculty,
+        course: _courseController.text.trim(),
+        studentIdImagePath: _studentIdImage?.path,
+      );
+      print('Saved to UserPreferences');
+
+      // Verify the save worked
+      final profile = authService.getUserProfile();
+      print('Verification - getUserProfile returned: $profile');
+
+      // Optional: Send to server
+      await _sendToServer();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Profile saved successfully!'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      print('=== PROFILE SAVE COMPLETE ===');
+
+      // Navigate to dashboard
+      await Future.delayed(const Duration(milliseconds: 500));
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => MainDashboardScreen(),
+        ),
+      );
+    } catch (e) {
+      print('ERROR saving profile: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error saving profile: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
       setState(() {
-        _isLoading = true;
+        _isLoading = false;
       });
-
-      try {
-        // Save to local storage
-        await UserPreferences.saveUserData(
-          name: _nameController.text.trim(),
-          email: _emailController.text.trim(),
-          phone: _phoneController.text.trim(),
-          studentId: _studentIdController.text.trim(),
-          selectedYear: _selectedYear,
-          selectedFaculty: _selectedFaculty,
-          course: _courseController.text.trim(),
-          studentIdImagePath: _studentIdImage?.path,
-        );
-
-        // Optional: Also send to your server
-        await _sendToServer();
-
-        // Show success message
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Profile saved successfully!'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
-        );
-
-        // Re-initialize AuthService to ensure session is loaded
-  await AuthService().initialize();
-        // Navigate to MainDashboardScreen (passing data for immediate use)
-        await Future.delayed(const Duration(milliseconds: 500));
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => MainDashboardScreen(),
-          ),
-        );
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error saving profile: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      } finally {
-        setState(() {
-          _isLoading = false;
-        });
-      }
     }
   }
+}
 
   // Send data to your Node.js server
   Future<void> _sendToServer() async {

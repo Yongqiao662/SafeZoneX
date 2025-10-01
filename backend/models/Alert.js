@@ -1,3 +1,4 @@
+// models/Alert.js - COMPLETE FILE
 const mongoose = require('mongoose');
 
 const alertSchema = new mongoose.Schema({
@@ -18,6 +19,17 @@ const alertSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  location: {
+    latitude: { type: Number, required: true },
+    longitude: { type: Number, required: true },
+    address: String,
+    campus: String
+  },
+  description: {
+    type: String,
+    required: true
+  },
+  evidenceImages: [String],
   alertType: {
     type: String,
     enum: [
@@ -32,110 +44,44 @@ const alertSchema = new mongoose.Schema({
     ],
     default: 'Other'
   },
-  status: {
-    type: String,
-    enum: ['active', 'acknowledged', 'resolved', 'false_alarm', 'pending_review', 'real', 'likely_real', 'filtered'],
-    default: 'active'
-  },
   priority: {
     type: String,
     enum: ['low', 'medium', 'high', 'critical'],
-    default: 'high'
+    default: 'medium'
   },
-  location: {
-    latitude: {
-      type: Number,
-      required: true
-    },
-    longitude: {
-      type: Number,
-      required: true
-    },
-    address: {
-      type: String,
-      required: false
-    },
-    campus: {
-      type: String,
-      default: 'University Malaya'
-    }
-  },
-  description: {
+  status: {
     type: String,
-    required: false
+    enum: ['verified', 'needs_review', 'unverified', 'active', 'investigating', 'resolved', 'false_alarm', 'pending_review', 'real'],
+    default: 'needs_review'
   },
-  evidenceImages: [{
-    imageData: String, // Base64 encoded
-    timestamp: Date,
-    verified: Boolean,
-    aiAnalysis: {
-      genuineScore: Number,
-      manipulationDetected: Boolean,
-      analysisDetails: String
-    }
-  }],
-  faceVerification: {
-    verified: {
-      type: Boolean,
-      default: false
-    },
-    confidence: {
-      type: Number,
-      default: 0
-    },
-    timestamp: Date,
-    matchScore: Number
-  },
-  timeline: [{
-    action: String,
-    timestamp: Date,
-    performer: String,
-    details: String
-  }],
-  acknowledgedBy: {
+  verificationTag: {
     type: String,
-    required: false
+    enum: ['Verified', 'Needs Review', 'Unverified'],
+    default: 'Needs Review'
   },
-  acknowledgedAt: {
-    type: Date,
-    required: false
-  },
-  resolvedBy: {
-    type: String,
-    required: false
-  },
-  resolvedAt: {
-    type: Date,
-    required: false
-  },
-  responseTime: {
-    type: Number, // in seconds
-    required: false
-  },
-  emergencyContacts: [{
-    name: String,
-    phone: String,
-    notified: Boolean,
-    notifiedAt: Date
-  }],
   aiAnalysis: {
-    type: mongoose.Schema.Types.Mixed,
-    default: {}
+    confidence: Number,
+    details: String,
+    verificationTag: String
   },
-  metadata: {
-    deviceInfo: String,
-    appVersion: String,
-    networkInfo: String,
-    batteryLevel: Number
+  resolution: String,
+  resolvedBy: String,
+  resolvedAt: Date,
+  createdAt: {
+    type: Date,
+    default: Date.now
+  },
+  updatedAt: {
+    type: Date,
+    default: Date.now
   }
-}, {
-  timestamps: true
 });
 
-// Indexes for efficient queries
-alertSchema.index({ userId: 1, createdAt: -1 });
-alertSchema.index({ status: 1, createdAt: -1 });
-alertSchema.index({ "location.latitude": 1, "location.longitude": 1 });
-alertSchema.index({ alertType: 1, priority: 1 });
+// Add indexes for faster queries
+alertSchema.index({ createdAt: -1 });
+alertSchema.index({ status: 1 });
+alertSchema.index({ verificationTag: 1 });
+alertSchema.index({ priority: 1 });
+alertSchema.index({ alertId: 1 });
 
 module.exports = mongoose.model('Alert', alertSchema);

@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SafeZoneX Security Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f1e 100%);
+            color: white;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .header {
+            background: rgba(255,255,255,0.05);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            backdrop-filter: blur(10px);
+        }
+        
+        h1 { color: #fff; margin-bottom: 10px; }
+        
+        .filters {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin: 20px 0;
+            padding: 15px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px;
+        }
+        
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .filter-group label {
+            font-size: 12px;
+            color: rgba(255,255,255,0.7);
+            font-weight: 600;
+        }
+        
+        select, input {
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.1);
+            color: white;
+            font-size: 14px;
+        }
+        
+        select:focus, input:focus {
+            outline: none;
+            border-color: #6c5ce7;
+        }
+        
+        select option {
+            background: #1a1a2e;
+            color: white;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            background: rgba(255,255,255,0.05);
+            padding: 20px;
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .stat-value {
+            font-size: 32px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        
+        .stat-label {
+            font-size: 14px;
+            color: rgba(255,255,255,0.7);
+        }
+        
+        .reports-container {
+            display: grid;
+            gap: 15px;
+        }
+        
+        .report-card {
+            background: rgba(255,255,255,0.05);
+            padding: 20px;
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+            border-left: 4px solid #6c5ce7;
+            transition: transform 0.2s;
+        }
+        
+        .report-card:hover {
+            transform: translateY(-2px);
+            background: rgba(255,255,255,0.08);
+        }
+        
+        .report-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .report-id {
+            font-size: 12px;
+            color: rgba(255,255,255,0.5);
+        }
+        
+        .report-type {
+            background: rgba(108,92,231,0.3);
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .verification-tag {
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: bold;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        
+        .tag-verified {
+            background: rgba(46,213,115,0.2);
+            color: #2ed573;
+            border: 1px solid #2ed573;
+        }
+        
+        .tag-needs-review {
+            background: rgba(255,165,2,0.2);
+            color: #ffa502;
+            border: 1px solid #ffa502;
+        }
+        
+        .tag-unverified {
+            background: rgba(255,71,87,0.2);
+            color: #ff4757;
+            border: 1px solid #ff4757;
+        }
+        
+        .priority-badge {
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        
+        .priority-critical { background: #ff4757; color: white; }
+        .priority-high { background: #ffa502; color: white; }
+        .priority-medium { background: #3498db; color: white; }
+        .priority-low { background: #95a5a6; color: white; }
+        
+        .user-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin: 15px 0;
+            padding: 12px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px;
+        }
+        
+        .user-field {
+            font-size: 13px;
+        }
+        
+        .user-field strong {
+            color: rgba(255,255,255,0.6);
+            display: block;
+            margin-bottom: 4px;
+        }
+        
+        .ai-analysis {
+            margin-top: 12px;
+            padding: 12px;
+            background: rgba(108,92,231,0.1);
+            border-radius: 8px;
+            border: 1px solid rgba(108,92,231,0.3);
+        }
+        
+        .confidence-bar {
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+        
+        .confidence-fill {
+            height: 100%;
+            transition: width 0.3s;
+        }
+        
+        /* IMAGE GALLERY STYLES */
+        .evidence-images {
+            margin-top: 15px;
+            padding: 12px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+        }
+        
+        .evidence-images-label {
+            font-size: 12px;
+            color: rgba(255,255,255,0.6);
+            font-weight: 600;
+            margin-bottom: 8px;
+            display: block;
+        }
+        
+        .image-thumbnails {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .image-thumbnail {
+            width: 80px;
+            height: 80px;
+            border-radius: 8px;
+            overflow: hidden;
+            cursor: pointer;
+            border: 2px solid rgba(255,255,255,0.2);
+            transition: all 0.2s;
+            position: relative;
+        }
+        
+        .image-thumbnail:hover {
+            border-color: #6c5ce7;
+            transform: scale(1.05);
+        }
+        
+        .image-thumbnail img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .image-count-badge {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: bold;
+        }
+        
+        /* MODAL STYLES */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            animation: fadeIn 0.3s;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .modal-content {
+            position: relative;
+            margin: auto;
+            padding: 20px;
+            width: 90%;
+            max-width: 900px;
+            height: 90vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-image {
+            max-width: 100%;
+            max-height: 70vh;
+            border-radius: 8px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        }
+        
+        .modal-close {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            color: white;
+            font-size: 40px;
+            font-weight: bold;
+            cursor: pointer;
+            background: rgba(0,0,0,0.5);
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        
+        .modal-close:hover {
+            background: rgba(255,0,0,0.7);
+            transform: rotate(90deg);
+        }
+        
+        .modal-nav {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(0,0,0,0.5);
+            color: white;
+            padding: 20px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 24px;
+            transition: all 0.2s;
+        }
+        
+        .modal-nav:hover {
+            background: rgba(108,92,231,0.7);
+        }
+        
+        .modal-prev {
+            left: 20px;
+        }
+        
+        .modal-next {
+            right: 20px;
+        }
+        
+        .modal-counter {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.7);
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+        
+        .no-reports {
+            text-align: center;
+            padding: 60px;
+            color: rgba(255,255,255,0.5);
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        
+        .btn-resolve {
+            background: #2ed573;
+            color: white;
+        }
+        
+        .btn-resolve:hover {
+            background: #26de81;
+        }
+        
+        .btn-false {
+            background: #ff4757;
+            color: white;
+        }
+        
+        .btn-false:hover {
+            background: #ff3838;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🛡️ SafeZoneX Security Dashboard</h1>
+        <p>Real-time campus security monitoring with AI-powered multi-tier verification</p>
+    </div>
+
+    <div class="stats">
+        <div class="stat-card">
+            <div class="stat-label">Total Reports</div>
+            <div class="stat-value" id="totalReports">0</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Verified</div>
+            <div class="stat-value" style="color: #2ed573;" id="verifiedCount">0</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Needs Review</div>
+            <div class="stat-value" style="color: #ffa502;" id="needsReviewCount">0</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Unverified</div>
+            <div class="stat-value" style="color: #ff4757;" id="unverifiedCount">0</div>
+        </div>
+    </div>
+
+    <div class="filters">
+        <div class="filter-group">
+            <label>Verification Status</label>
+            <select id="filterVerification">
+                <option value="all">All Reports</option>
+                <option value="Verified">Verified Only</option>
+                <option value="Needs Review">Needs Review</option>
+                <option value="Unverified">Unverified</option>
+            </select>
+        </div>
+        
+        <div class="filter-group">
+            <label>Priority</label>
+            <select id="filterPriority">
+                <option value="all">All Priorities</option>
+                <option value="critical">Critical</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+            </select>
+        </div>
+        
+        <div class="filter-group">
+            <label>Activity Type</label>
+            <select id="filterType">
+                <option value="all">All Types</option>
+                <option value="Suspicious Person">Suspicious Person</option>
+                <option value="Theft/Robbery">Theft/Robbery</option>
+                <option value="Vandalism">Vandalism</option>
+                <option value="Drug Activity">Drug Activity</option>
+                <option value="Harassment">Harassment</option>
+                <option value="Safety Hazard">Safety Hazard</option>
+                <option value="Unauthorized Access">Unauthorized Access</option>
+                <option value="Other">Other</option>
+            </select>
+        </div>
+        
+        <div class="filter-group">
+            <label>Search</label>
+            <input type="text" id="searchBox" placeholder="Search reports...">
+        </div>
+    </div>
+
+    <div class="reports-container" id="reportsContainer">
+        <div class="no-reports">Loading reports...</div>
+    </div>
+
+    <!-- IMAGE MODAL -->
+    <div id="imageModal" class="modal">
+        <span class="modal-close" onclick="closeModal()">&times;</span>
+        <div class="modal-content">
+            <span class="modal-nav modal-prev" onclick="changeImage(-1)">&#10094;</span>
+            <img id="modalImage" class="modal-image" src="" alt="Evidence Image">
+            <span class="modal-nav modal-next" onclick="changeImage(1)">&#10095;</span>
+            <div class="modal-counter">
+                <span id="imageCounter">1 / 1</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const API_URL = 'http://localhost:8080';
+        const socket = io(API_URL);
+        
+        let allReports = [];
+        let currentImages = [];
+        let currentImageIndex = 0;
+        
+        socket.on('connect', () => {
+            console.log('Connected to server');
+            socket.emit('join_room', { room: 'security_dashboard' });
+            loadReports();
+        });
+        
+        socket.on('report_update', (report) => {
+            console.log('New report received:', report);
+            allReports.unshift(report);
+            applyFilters();
+        });
+        
+        async function loadReports() {
+            try {
+                const response = await fetch(`${API_URL}/api/reports`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    allReports = data.reports;
+                    console.log(`Loaded ${allReports.length} reports`);
+                    applyFilters();
+                }
+            } catch (error) {
+                console.error('Error loading reports:', error);
+                document.getElementById('reportsContainer').innerHTML = 
+                    '<div class="no-reports">Error loading reports. Please refresh.</div>';
+            }
+        }
+        
+        function applyFilters() {
+            const verificationFilter = document.getElementById('filterVerification').value;
+            const priorityFilter = document.getElementById('filterPriority').value;
+            const typeFilter = document.getElementById('filterType').value;
+            const searchTerm = document.getElementById('searchBox').value.toLowerCase();
+            
+            let filtered = allReports.filter(report => {
+                const matchVerification = verificationFilter === 'all' || 
+                    (report.verificationTag || 'Needs Review') === verificationFilter;
+                const matchPriority = priorityFilter === 'all' || report.priority === priorityFilter;
+                const matchType = typeFilter === 'all' || report.alertType === typeFilter;
+                const matchSearch = searchTerm === '' || 
+                    report.description?.toLowerCase().includes(searchTerm) ||
+                    report.userName?.toLowerCase().includes(searchTerm) ||
+                    report.alertId?.toLowerCase().includes(searchTerm);
+                
+                return matchVerification && matchPriority && matchType && matchSearch;
+            });
+            
+            renderReports(filtered);
+            updateStats();
+        }
+        
+        function updateStats() {
+            document.getElementById('totalReports').textContent = allReports.length;
+            document.getElementById('verifiedCount').textContent = 
+                allReports.filter(r => (r.verificationTag || 'Needs Review') === 'Verified').length;
+            document.getElementById('needsReviewCount').textContent = 
+                allReports.filter(r => (r.verificationTag || 'Needs Review') === 'Needs Review').length;
+            document.getElementById('unverifiedCount').textContent = 
+                allReports.filter(r => (r.verificationTag || 'Needs Review') === 'Unverified').length;
+        }
+        
+        function renderReports(reports) {
+            const container = document.getElementById('reportsContainer');
+            
+            if (reports.length === 0) {
+                container.innerHTML = '<div class="no-reports">No reports match your filters</div>';
+                return;
+            }
+            
+            container.innerHTML = reports.map(report => {
+                const tag = report.verificationTag || 'Needs Review';
+                const tagClass = tag.toLowerCase().replace(' ', '-');
+                const confidence = report.aiAnalysis?.confidence || 0;
+                const confidenceColor = confidence >= 70 ? '#2ed573' : confidence >= 30 ? '#ffa502' : '#ff4757';
+                const images = report.evidenceImages || [];
+                
+                let imageGalleryHTML = '';
+                if (images.length > 0) {
+                    imageGalleryHTML = `
+                        <div class="evidence-images">
+                            <span class="evidence-images-label">Evidence Photos (${images.length})</span>
+                            <div class="image-thumbnails">
+                                ${images.map((img, idx) => `
+                                    <div class="image-thumbnail" onclick='openImageModal(${JSON.stringify(images)}, ${idx})'>
+                                        <img src="${img}" alt="Evidence ${idx + 1}">
+                                        ${idx === 0 ? `<span class="image-count-badge">${images.length}</span>` : ''}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                return `
+                    <div class="report-card">
+                        <div class="report-header">
+                            <div>
+                                <div class="report-id">ID: ${report.alertId?.substring(0, 8)}</div>
+                                <span class="verification-tag tag-${tagClass}">${tag}</span>
+                                <span class="priority-badge priority-${report.priority}">${report.priority}</span>
+                            </div>
+                            <div class="report-type">${report.alertType}</div>
+                        </div>
+                        
+                        <div class="user-info">
+                            <div class="user-field">
+                                <strong>Reporter</strong>
+                                ${report.userName || 'Unknown'}
+                            </div>
+                            <div class="user-field">
+                                <strong>Phone</strong>
+                                ${report.userPhone || 'N/A'}
+                            </div>
+                            <div class="user-field">
+                                <strong>Time</strong>
+                                ${new Date(report.createdAt).toLocaleString()}
+                            </div>
+                            <div class="user-field">
+                                <strong>Location</strong>
+                                ${report.location?.campus || 'University Malaya'}
+                            </div>
+                        </div>
+                        
+                        <p style="margin: 15px 0; line-height: 1.6;">
+                            ${report.description}
+                        </p>
+                        
+                        ${imageGalleryHTML}
+                        
+                        <div class="ai-analysis">
+                            <strong style="font-size: 12px; color: #6c5ce7;">AI Analysis</strong>
+                            <p style="margin: 8px 0; font-size: 13px;">
+                                ${report.aiAnalysis?.details || 'No analysis available'}
+                            </p>
+                            <div style="font-size: 12px; margin-top: 8px;">
+                                Confidence: <strong style="color: ${confidenceColor}">${confidence.toFixed(0)}%</strong>
+                            </div>
+                            <div class="confidence-bar">
+                                <div class="confidence-fill" style="width: ${confidence}%; background: ${confidenceColor};"></div>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
+                            <button class="btn btn-resolve" onclick="updateStatus('${report.alertId}', 'resolved')">
+                                Mark Resolved
+                            </button>
+                            <button class="btn btn-false" onclick="updateStatus('${report.alertId}', 'false_alarm')">
+                                False Alarm
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        // IMAGE MODAL FUNCTIONS
+        function openImageModal(images, startIndex) {
+            currentImages = images;
+            currentImageIndex = startIndex;
+            showImage();
+            document.getElementById('imageModal').style.display = 'block';
+            document.body.style.overflow = 'hidden';
+        }
+        
+        function closeModal() {
+            document.getElementById('imageModal').style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+        
+        function changeImage(direction) {
+            currentImageIndex += direction;
+            if (currentImageIndex < 0) currentImageIndex = currentImages.length - 1;
+            if (currentImageIndex >= currentImages.length) currentImageIndex = 0;
+            showImage();
+        }
+        
+        function showImage() {
+            document.getElementById('modalImage').src = currentImages[currentImageIndex];
+            document.getElementById('imageCounter').textContent = 
+                `${currentImageIndex + 1} / ${currentImages.length}`;
+        }
+        
+        // Close modal on escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeModal();
+            if (e.key === 'ArrowLeft') changeImage(-1);
+            if (e.key === 'ArrowRight') changeImage(1);
+        });
+        
+        // Close modal when clicking outside image
+        document.getElementById('imageModal').addEventListener('click', (e) => {
+            if (e.target.id === 'imageModal') closeModal();
+        });
+        
+        async function updateStatus(alertId, newStatus) {
+            try {
+                const response = await fetch(`${API_URL}/api/reports/${alertId}/status`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        status: newStatus,
+                        resolvedBy: 'Security Team'
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    alert('Report status updated successfully');
+                    loadReports();
+                } else {
+                    alert('Failed to update status: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Error updating status:', error);
+                alert('Failed to update status');
+            }
+        }
+        
+        document.getElementById('filterVerification').addEventListener('change', applyFilters);
+        document.getElementById('filterPriority').addEventListener('change', applyFilters);
+        document.getElementById('filterType').addEventListener('change', applyFilters);
+        document.getElementById('searchBox').addEventListener('input', applyFilters);
+        
+        setInterval(loadReports, 30000);
+    </script>
+</body>
+</html>

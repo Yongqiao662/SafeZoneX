@@ -1,4 +1,3 @@
-// Adjust dotenv configuration to use absolute path
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 
@@ -8,17 +7,13 @@ const socketIo = require('socket.io');
 const mongoose = require('mongoose');
 const { v4: uuidv4 } = require('uuid');
 const winston = require('winston');
-const jwt = require('jsonwebtoken');
 
-// Import models
 const Alert = require('./models/Alert');
 const Feedback = require('./models/Feedback');
 const User = require('./models/User');
 
-// ADDED: Duplicate prevention
 const submittedReports = new Set();
 
-// Configure logging
 const logger = winston.createLogger({
   level: 'info',
   format: winston.format.combine(
@@ -47,7 +42,6 @@ const io = socketIo(server, {
 
 app.use(express.json({ limit: '10mb' }));
 
-// Add CORS middleware for web dashboard
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
@@ -55,7 +49,14 @@ app.use((req, res, next) => {
   next();
 });
 
-// MongoDB connection
+// Serve static files (for dashboard.html)
+app.use(express.static('public'));
+
+// Or serve dashboard.html directly
+app.get('/dashboard.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dashboard.html'));
+});
+
 const mongoURI = process.env.MONGODB_URI;
 mongoose.connect(mongoURI, {
   useNewUrlParser: true,
@@ -67,38 +68,93 @@ mongoose.connect(mongoURI, {
   process.exit(1);
 });
 
-// Active alerts cache
 let alertsCache = new Map();
 
-// FIXED: Better AI confidence calculation
+// IMPROVED AI confidence calculation
 function calculateConfidence(description, evidenceImages, alertType) {
-  let confidence = 30;
+  let confidence = 40;
   
-  if (description && description.length > 50) confidence += 15;
-  if (description && description.length > 100) confidence += 10;
+  const text = description?.toLowerCase() || '';
   
-  const realKeywords = /theft|robbery|vandalism|harassment|drug|assault|suspicious person|emergency|danger|weapon|fight|attack|steal|stolen|crime/i;
-  const fakeKeywords = /test|fake|demo|sample|example|trying|check/i;
+  const criticalKeywords = /theft|robbery|stolen|steal|attack|assault|weapon|knife|gun|rape|murder|kidnap|abduct|drug deal|overdose|unconscious/i;
+  if (criticalKeywords.test(text)) {
+    confidence += 35;
+  }
   
-  if (description && realKeywords.test(description)) {
+  const highKeywords = /suspicious person|following|loiter|harassment|vandalism|graffiti|damage|broken|fight|threat|intimidat|unsafe|hazard|leak|fire|smoke/i;
+  if (highKeywords.test(text)) {
+    confidence += 25;
+  }
+  
+  const mediumKeywords = /concern|worry|strange|unusual|unauthorized|trespass|noise|disturbance/i;
+  if (mediumKeywords.test(text)) {
+    confidence += 15;
+  }
+  
+  const infrastructureKeywords = /broken|faulty|not working|malfunctioning|damaged|leaking|blocked|unsafe|light|elevator|door lock|fire alarm|air conditioning|security camera|emergency exit|window|garbage|electrical|flood|handrail|street light|um accommodation|kk8/i;
+  if (infrastructureKeywords.test(text)) {
     confidence += 20;
   }
   
-  if (description && fakeKeywords.test(description)) {
-    confidence -= 30;
+  const fakeKeywords = /win|prize|click here|free money|congratulations|lottery|\$\d+|limited time offer|act now|claim|verify account|suspended|click link|download|sign up now/i;
+  if (fakeKeywords.test(text)) {
+    confidence -= 40;
   }
   
-  if (evidenceImages && evidenceImages.length > 0) confidence += 15;
+  const testKeywords = /test|testing|demo|sample|example|trying|check|dummy/i;
+  if (testKeywords.test(text)) {
+    confidence -= 35;
+  }
   
-  if (alertType && alertType !== 'Other') confidence += 10;
+  if (text.length > 80) confidence += 10;
+  if (text.length > 150) confidence += 10;
   
-  if (confidence > 85) confidence = 85;
-  if (confidence < 20) confidence = 20;
+  if (evidenceImages && evidenceImages.length > 0) {
+    confidence += 15;
+  }
+  
+  const highPriorityTypes = ['Theft/Robbery', 'Drug Activity', 'Harassment', 'Safety Hazard'];
+  if (highPriorityTypes.includes(alertType)) {
+    confidence += 10;
+  }
+  
+  confidence = Math.max(15, Math.min(95, confidence));
   
   return confidence;
 }
 
-// API to submit a report
+function determineStatusAndPriority(confidence, alertType, description) {
+  let status, verificationTag, priority;
+  const text = description?.toLowerCase() || '';
+  
+  if (confidence >= 70) {
+    status = 'verified';
+    verificationTag = 'Verified';
+  } else if (confidence >= 30) {
+    status = 'needs_review';
+    verificationTag = 'Needs Review';
+  } else {
+    status = 'unverified';
+    verificationTag = 'Unverified';
+  }
+  
+  const criticalWords = /weapon|gun|knife|attack|assault|rape|murder|kidnap|overdose|unconscious|emergency|critical|urgent/i;
+  const highWords = /theft|robbery|drug|harassment|following|stalk|threat|unsafe|fire|gas leak|chemical spill/i;
+  const mediumWords = /suspicious|vandalism|damage|broken|unauthorized|trespass/i;
+  
+  if (criticalWords.test(text) || (confidence >= 80 && ['Theft/Robbery', 'Drug Activity', 'Harassment'].includes(alertType))) {
+    priority = 'critical';
+  } else if (highWords.test(text) || (confidence >= 65 && ['Safety Hazard', 'Unauthorized Access'].includes(alertType))) {
+    priority = 'high';
+  } else if (mediumWords.test(text) || confidence >= 50) {
+    priority = 'medium';
+  } else {
+    priority = 'low';
+  }
+  
+  return { status, verificationTag, priority };
+}
+
 app.post('/api/report', async (req, res) => {
   try {
     const reportKey = `${req.body.userId}_${req.body.description}_${req.body.location.latitude}_${req.body.location.longitude}`;
@@ -111,7 +167,7 @@ app.post('/api/report', async (req, res) => {
     submittedReports.add(reportKey);
     setTimeout(() => submittedReports.delete(reportKey), 10000);
     
-    console.log('📝 Report submission request body:', JSON.stringify(req.body, null, 2));
+    console.log('📝 Report submission:', JSON.stringify(req.body, null, 2));
 
     const {
       userId,
@@ -121,22 +177,11 @@ app.post('/api/report', async (req, res) => {
       description,
       evidenceImages,
       alertType,
-      priority
+      priority: requestedPriority
     } = req.body;
 
-    console.log('📋 Extracted fields:', {
-      userId,
-      userName,
-      userPhone,
-      location,
-      description: description?.substring(0, 50) + '...',
-      hasImages: evidenceImages?.length > 0,
-      alertType,
-      priority
-    });
-
     if (!userId || !userName || !userPhone) {
-      console.log('❌ Missing user fields:', { userId: !!userId, userName: !!userName, userPhone: !!userPhone });
+      console.log('❌ Missing user fields');
       return res.status(400).json({ success: false, error: 'Missing required user fields' });
     }
     
@@ -147,35 +192,23 @@ app.post('/api/report', async (req, res) => {
 
     const reportId = uuidv4();
     
-    // Calculate AI confidence
     let confidence = calculateConfidence(description, evidenceImages, alertType);
     
-    console.log(`🎯 Calculated confidence: ${confidence}% for description: "${description}"`);
+    console.log(`🎯 AI Confidence: ${confidence}% for "${description?.substring(0, 60)}..."`);
 
-    // Determine status based on confidence
-    let status = 'active';
-    let aiAnalysis = {
-      confidence: confidence,
-      details: ''
-    };
-    
-    let validPriority = 'medium';
-    if (priority === 'normal') {
-      validPriority = 'medium';
-    } else if (['low', 'medium', 'high', 'critical'].includes(priority)) {
-      validPriority = priority;
-    }
+    const { status, verificationTag, priority } = determineStatusAndPriority(
+      confidence, 
+      alertType, 
+      description
+    );
 
-    // FIXED: Status logic based on confidence
+    let aiAnalysisDetails = '';
     if (confidence >= 70) {
-      status = 'real';
-      aiAnalysis.details = 'High confidence - appears to be legitimate incident';
-    } else if (confidence >= 50) {
-      status = 'active';
-      aiAnalysis.details = 'Under investigation - needs verification';
+      aiAnalysisDetails = `High confidence report - Verified as legitimate. Priority: ${priority}`;
+    } else if (confidence >= 30) {
+      aiAnalysisDetails = `Medium confidence - Needs manual review by security team. Priority: ${priority}`;
     } else {
-      status = 'pending_review';
-      aiAnalysis.details = 'Low confidence - manual review required';
+      aiAnalysisDetails = `Low confidence - Requires verification. May be spam or unclear report. Priority: ${priority}`;
     }
 
     const alertData = {
@@ -192,50 +225,58 @@ app.post('/api/report', async (req, res) => {
       description: description || '',
       evidenceImages: Array.isArray(evidenceImages) ? evidenceImages : [],
       alertType: alertType || 'Other',
-      priority: validPriority,
+      priority,
       status,
-      aiAnalysis,
+      verificationTag,
+      aiAnalysis: {
+        confidence,
+        details: aiAnalysisDetails,
+        verificationTag
+      },
       createdAt: new Date()
     };
 
-    console.log('💾 Saving alert with status:', status, 'priority:', validPriority, 'confidence:', confidence);
+    console.log('💾 Saving report:', {
+      reportId,
+      status,
+      verificationTag,
+      priority,
+      confidence
+    });
 
     const newAlert = new Alert(alertData);
     await newAlert.save();
     alertsCache.set(reportId, newAlert);
 
-    console.log('✅ Report saved successfully:', reportId);
-    logger.info(`🚨 New report submitted: ${reportId} (${status})`);
+    console.log('✅ Report saved successfully');
+    logger.info(`🚨 New report: ${reportId} (${status}, ${verificationTag}, confidence: ${confidence}%)`);
 
-    // ALWAYS return AI analysis to mobile app
     res.json({ 
       success: true, 
       reportId,
       status,
-      aiAnalysis,
+      verificationTag,
+      aiAnalysis: alertData.aiAnalysis,
       message: 'Report submitted successfully' 
     });
 
-    // FIXED: Only emit to dashboard if confidence >= 50%
-    if (confidence >= 50) {
-      const reportPayload = {
-        alertId: reportId,
-        userId,
-        userName,
-        alertType,
-        status,
-        aiAnalysis,
-        location: alertData.location,
-        description,
-        priority: validPriority,
-        createdAt: new Date()
-      };
-      
-      io.to('security_dashboard').emit('report_update', reportPayload);
-      console.log(`📢 Shown on dashboard - Status: ${status}, Confidence: ${confidence}%`);
-    } else {
-      console.log(`🚫 Hidden from dashboard (confidence ${confidence}% < 50%) - Status: ${status}`);
-    }
+    const reportPayload = {
+      alertId: reportId,
+      userId,
+      userName,
+      userPhone,
+      alertType,
+      status,
+      verificationTag,
+      aiAnalysis: alertData.aiAnalysis,
+      location: alertData.location,
+      description,
+      priority,
+      createdAt: new Date()
+    };
+    
+    io.to('security_dashboard').emit('report_update', reportPayload);
+    console.log(`📢 Sent to dashboard - ${verificationTag} (${confidence}%), Priority: ${priority}`);
 
   } catch (error) {
     console.error('❌ Report submission error:', error);
@@ -248,18 +289,15 @@ app.post('/api/report', async (req, res) => {
   }
 });
 
-// GET all reports for dashboard - FIXED: Only return reports with confidence >= 50%
 app.get('/api/reports', async (req, res) => {
   try {
     console.log('📊 Dashboard fetching all reports');
     
-    const reports = await Alert.find({
-      'aiAnalysis.confidence': { $gte: 50 }
-    })
+    const reports = await Alert.find({})
       .sort({ createdAt: -1 })
       .limit(100);
 
-    console.log(`📋 Found ${reports.length} reports with confidence >= 50% for dashboard`);
+    console.log(`📋 Found ${reports.length} total reports for dashboard`);
 
     const transformedReports = reports.map(report => ({
       id: report.alertId,
@@ -271,6 +309,7 @@ app.get('/api/reports', async (req, res) => {
       description: report.description,
       location: report.location,
       status: report.status,
+      verificationTag: report.verificationTag || 'Needs Review',
       priority: report.priority,
       createdAt: report.createdAt,
       aiAnalysis: report.aiAnalysis,
@@ -284,7 +323,7 @@ app.get('/api/reports', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Error fetching reports for dashboard:', error);
+    console.error('❌ Error fetching reports:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to fetch reports'
@@ -292,19 +331,13 @@ app.get('/api/reports', async (req, res) => {
   }
 });
 
-// GET specific report by ID
 app.get('/api/reports/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    console.log('🔍 Fetching specific report:', id);
-
     const report = await Alert.findOne({ alertId: id });
 
     if (!report) {
-      return res.status(404).json({
-        success: false,
-        error: 'Report not found'
-      });
+      return res.status(404).json({ success: false, error: 'Report not found' });
     }
 
     res.json({
@@ -319,37 +352,28 @@ app.get('/api/reports/:id', async (req, res) => {
         description: report.description,
         location: report.location,
         status: report.status,
+        verificationTag: report.verificationTag || 'Needs Review',
         priority: report.priority,
         createdAt: report.createdAt,
         aiAnalysis: report.aiAnalysis,
         evidenceImages: report.evidenceImages || []
       }
     });
-
   } catch (error) {
     console.error('❌ Error fetching specific report:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch report'
-    });
+    res.status(500).json({ success: false, error: 'Failed to fetch report' });
   }
 });
 
-// UPDATE report status
 app.put('/api/reports/:id/status', async (req, res) => {
   try {
     const { id } = req.params;
     const { status, resolution, resolvedBy } = req.body;
     
-    console.log('🔄 Dashboard updating report status:', id, 'to', status);
-
-    const validStatuses = ['active', 'investigating', 'resolved', 'false_alarm', 'pending_review', 'real'];
+    const validStatuses = ['active', 'investigating', 'resolved', 'false_alarm', 'pending_review', 'real', 'verified', 'needs_review', 'unverified'];
     
     if (!validStatuses.includes(status)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid status. Must be: ' + validStatuses.join(', ')
-      });
+      return res.status(400).json({ success: false, error: 'Invalid status' });
     }
 
     const updatedReport = await Alert.findOneAndUpdate(
@@ -365,170 +389,39 @@ app.put('/api/reports/:id/status', async (req, res) => {
     );
 
     if (!updatedReport) {
-      return res.status(404).json({
-        success: false,
-        error: 'Report not found'
-      });
+      return res.status(404).json({ success: false, error: 'Report not found' });
     }
 
-    console.log('✅ Report status updated successfully via dashboard');
-
-    const updatePayload = {
+    io.to('security_dashboard').emit('report_status_updated', {
       alertId: id,
       status: status,
       resolvedBy: resolvedBy,
       resolvedAt: updatedReport.resolvedAt
-    };
-    io.to('security_dashboard').emit('report_status_updated', updatePayload);
-
-    res.json({
-      success: true,
-      message: 'Report status updated successfully',
-      report: {
-        id: updatedReport.alertId,
-        alertId: updatedReport.alertId,
-        status: updatedReport.status,
-        resolvedBy: updatedReport.resolvedBy,
-        resolvedAt: updatedReport.resolvedAt
-      }
     });
 
+    res.json({ success: true, message: 'Report status updated successfully' });
   } catch (error) {
-    console.error('❌ Error updating report status via dashboard:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to update report status'
-    });
+    console.error('❌ Error updating report status:', error);
+    res.status(500).json({ success: false, error: 'Failed to update report status' });
   }
 });
 
-// GET dashboard statistics
-app.get('/api/reports/stats', async (req, res) => {
-  try {
-    console.log('📈 Fetching dashboard statistics');
-
-    const [
-      totalReports,
-      activeReports, 
-      resolvedReports,
-      recentReports
-    ] = await Promise.all([
-      Alert.countDocuments({ 'aiAnalysis.confidence': { $gte: 50 } }),
-      Alert.countDocuments({ status: 'active', 'aiAnalysis.confidence': { $gte: 50 } }),
-      Alert.countDocuments({ status: 'resolved', 'aiAnalysis.confidence': { $gte: 50 } }),
-      Alert.countDocuments({ 
-        createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
-        'aiAnalysis.confidence': { $gte: 50 }
-      })
-    ]);
-
-    const alertTypeStats = await Alert.aggregate([
-      {
-        $match: { 'aiAnalysis.confidence': { $gte: 50 } }
-      },
-      {
-        $group: {
-          _id: '$alertType',
-          count: { $sum: 1 }
-        }
-      }
-    ]);
-
-    const stats = {
-      totalReports,
-      activeReports,
-      resolvedReports, 
-      recentReports,
-      alertTypeBreakdown: alertTypeStats
-    };
-
-    console.log('📊 Dashboard statistics:', stats);
-
-    res.json({
-      success: true,
-      stats: stats
-    });
-
-  } catch (error) {
-    console.error('❌ Error fetching dashboard statistics:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch dashboard statistics'
-    });
-  }
-});
-
-// Import required modules for AI analysis
-const fs = require('fs');
-const { spawn } = require('child_process');
-
-// Feedback loop function
-function requestFeedback(alert) {
-  logger.info(`🔄 Requesting feedback for report: ${alert.alertId}`);
-  io.emit('feedback_request', {
-    alertId: alert.alertId,
-    message: 'Please provide feedback on this report.'
-  });
-}
-
-// DEVELOPMENT ONLY: Disable JWT authentication for Socket.IO
 io.use((socket, next) => {
-  socket.user = {
-    id: 'dev_user',
-    role: 'security',
-    name: 'Dev User'
-  };
+  socket.user = { id: 'dev_user', role: 'security', name: 'Dev User' };
   next();
 });
 
 io.on('connection', (socket) => {
-  logger.info(`🔌 Client connected: ${socket.id} (User: ${socket.user.id})`);
+  logger.info(`🔌 Client connected: ${socket.id}`);
 
-  if (socket.user.role === 'student') {
-    socket.join(`student_${socket.user.id}`);
-    logger.info(`👨‍🎓 Student joined room: student_${socket.user.id}`);
-  } else if (socket.user.role === 'security') {
+  if (socket.user.role === 'security') {
     socket.join('security_dashboard');
-    logger.info(`🔐 Security joined room: security_dashboard`);
   }
 
   socket.on('join_room', (data) => {
     const room = data.room || 'security_dashboard';
     socket.join(room);
-    logger.info(`📥 Client ${socket.id} joined room: ${room}`);
-  });
-
-  socket.on('report_update', (data) => {
-    if (socket.user.role === 'student') {
-      io.to(`student_${socket.user.id}`).emit('report_update', data);
-    } else if (socket.user.role === 'security') {
-      io.to('security_dashboard').emit('report_update', data);
-    }
-  });
-
-  socket.on('feedback_response', async ({ alertId, confirmed }) => {
-    try {
-      await Feedback.create({
-        report_id: alertId,
-        feedback: confirmed ? 'real' : 'fake',
-        user_id: socket.user.id,
-        timestamp: new Date()
-      });
-
-      const newStatus = confirmed ? 'real' : 'false_alarm';
-      await Alert.updateOne(
-        { alertId },
-        { $set: { status: newStatus } }
-      );
-
-      if (socket.user.role === 'student') {
-        io.to(`student_${socket.user.id}`).emit('report_update', { alertId, status: newStatus });
-      } else if (socket.user.role === 'security') {
-        io.to('security_dashboard').emit('report_update', { alertId, status: newStatus });
-      }
-    } catch (error) {
-      logger.error('Error handling feedback_response:', error);
-    }
+    logger.info(`🔥 Client ${socket.id} joined room: ${room}`);
   });
 
   socket.on('disconnect', () => {
@@ -539,4 +432,5 @@ io.on('connection', (socket) => {
 const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
   logger.info(`🚀 Server running on http://localhost:${PORT}`);
+  logger.info(`📊 Dashboard available at: http://localhost:${PORT}/dashboard.html`);
 });

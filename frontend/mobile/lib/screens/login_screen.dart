@@ -510,10 +510,10 @@ class _LoginScreenState extends State<LoginScreen>
   Future<void> _processGoogleUser(GoogleSignInAccount googleUser) async {
     final email = googleUser.email.trim().toLowerCase();
     print('Google Sign-In email: $email');
-    print('Checking if email ends with: siswa.um.edu.my');
+    print('Checking if email ends with: siswa-old.um.edu.my');
     
     // Fixed validation - use endsWith() method instead of substring
-    final bool isValidDomain = email.endsWith('siswa.um.edu.my');
+    final bool isValidDomain = email.endsWith('siswa-old.um.edu.my');
     print('Email ends with domain: $isValidDomain');
 
     // Domain validation
