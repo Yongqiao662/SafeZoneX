@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
+import 'package:socket_io_client/socket_io_client.dart' as IO;
+import '../services/backend_api_service.dart';
 
 class SOSActiveScreen extends StatefulWidget {
   @override
@@ -19,11 +21,21 @@ class _SOSActiveScreenState extends State<SOSActiveScreen>
   bool _isConnected = false;
   String _status = 'Connecting...';
   int _alertsSent = 0;
+  
+  // WebSocket connection
+  IO.Socket? _socket;
+  final BackendApiService _apiService = BackendApiService();
+  
+  // Current location (would come from GPS in real app)
+  double _currentLat = 3.1225;
+  double _currentLng = 101.6532;
+  String _currentAddress = 'University Malaya Campus';
+  
   List<Map<String, dynamic>> _statusMessages = [
     {'text': 'Emergency contacts notified', 'completed': false},
+    {'text': 'Friends alerted via real-time notification', 'completed': false},
     {'text': 'Location shared with security', 'completed': false},
     {'text': 'Help is on the way', 'completed': false},
-    {'text': 'Stay calm and safe', 'completed': false},
   ];
 
   @override
@@ -73,15 +85,8 @@ class _SOSActiveScreenState extends State<SOSActiveScreen>
   }
 
   void _simulateConnection() {
-    Timer(Duration(seconds: 1), () {
-      if (mounted) {
-        setState(() {
-          _isConnected = true;
-          _status = 'Connected to Emergency Response';
-        });
-        HapticFeedback.selectionClick();
-      }
-    });
+    // Connect to backend WebSocket
+    _connectToBackend();
     
     // Add status messages progressively
     Timer.periodic(Duration(seconds: 2), (timer) {
@@ -93,6 +98,112 @@ class _SOSActiveScreenState extends State<SOSActiveScreen>
         HapticFeedback.selectionClick();
       }
     });
+    
+    // Send location updates every 10 seconds
+    Timer.periodic(Duration(seconds: 10), (timer) {
+      if (mounted && _isConnected) {
+        _updateLocation();
+      }
+    });
+  }
+
+  void _connectToBackend() async {
+    try {
+      // Initialize socket connection (use 10.0.2.2 for Android emulator, or actual IP for physical device)
+      _socket = IO.io('http://10.0.2.2:8080', <String, dynamic>{
+        'transports': ['websocket'],
+        'autoConnect': false,
+      });
+
+      _socket?.connect();
+
+      _socket?.onConnect((_) {
+        print('✅ Connected to backend WebSocket for SOS');
+        if (mounted) {
+          setState(() {
+            _isConnected = true;
+            _status = 'Connected - Friends Notified';
+          });
+        }
+        HapticFeedback.selectionClick();
+        
+        // Send initial SOS alert when connected
+        _broadcastSOSAlert();
+      });
+
+      _socket?.onDisconnect((_) {
+        print('❌ Disconnected from backend WebSocket');
+        if (mounted) {
+          setState(() {
+            _isConnected = false;
+            _status = 'Reconnecting...';
+          });
+        }
+      });
+
+      _socket?.on('sos_acknowledged', (data) {
+        print('✅ SOS acknowledged by friend: $data');
+        HapticFeedback.lightImpact();
+      });
+
+    } catch (e) {
+      print('❌ Error connecting to backend: $e');
+      if (mounted) {
+        setState(() {
+          _status = 'Connection failed - Local mode';
+        });
+      }
+    }
+  }
+
+  void _broadcastSOSAlert() {
+    if (_socket != null && _socket!.connected) {
+      final sosData = {
+        'userId': 'demo_user_${DateTime.now().millisecondsSinceEpoch}',
+        'userName': 'Demo User',
+        'userPhoto': '',
+        'latitude': _currentLat,
+        'longitude': _currentLng,
+        'address': _currentAddress,
+        'timestamp': DateTime.now().toIso8601String(),
+        'message': '🆘 Emergency! I need help. Please check on me.',
+        'urgency': 'high',
+      };
+
+      _socket?.emit('sos_alert', sosData);
+      print('📡 SOS alert broadcasted to all friends: $sosData');
+      
+      if (mounted) {
+        setState(() {
+          _status = '🔴 SOS Live - Friends Notified';
+        });
+      }
+    } else {
+      print('⚠️ Socket not connected, retrying...');
+      Timer(Duration(seconds: 2), () {
+        if (_socket != null && !_socket!.connected) {
+          _socket?.connect();
+        }
+      });
+    }
+  }
+
+  void _updateLocation() {
+    // In real app, this would get GPS coordinates
+    // For now, simulate location updates
+    if (_socket != null && _socket!.connected) {
+      final locationUpdate = {
+        'userId': 'demo_user',
+        'latitude': _currentLat + (0.0001 * (DateTime.now().second % 10)),
+        'longitude': _currentLng + (0.0001 * (DateTime.now().second % 10)),
+        'address': _currentAddress,
+        'timestamp': DateTime.now().toIso8601String(),
+        'status': 'moving', // or 'stationary'
+      };
+
+      _socket?.emit('sos_location_update', locationUpdate);
+      print('📍 Location update sent to friends');
+    }
   }
 
   @override
@@ -102,6 +213,18 @@ class _SOSActiveScreenState extends State<SOSActiveScreen>
     _rippleController.dispose();
     _glowController.dispose();
     _bounceController.dispose();
+    
+    // Disconnect WebSocket and send SOS end signal
+    if (_socket != null && _socket!.connected) {
+      _socket?.emit('sos_ended', {
+        'userId': 'demo_user',
+        'timestamp': DateTime.now().toIso8601String(),
+        'message': 'SOS has been deactivated',
+      });
+      _socket?.disconnect();
+      _socket?.dispose();
+    }
+    
     super.dispose();
   }
 

@@ -1,5 +1,54 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'dart:async';
+
+class SOSAlert {
+  final String id;
+  final String userId;
+  final String userName;
+  final String userPhoto;
+  final double latitude;
+  final double longitude;
+  final String address;
+  final String timestamp;
+  final String message;
+  final String urgency;
+  final String status;
+  final List<dynamic> acknowledgedBy;
+
+  SOSAlert({
+    required this.id,
+    required this.userId,
+    required this.userName,
+    required this.userPhoto,
+    required this.latitude,
+    required this.longitude,
+    required this.address,
+    required this.timestamp,
+    required this.message,
+    required this.urgency,
+    this.status = 'active',
+    this.acknowledgedBy = const [],
+  });
+
+  factory SOSAlert.fromJson(Map<String, dynamic> json) {
+    return SOSAlert(
+      id: json['id'] ?? '',
+      userId: json['userId'] ?? '',
+      userName: json['userName'] ?? 'Unknown',
+      userPhoto: json['userPhoto'] ?? '',
+      latitude: (json['latitude'] ?? 0.0).toDouble(),
+      longitude: (json['longitude'] ?? 0.0).toDouble(),
+      address: json['address'] ?? 'Unknown location',
+      timestamp: json['timestamp'] ?? DateTime.now().toIso8601String(),
+      message: json['message'] ?? 'Emergency alert',
+      urgency: json['urgency'] ?? 'high',
+      status: json['status'] ?? 'active',
+      acknowledgedBy: json['acknowledgedBy'] ?? [],
+    );
+  }
+}
 
 class Friend {
   final String id;
@@ -11,6 +60,7 @@ class Friend {
   final String profileColor;
   final String location;
   final String locationUpdated;
+  bool inSOS; // NEW: Track if friend is in SOS mode
 
   Friend({
     required this.id,
@@ -22,6 +72,7 @@ class Friend {
     required this.profileColor,
     required this.location,
     required this.locationUpdated,
+    this.inSOS = false, // NEW
   });
 }
 
@@ -108,6 +159,12 @@ class _FriendsScreenState extends State<FriendsScreen>
   List<Friend> filteredFriends = [];
   String searchQuery = '';
   bool isSearching = false;
+  
+  // WebSocket for real-time SOS alerts
+  IO.Socket? _socket;
+  List<SOSAlert> _activeSOSAlerts = [];
+  bool _isConnectedToBackend = false;
+  Timer? _connectionRetryTimer;
 
   // Mock chat data for different friends
   Map<String, List<ChatMessage>> chatHistory = {
@@ -214,6 +271,9 @@ class _FriendsScreenState extends State<FriendsScreen>
     _slideController.value = 1.0;
     _searchAnimationController.value = 1.0;
     _searchTextController.addListener(_onSearchChanged);
+    
+    // Connect to backend for real-time SOS alerts
+    _connectToBackendForSOSAlerts();
   }
 
   void _initAnimations() {
@@ -311,7 +371,428 @@ class _FriendsScreenState extends State<FriendsScreen>
     _slideController.dispose();
     _searchAnimationController.dispose();
     _searchTextController.dispose();
+    
+    // Clean up WebSocket connection
+    _connectionRetryTimer?.cancel();
+    if (_socket != null && _socket!.connected) {
+      _socket?.disconnect();
+      _socket?.dispose();
+    }
+    
     super.dispose();
+  }
+
+  // Connect to backend for real-time SOS alerts
+  void _connectToBackendForSOSAlerts() async {
+    try {
+      // Initialize socket connection (use 10.0.2.2 for Android emulator)
+      _socket = IO.io('http://10.0.2.2:8080', <String, dynamic>{
+        'transports': ['websocket'],
+        'autoConnect': false,
+      });
+
+      _socket?.connect();
+
+      _socket?.onConnect((_) {
+        print('✅ Connected to backend for SOS alerts');
+        if (mounted) {
+          setState(() {
+            _isConnectedToBackend = true;
+          });
+        }
+      });
+
+      _socket?.onDisconnect((_) {
+        print('❌ Disconnected from backend');
+        if (mounted) {
+          setState(() {
+            _isConnectedToBackend = false;
+          });
+        }
+        
+        // Auto-reconnect after 5 seconds
+        _connectionRetryTimer?.cancel();
+        _connectionRetryTimer = Timer(Duration(seconds: 5), () {
+          if (mounted && (_socket == null || !_socket!.connected)) {
+            print('🔄 Attempting to reconnect...');
+            _socket?.connect();
+          }
+        });
+      });
+
+      // Listen for friend SOS alerts
+      _socket?.on('friend_sos_alert', (data) {
+        print('🆘 Received SOS alert: $data');
+        _handleIncomingSOSAlert(data);
+      });
+
+      // Listen for location updates
+      _socket?.on('friend_location_update', (data) {
+        print('📍 Received location update: $data');
+        _handleLocationUpdate(data);
+      });
+
+      // Listen for SOS ended
+      _socket?.on('friend_sos_ended', (data) {
+        print('✅ SOS ended: $data');
+        _handleSOSEnded(data);
+      });
+
+    } catch (e) {
+      print('❌ Error connecting to backend: $e');
+    }
+  }
+
+  void _handleIncomingSOSAlert(dynamic data) {
+    try {
+      final sosAlert = SOSAlert.fromJson(Map<String, dynamic>.from(data));
+      
+      if (mounted) {
+        setState(() {
+          // Add to active alerts list
+          _activeSOSAlerts.add(sosAlert);
+          
+          // Mark friend as in SOS mode
+          final friendIndex = allFriends.indexWhere(
+            (f) => f.name.toLowerCase().contains(sosAlert.userName.toLowerCase())
+          );
+          if (friendIndex != -1) {
+            allFriends[friendIndex].inSOS = true;
+          }
+        });
+        
+        // Show notification dialog
+        _showSOSNotificationDialog(sosAlert);
+        
+        // Send vibration/haptic feedback
+        HapticFeedback.vibrate();
+      }
+    } catch (e) {
+      print('Error parsing SOS alert: $e');
+    }
+  }
+
+  void _handleLocationUpdate(dynamic data) {
+    try {
+      final userId = data['userId'];
+      final lat = (data['latitude'] ?? 0.0).toDouble();
+      final lng = (data['longitude'] ?? 0.0).toDouble();
+      final address = data['address'] ?? 'Unknown';
+      
+      // Update the location in active SOS alerts
+      if (mounted) {
+        setState(() {
+          for (var alert in _activeSOSAlerts) {
+            if (alert.userId == userId) {
+              // In a real app, you'd create a new SOSAlert with updated location
+              // For now, just log it
+              print('📍 Updated location for ${alert.userName}: $address');
+            }
+          }
+        });
+      }
+    } catch (e) {
+      print('Error handling location update: $e');
+    }
+  }
+
+  void _handleSOSEnded(dynamic data) {
+    try {
+      final userId = data['userId'];
+      
+      if (mounted) {
+        setState(() {
+          // Remove from active alerts
+          _activeSOSAlerts.removeWhere((alert) => alert.userId == userId);
+          
+          // Mark friend as no longer in SOS
+          for (var friend in allFriends) {
+            if (friend.inSOS) {
+              friend.inSOS = false;
+            }
+          }
+        });
+        
+        // Show notification
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Friend is no longer in emergency mode'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error handling SOS ended: $e');
+    }
+  }
+
+  void _showSOSNotificationDialog(SOSAlert alert) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: Color(0xFF1a1a2e),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.warning, color: Colors.red, size: 30),
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  '🆘 Emergency Alert',
+                  style: TextStyle(
+                    color: Colors.red,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${alert.userName} needs help!',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              SizedBox(height: 12),
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.red.withOpacity(0.3)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.message, color: Colors.white70, size: 18),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            alert.message,
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(Icons.location_on, color: Colors.white70, size: 18),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            alert.address,
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(Icons.access_time, color: Colors.white70, size: 18),
+                        SizedBox(width: 8),
+                        Text(
+                          'Just now',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+              },
+              child: Text(
+                'Dismiss',
+                style: TextStyle(color: Colors.white70),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                // Acknowledge the SOS
+                _acknowledgeSOSAlert(alert);
+                Navigator.pop(context);
+                // Navigate to map view showing friend's location
+                _showFriendLocationOnMap(alert);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              ),
+              child: Text(
+                'View Location & Help',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _acknowledgeSOSAlert(SOSAlert alert) {
+    if (_socket != null && _socket!.connected) {
+      _socket?.emit('sos_acknowledge', {
+        'alertId': alert.id,
+        'friendId': 'current_user_id', // Replace with actual user ID
+        'friendName': 'My Name', // Replace with actual user name
+        'timestamp': DateTime.now().toIso8601String(),
+      });
+      
+      print('✅ Acknowledged SOS alert');
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${alert.userName} has been notified you\'re aware'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  void _showFriendLocationOnMap(SOSAlert alert) {
+    // Show dialog with map and friend location
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: Color(0xFF1a1a2e),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text(
+            '${alert.userName}\'s Location',
+            style: TextStyle(color: Colors.white),
+          ),
+          content: Container(
+            width: double.maxFinite,
+            height: 300,
+            child: Column(
+              children: [
+                Container(
+                  height: 200,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[800],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.map, size: 80, color: Colors.white38),
+                        SizedBox(height: 12),
+                        Text(
+                          'Map View',
+                          style: TextStyle(color: Colors.white70),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'Lat: ${alert.latitude.toStringAsFixed(4)}',
+                          style: TextStyle(color: Colors.white54, fontSize: 12),
+                        ),
+                        Text(
+                          'Lng: ${alert.longitude.toStringAsFixed(4)}',
+                          style: TextStyle(color: Colors.white54, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                SizedBox(height: 16),
+                Container(
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline, color: Colors.blue, size: 20),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          alert.address,
+                          style: TextStyle(color: Colors.white70, fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Close', style: TextStyle(color: Colors.white70)),
+            ),
+            ElevatedButton.icon(
+              onPressed: () {
+                // In real app, open Google Maps navigation
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Opening navigation...'),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              },
+              icon: Icon(Icons.directions),
+              label: Text('Navigate'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -335,6 +816,9 @@ class _FriendsScreenState extends State<FriendsScreen>
             child: Column(
               children: [
                 _buildAppBar(),
+                // SOS Alert Banner
+                if (_activeSOSAlerts.isNotEmpty)
+                  _buildSOSBanner(),
                 Expanded(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -403,6 +887,63 @@ class _FriendsScreenState extends State<FriendsScreen>
               icon: const Icon(Icons.person_add_outlined, color: Colors.white),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSOSBanner() {
+    return Container(
+      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.red, Colors.redAccent],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.red.withOpacity(0.4),
+            blurRadius: 20,
+            spreadRadius: 2,
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.3),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.emergency, color: Colors.white, size: 24),
+          ),
+          SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '🆘 ${_activeSOSAlerts.length} Friend(s) Need Help!',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'Tap to view emergency alerts',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.9),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Icon(Icons.arrow_forward_ios, color: Colors.white, size: 16),
         ],
       ),
     );
@@ -644,32 +1185,100 @@ class _FriendsScreenState extends State<FriendsScreen>
   }
 
   Widget _buildFriendItem(Friend friend) {
+    // Check if this friend has an active SOS alert
+    final hasSOS = friend.inSOS || _activeSOSAlerts.any(
+      (alert) => alert.userName.toLowerCase().contains(friend.name.toLowerCase())
+    );
+    
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
+        color: hasSOS 
+            ? Colors.red.withOpacity(0.15) 
+            : Colors.white.withOpacity(0.05),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: Colors.white.withOpacity(0.1),
-          width: 1,
+          color: hasSOS 
+              ? Colors.red.withOpacity(0.5) 
+              : Colors.white.withOpacity(0.1),
+          width: hasSOS ? 2 : 1,
         ),
+        boxShadow: hasSOS ? [
+          BoxShadow(
+            color: Colors.red.withOpacity(0.3),
+            blurRadius: 15,
+            spreadRadius: 2,
+          ),
+        ] : null,
       ),
       child: Row(
         children: [
-          _buildProfileAvatar(friend, 48),
+          Stack(
+            children: [
+              _buildProfileAvatar(friend, 48),
+              if (hasSOS)
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  child: Container(
+                    width: 20,
+                    height: 20,
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Color(0xFF1a1a2e), width: 2),
+                    ),
+                    child: Icon(
+                      Icons.warning,
+                      size: 12,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+            ],
+          ),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  friend.name,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        friend.name,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    if (hasSOS)
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.emergency, size: 12, color: Colors.white),
+                            SizedBox(width: 4),
+                            Text(
+                              'SOS',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 4),
                 Row(
@@ -678,19 +1287,25 @@ class _FriendsScreenState extends State<FriendsScreen>
                       width: 8,
                       height: 8,
                       decoration: BoxDecoration(
-                        color: friend.isOnline ? Colors.green : Colors.grey,
+                        color: hasSOS 
+                            ? Colors.red 
+                            : (friend.isOnline ? Colors.green : Colors.grey),
                         shape: BoxShape.circle,
                       ),
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      friend.lastSeen,
+                      hasSOS 
+                          ? 'NEEDS HELP!' 
+                          : friend.lastSeen,
                       style: TextStyle(
                         fontSize: 12,
-                        color: friend.isOnline 
-                            ? Colors.green 
-                            : Colors.white.withOpacity(0.7),
-                        fontWeight: FontWeight.w500,
+                        color: hasSOS 
+                            ? Colors.red 
+                            : (friend.isOnline 
+                                ? Colors.green 
+                                : Colors.white.withOpacity(0.7)),
+                        fontWeight: hasSOS ? FontWeight.bold : FontWeight.w500,
                       ),
                     ),
                   ],
@@ -699,7 +1314,7 @@ class _FriendsScreenState extends State<FriendsScreen>
                   Row(
                     children: [
                       Icon(
-                        Icons.location_on,
+                        hasSOS ? Icons.warning_amber : Icons.location_on,
                         size: 12,
                         color: Colors.blue.withOpacity(0.7),
                       ),

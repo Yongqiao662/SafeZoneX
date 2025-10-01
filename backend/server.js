@@ -424,6 +424,87 @@ io.on('connection', (socket) => {
     logger.info(`🔥 Client ${socket.id} joined room: ${room}`);
   });
 
+  // SOS Alert - Broadcast to all connected friends
+  socket.on('sos_alert', (data) => {
+    logger.info(`🆘 SOS Alert received from ${data.userName}:`, data);
+    
+    // Store SOS alert in memory (or database)
+    const sosAlert = {
+      id: uuidv4(),
+      ...data,
+      socketId: socket.id,
+      status: 'active',
+      acknowledgedBy: [],
+      createdAt: new Date().toISOString()
+    };
+    
+    alertsCache.set(sosAlert.id, sosAlert);
+    
+    // Broadcast to ALL connected clients (friends)
+    io.emit('friend_sos_alert', sosAlert);
+    
+    // Also send to security dashboard
+    io.to('security_dashboard').emit('security_sos_alert', sosAlert);
+    
+    logger.info(`📡 SOS broadcasted to all friends and security`);
+  });
+
+  // SOS Location Update - Real-time location sharing
+  socket.on('sos_location_update', (data) => {
+    logger.info(`📍 Location update from ${data.userId}`);
+    
+    // Broadcast location update to all friends
+    io.emit('friend_location_update', {
+      ...data,
+      socketId: socket.id,
+      timestamp: new Date().toISOString()
+    });
+  });
+
+  // Friend acknowledges SOS
+  socket.on('sos_acknowledge', (data) => {
+    logger.info(`✅ SOS acknowledged by friend: ${data.friendName}`);
+    
+    // Find the SOS alert
+    const alertId = data.alertId;
+    const sosAlert = alertsCache.get(alertId);
+    
+    if (sosAlert) {
+      sosAlert.acknowledgedBy.push({
+        friendId: data.friendId,
+        friendName: data.friendName,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Notify the person in distress
+      io.to(sosAlert.socketId).emit('sos_acknowledged', {
+        friendName: data.friendName,
+        message: `${data.friendName} has been notified and is checking on you`
+      });
+      
+      logger.info(`💬 Acknowledgment sent back to SOS user`);
+    }
+  });
+
+  // SOS Ended
+  socket.on('sos_ended', (data) => {
+    logger.info(`✅ SOS ended by ${data.userId}`);
+    
+    // Broadcast to all friends
+    io.emit('friend_sos_ended', {
+      ...data,
+      socketId: socket.id,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Clean up alerts from this user
+    for (let [key, alert] of alertsCache.entries()) {
+      if (alert.userId === data.userId) {
+        alertsCache.delete(key);
+      }
+    }
+  });
+
   socket.on('disconnect', () => {
     logger.info(`🔌 Client disconnected: ${socket.id}`);
   });
