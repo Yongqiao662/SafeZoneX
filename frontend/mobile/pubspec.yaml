@@ -33,6 +33,8 @@ dependencies:
   google_sign_in: ^6.2.1
   dropdown_button2: ^2.3.9 
   shimmer: ^3.0.0
+  # URL launcher for opening maps
+  url_launcher: ^6.2.1
 
 dev_dependencies:
   flutter_test:

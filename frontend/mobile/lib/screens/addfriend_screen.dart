@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'dart:async';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class SOSAlert {
   final String id;
@@ -694,7 +696,9 @@ class _FriendsScreenState extends State<FriendsScreen>
   }
 
   void _showFriendLocationOnMap(SOSAlert alert) {
-    // Show dialog with map and friend location
+    // 🆕 REAL Google Maps with friend's location
+    final LatLng friendLocation = LatLng(alert.latitude, alert.longitude);
+    
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -703,61 +707,90 @@ class _FriendsScreenState extends State<FriendsScreen>
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
-          title: Text(
-            '${alert.userName}\'s Location',
-            style: TextStyle(color: Colors.white),
+          title: Row(
+            children: [
+              Icon(Icons.location_on, color: Colors.red, size: 24),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '${alert.userName}\'s Location',
+                  style: TextStyle(color: Colors.white, fontSize: 18),
+                ),
+              ),
+            ],
           ),
           content: Container(
             width: double.maxFinite,
-            height: 300,
+            height: 400,
             child: Column(
               children: [
+                // 🆕 REAL Google Maps
                 Container(
-                  height: 200,
+                  height: 250,
                   decoration: BoxDecoration(
-                    color: Colors.grey[800],
                     borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.red.withOpacity(0.5), width: 2),
                   ),
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.map, size: 80, color: Colors.white38),
-                        SizedBox(height: 12),
-                        Text(
-                          'Map View',
-                          style: TextStyle(color: Colors.white70),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: GoogleMap(
+                      initialCameraPosition: CameraPosition(
+                        target: friendLocation,
+                        zoom: 16.0,
+                      ),
+                      markers: {
+                        Marker(
+                          markerId: MarkerId('sos_location'),
+                          position: friendLocation,
+                          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+                          infoWindow: InfoWindow(
+                            title: '🆘 ${alert.userName}',
+                            snippet: alert.address,
+                          ),
                         ),
-                        SizedBox(height: 4),
-                        Text(
-                          'Lat: ${alert.latitude.toStringAsFixed(4)}',
-                          style: TextStyle(color: Colors.white54, fontSize: 12),
-                        ),
-                        Text(
-                          'Lng: ${alert.longitude.toStringAsFixed(4)}',
-                          style: TextStyle(color: Colors.white54, fontSize: 12),
-                        ),
-                      ],
+                      },
+                      mapType: MapType.normal,
+                      myLocationEnabled: true,
+                      myLocationButtonEnabled: true,
+                      zoomControlsEnabled: true,
+                      compassEnabled: true,
                     ),
                   ),
                 ),
                 SizedBox(height: 16),
+                // Address and info
                 Container(
                   padding: EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.1),
+                    color: Colors.red.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                    border: Border.all(color: Colors.red.withOpacity(0.3)),
                   ),
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.info_outline, color: Colors.blue, size: 20),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          alert.address,
-                          style: TextStyle(color: Colors.white70, fontSize: 13),
-                        ),
+                      Row(
+                        children: [
+                          Icon(Icons.location_on, color: Colors.red, size: 20),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              alert.address,
+                              style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Icon(Icons.my_location, color: Colors.white70, size: 16),
+                          SizedBox(width: 8),
+                          Text(
+                            '${alert.latitude.toStringAsFixed(6)}, ${alert.longitude.toStringAsFixed(6)}',
+                            style: TextStyle(color: Colors.white70, fontSize: 11),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -771,14 +804,16 @@ class _FriendsScreenState extends State<FriendsScreen>
               child: Text('Close', style: TextStyle(color: Colors.white70)),
             ),
             ElevatedButton.icon(
-              onPressed: () {
-                // In real app, open Google Maps navigation
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Opening navigation...'),
-                    duration: Duration(seconds: 2),
-                  ),
-                );
+              onPressed: () async {
+                // 🆕 REAL Google Maps Navigation
+                final url = 'https://www.google.com/maps/dir/?api=1&destination=${alert.latitude},${alert.longitude}';
+                if (await canLaunchUrl(Uri.parse(url))) {
+                  await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Could not open maps')),
+                  );
+                }
               },
               icon: Icon(Icons.directions),
               label: Text('Navigate'),

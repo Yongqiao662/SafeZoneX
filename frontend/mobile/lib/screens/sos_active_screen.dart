@@ -3,6 +3,9 @@ import 'package:flutter/services.dart';
 import 'dart:async';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import '../services/backend_api_service.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SOSActiveScreen extends StatefulWidget {
   @override
@@ -26,10 +29,16 @@ class _SOSActiveScreenState extends State<SOSActiveScreen>
   IO.Socket? _socket;
   final BackendApiService _apiService = BackendApiService();
   
-  // Current location (would come from GPS in real app)
-  double _currentLat = 3.1225;
-  double _currentLng = 101.6532;
-  String _currentAddress = 'University Malaya Campus';
+  // Real location (from GPS)
+  double _currentLat = 0.0;
+  double _currentLng = 0.0;
+  String _currentAddress = 'Getting location...';
+  bool _locationFetched = false;
+  
+  // Real user data
+  String _userId = '';
+  String _userName = 'User';
+  String _userPhoto = '';
   
   List<Map<String, dynamic>> _statusMessages = [
     {'text': 'Emergency contacts notified', 'completed': false},
@@ -88,6 +97,9 @@ class _SOSActiveScreenState extends State<SOSActiveScreen>
     // Connect to backend WebSocket
     _connectToBackend();
     
+    // Fetch REAL user data and location
+    _initializeRealData();
+    
     // Add status messages progressively
     Timer.periodic(Duration(seconds: 2), (timer) {
       if (mounted && _alertsSent < _statusMessages.length) {
@@ -105,6 +117,134 @@ class _SOSActiveScreenState extends State<SOSActiveScreen>
         _updateLocation();
       }
     });
+  }
+
+  // 🆕 REAL DATA: Fetch user info and GPS location
+  Future<void> _initializeRealData() async {
+    // Get real user data from SharedPreferences
+    await _loadUserData();
+    
+    // Get real GPS location
+    await _getRealLocation();
+  }
+
+  // 🆕 Load real user data
+  Future<void> _loadUserData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      setState(() {
+        _userId = prefs.getString('user_id') ?? 'user_${DateTime.now().millisecondsSinceEpoch}';
+        _userName = prefs.getString('user_name') ?? prefs.getString('display_name') ?? 'SafeZone User';
+        _userPhoto = prefs.getString('user_photo') ?? prefs.getString('photo_url') ?? '';
+      });
+      print('✅ Loaded user data: $_userName ($_userId)');
+    } catch (e) {
+      print('⚠️ Error loading user data: $e');
+      // Fallback to defaults
+      _userId = 'user_${DateTime.now().millisecondsSinceEpoch}';
+      _userName = 'SafeZone User';
+    }
+  }
+
+  // 🆕 Get REAL GPS Location
+  Future<void> _getRealLocation() async {
+    try {
+      print('📍 Requesting location permission...');
+      
+      // Check if location services are enabled
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        print('⚠️ Location services are disabled');
+        setState(() {
+          _currentAddress = 'Location services disabled';
+        });
+        return;
+      }
+
+      // Check location permission
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          print('⚠️ Location permission denied');
+          setState(() {
+            _currentAddress = 'Location permission denied';
+          });
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        print('⚠️ Location permission permanently denied');
+        setState(() {
+          _currentAddress = 'Location permission denied';
+        });
+        return;
+      }
+
+      // Get current position with high accuracy
+      print('📍 Getting GPS coordinates...');
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      setState(() {
+        _currentLat = position.latitude;
+        _currentLng = position.longitude;
+        _locationFetched = true;
+      });
+
+      print('✅ GPS Location: ${position.latitude}, ${position.longitude}');
+
+      // Reverse geocode to get address
+      await _getAddressFromCoordinates(position.latitude, position.longitude);
+
+    } catch (e) {
+      print('❌ Error getting location: $e');
+      setState(() {
+        _currentAddress = 'Unable to get location: ${e.toString()}';
+      });
+    }
+  }
+
+  // 🆕 Convert coordinates to address
+  Future<void> _getAddressFromCoordinates(double lat, double lng) async {
+    try {
+      print('🗺️ Reverse geocoding...');
+      List<Placemark> placemarks = await placemarkFromCoordinates(lat, lng);
+      
+      if (placemarks.isNotEmpty) {
+        Placemark place = placemarks[0];
+        String address = '';
+        
+        if (place.name != null && place.name!.isNotEmpty) {
+          address += '${place.name}, ';
+        }
+        if (place.street != null && place.street!.isNotEmpty) {
+          address += '${place.street}, ';
+        }
+        if (place.locality != null && place.locality!.isNotEmpty) {
+          address += '${place.locality}, ';
+        }
+        if (place.administrativeArea != null) {
+          address += '${place.administrativeArea}, ';
+        }
+        if (place.country != null) {
+          address += place.country!;
+        }
+        
+        setState(() {
+          _currentAddress = address.isNotEmpty ? address : 'Location: $lat, $lng';
+        });
+        
+        print('✅ Address: $_currentAddress');
+      }
+    } catch (e) {
+      print('⚠️ Error getting address: $e');
+      setState(() {
+        _currentAddress = 'Coordinates: ${lat.toStringAsFixed(6)}, ${lng.toStringAsFixed(6)}';
+      });
+    }
   }
 
   void _connectToBackend() async {
@@ -159,12 +299,12 @@ class _SOSActiveScreenState extends State<SOSActiveScreen>
   void _broadcastSOSAlert() {
     if (_socket != null && _socket!.connected) {
       final sosData = {
-        'userId': 'demo_user_${DateTime.now().millisecondsSinceEpoch}',
-        'userName': 'Demo User',
-        'userPhoto': '',
-        'latitude': _currentLat,
-        'longitude': _currentLng,
-        'address': _currentAddress,
+        'userId': _userId,  // 🆕 REAL user ID
+        'userName': _userName,  // 🆕 REAL user name
+        'userPhoto': _userPhoto,  // 🆕 REAL user photo
+        'latitude': _currentLat,  // 🆕 REAL GPS latitude
+        'longitude': _currentLng,  // 🆕 REAL GPS longitude
+        'address': _currentAddress,  // 🆕 REAL address
         'timestamp': DateTime.now().toIso8601String(),
         'message': '🆘 Emergency! I need help. Please check on me.',
         'urgency': 'high',
@@ -188,21 +328,38 @@ class _SOSActiveScreenState extends State<SOSActiveScreen>
     }
   }
 
-  void _updateLocation() {
-    // In real app, this would get GPS coordinates
-    // For now, simulate location updates
-    if (_socket != null && _socket!.connected) {
-      final locationUpdate = {
-        'userId': 'demo_user',
-        'latitude': _currentLat + (0.0001 * (DateTime.now().second % 10)),
-        'longitude': _currentLng + (0.0001 * (DateTime.now().second % 10)),
-        'address': _currentAddress,
-        'timestamp': DateTime.now().toIso8601String(),
-        'status': 'moving', // or 'stationary'
-      };
+  void _updateLocation() async {
+    // 🆕 Get REAL updated GPS location
+    try {
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+      
+      setState(() {
+        _currentLat = position.latitude;
+        _currentLng = position.longitude;
+      });
+      
+      // Get updated address
+      await _getAddressFromCoordinates(position.latitude, position.longitude);
+      
+      if (_socket != null && _socket!.connected) {
+        final locationUpdate = {
+          'userId': _userId,  // 🆕 REAL user ID
+          'latitude': _currentLat,  // 🆕 REAL updated latitude
+          'longitude': _currentLng,  // 🆕 REAL updated longitude
+          'address': _currentAddress,  // 🆕 REAL updated address
+          'timestamp': DateTime.now().toIso8601String(),
+          'status': position.speed > 1.0 ? 'moving' : 'stationary',  // 🆕 REAL movement status
+          'accuracy': position.accuracy,  // 🆕 REAL accuracy
+          'speed': position.speed,  // 🆕 REAL speed
+        };
 
-      _socket?.emit('sos_location_update', locationUpdate);
-      print('📍 Location update sent to friends');
+        _socket?.emit('sos_location_update', locationUpdate);
+        print('📍 Real location update sent: ${position.latitude}, ${position.longitude}');
+      }
+    } catch (e) {
+      print('⚠️ Error updating location: $e');
     }
   }
 
@@ -217,7 +374,7 @@ class _SOSActiveScreenState extends State<SOSActiveScreen>
     // Disconnect WebSocket and send SOS end signal
     if (_socket != null && _socket!.connected) {
       _socket?.emit('sos_ended', {
-        'userId': 'demo_user',
+        'userId': _userId,  // 🆕 REAL user ID
         'timestamp': DateTime.now().toIso8601String(),
         'message': 'SOS has been deactivated',
       });
