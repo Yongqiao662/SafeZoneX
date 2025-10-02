@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'verification_screen.dart';
 import 'main_dashboard_screen.dart';
+import 'personal_details_screen.dart';
 import '../services/auth_service.dart';
+import '../services/api_service.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({Key? key}) : super(key: key);
@@ -466,7 +467,7 @@ class _SignUpScreenState extends State<SignUpScreen>
                       ),
                     )
                   : const Text(
-                      'Send Verification Code',
+                      'Create Account',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w600,
@@ -541,26 +542,50 @@ class _SignUpScreenState extends State<SignUpScreen>
     setState(() => _isLoading = true);
 
     try {
-      // Simulate sending verification email
-      await Future.delayed(const Duration(seconds: 2));
+      final email = _emailController.text.trim().toLowerCase();
+      final name = _nameController.text.trim();
       
-      // Show success message
-      _showSuccessSnackBar('Verification code sent to ${_emailController.text}');
+      print('📝 Registering user: $name ($email)');
       
-      // Navigate to verification screen
-      await _exitAnimation();
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => VerificationScreen(
-            name: _nameController.text.trim(),
-            email: _emailController.text.trim(),
-          ),
-        ),
+      // Register user in database
+      final result = await ApiService.registerUser(
+        email: email,
+        name: name,
       );
+      
+      if (result['success'] == true && result['user'] != null) {
+        final user = result['user'];
+        final userId = user['userId'];
+        
+        print('✅ User registered successfully: $userId');
+        
+        // Save user credentials using helper method
+        await ApiService.saveUserCredentials(
+          userId: userId,
+          email: email,
+          name: name,
+        );
+        
+        // Show success message
+        if (mounted) {
+          _showSuccessSnackBar('Account created successfully! Welcome, $name!');
+          
+          // Navigate to main dashboard
+          await _exitAnimation();
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => MainDashboardScreen(),
+            ),
+          );
+        }
+      } else {
+        throw Exception(result['error'] ?? 'Registration failed');
+      }
     } catch (e) {
+      print('❌ Registration error: $e');
       if (mounted) {
-        _showErrorSnackBar('Failed to send verification code: ${e.toString()}');
+        _showErrorSnackBar('Failed to create account: ${e.toString()}');
         setState(() => _isLoading = false);
       }
     }
@@ -620,6 +645,7 @@ class _SignUpScreenState extends State<SignUpScreen>
         if (!email.endsWith('@siswa.um.edu.my')) {
           _showErrorSnackBar('Only UM student emails (@siswa.um.edu.my) are allowed. Your email: $email');
           await _googleSignIn.signOut(); // Sign out the user
+          setState(() => _isLoading = false);
           return;
         }
 
@@ -630,24 +656,59 @@ class _SignUpScreenState extends State<SignUpScreen>
         if (idToken != null && accessToken != null) {
           print('Google ID Token: $idToken');
           
-          // TODO: Re-enable backend authentication when server is running
-          // For now, bypass backend and use Google data directly
-          print('Using Google data directly (backend disabled)');
-          _showSuccessSnackBar('Welcome, ${googleUser.displayName ?? googleUser.email}!');
-          // Navigate to main dashboard
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => MainDashboardScreen()),
-          );
+          final name = googleUser.displayName ?? email.split('@')[0];
+          
+          // Check if user already exists in database
+          print('🔍 Checking if user exists in database...');
+          final checkResult = await ApiService.checkUserExists(email);
+          
+          if (checkResult['exists'] == true && checkResult['user'] != null) {
+            // User already registered - auto-login
+            final user = checkResult['user'];
+            print('✅ User already registered! Auto-logging in...');
+            
+            await ApiService.saveUserCredentials(
+              userId: user['userId'],
+              email: user['email'],
+              name: user['name'],
+            );
+            
+            _showSuccessSnackBar('Welcome back, ${user['name']}!');
+            
+            // Navigate directly to dashboard
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => MainDashboardScreen(),
+              ),
+            );
+          } else {
+            // New user - go to Personal Details Screen
+            print('🆕 New user - redirecting to Personal Details');
+            _showSuccessSnackBar('Signed in with Google! Please complete your profile.');
+            
+            // Navigate to Personal Details Screen
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => PersonalDetailsScreen(
+                  name: name,
+                  email: email,
+                ),
+              ),
+            );
+          }
         } else {
           _showErrorSnackBar('Failed to get authentication tokens');
+          setState(() => _isLoading = false);
         }
+      } else {
+        setState(() => _isLoading = false);
       }
     } catch (error) {
       print('Error during Google Sign-In: $error');
       _showErrorSnackBar('Google Sign-In failed: $error');
-    } finally {
       setState(() => _isLoading = false);
     }
   }
-    }
+}

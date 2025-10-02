@@ -4,6 +4,7 @@ import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'dart:async';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../services/api_service.dart';
 
 class SOSAlert {
   final String id;
@@ -110,52 +111,9 @@ class _FriendsScreenState extends State<FriendsScreen>
   late Animation<Offset> _slideAnimation;
   late Animation<double> _searchAnimation;
   
-  List<Friend> allFriends = [
-    Friend(
-      id: '1',
-      name: 'Sarah Wilson',
-      username: 'sarah_w',
-      email: 'sarah.wilson@university.edu',
-      isOnline: true,
-      lastSeen: 'Online',
-      profileColor: 'purple',
-      location: 'Library - Level 3',
-      locationUpdated: '2 min ago',
-    ),
-    Friend(
-      id: '2',
-      name: 'Mike Chen',
-      username: 'mike_chen',
-      email: 'mike.chen@university.edu',
-      isOnline: false,
-      lastSeen: '2 minutes ago',
-      profileColor: 'blue',
-      location: 'Engineering Building',
-      locationUpdated: '15 min ago',
-    ),
-    Friend(
-      id: '3',
-      name: 'Emma Davis',
-      username: 'emma_d',
-      email: 'emma.davis@university.edu',
-      isOnline: true,
-      lastSeen: 'Online',
-      profileColor: 'green',
-      location: 'Student Center',
-      locationUpdated: '1 min ago',
-    ),
-    Friend(
-      id: '4',
-      name: 'Alex Thompson',
-      username: 'alex_t',
-      email: 'alex.thompson@university.edu',
-      isOnline: false,
-      lastSeen: '1 hour ago',
-      profileColor: 'orange',
-      location: 'Dormitory Block A',
-      locationUpdated: '1 hour ago',
-    ),
-  ];
+  List<Friend> allFriends = []; // Will be loaded from backend
+  bool _isLoadingFriends = true;
+  String? _currentUserId;
 
   List<Friend> searchResults = [];
   List<Friend> filteredFriends = [];
@@ -168,114 +126,75 @@ class _FriendsScreenState extends State<FriendsScreen>
   bool _isConnectedToBackend = false;
   Timer? _connectionRetryTimer;
 
-  // Mock chat data for different friends
-  Map<String, List<ChatMessage>> chatHistory = {
-    '1': [
-      ChatMessage(
-        id: '1',
-        message: 'Hey! Are you free to walk to the dining hall together?',
-        isMe: false,
-        timestamp: DateTime.now().subtract(Duration(minutes: 30)),
-      ),
-      ChatMessage(
-        id: '2',
-        message: 'Sure! I\'m at the library right now. Give me 5 minutes?',
-        isMe: true,
-        timestamp: DateTime.now().subtract(Duration(minutes: 28)),
-      ),
-      ChatMessage(
-        id: '3',
-        message: 'Perfect! I\'ll wait for you at the main entrance',
-        isMe: false,
-        timestamp: DateTime.now().subtract(Duration(minutes: 25)),
-      ),
-      ChatMessage(
-        id: '4',
-        message: 'On my way! Thanks for walking with me 😊',
-        isMe: true,
-        timestamp: DateTime.now().subtract(Duration(minutes: 20)),
-      ),
-    ],
-    '2': [
-      ChatMessage(
-        id: '1',
-        message: 'Did you finish the assignment for Prof. Martinez?',
-        isMe: false,
-        timestamp: DateTime.now().subtract(Duration(hours: 2)),
-      ),
-      ChatMessage(
-        id: '2',
-        message: 'Yes! Want to study together for the exam next week?',
-        isMe: true,
-        timestamp: DateTime.now().subtract(Duration(hours: 1, minutes: 45)),
-      ),
-      ChatMessage(
-        id: '3',
-        message: 'Definitely! Library tomorrow at 3 PM?',
-        isMe: false,
-        timestamp: DateTime.now().subtract(Duration(hours: 1, minutes: 30)),
-      ),
-    ],
-    '3': [
-      ChatMessage(
-        id: '1',
-        message: 'Emergency! Lost my keys somewhere on campus',
-        isMe: false,
-        timestamp: DateTime.now().subtract(Duration(minutes: 45)),
-      ),
-      ChatMessage(
-        id: '2',
-        message: 'Oh no! Did you check the student center lost & found?',
-        isMe: true,
-        timestamp: DateTime.now().subtract(Duration(minutes: 40)),
-      ),
-      ChatMessage(
-        id: '3',
-        message: 'Found them! They were in my backpack pocket all along 🤦‍♀️',
-        isMe: false,
-        timestamp: DateTime.now().subtract(Duration(minutes: 35)),
-      ),
-      ChatMessage(
-        id: '4',
-        message: 'Haha classic! Glad you found them. Want to grab coffee?',
-        isMe: true,
-        timestamp: DateTime.now().subtract(Duration(minutes: 30)),
-      ),
-    ],
-    '4': [
-      ChatMessage(
-        id: '1',
-        message: 'Hey! Are you planning to attend the campus safety workshop tomorrow?',
-        isMe: true,
-        timestamp: DateTime.now().subtract(Duration(hours: 3)),
-      ),
-      ChatMessage(
-        id: '2',
-        message: 'I completely forgot about it! What time was it again?',
-        isMe: false,
-        timestamp: DateTime.now().subtract(Duration(hours: 2, minutes: 30)),
-      ),
-      ChatMessage(
-        id: '3',
-        message: '2 PM at the main auditorium. It\'s about the new SafeZoneX app!',
-        isMe: true,
-        timestamp: DateTime.now().subtract(Duration(hours: 2)),
-      ),
-    ],
-  };
+  // Chat data will be loaded from backend per friend
+  Map<String, List<ChatMessage>> chatHistory = {};
 
   @override
   void initState() {
     super.initState();
-    filteredFriends = allFriends;
     _initAnimations();
     _fadeController.value = 1.0;
     _slideController.value = 1.0;
     _searchAnimationController.value = 1.0;
     _searchTextController.addListener(_onSearchChanged);
     
+    // Load real friends from backend
+    _loadRealFriends();
+    
     // Connect to backend for real-time SOS alerts
     _connectToBackendForSOSAlerts();
+  }
+
+  Future<void> _loadRealFriends() async {
+    try {
+      setState(() => _isLoadingFriends = true);
+      
+      // Get current user ID
+      _currentUserId = await ApiService.getCurrentUserId();
+      
+      if (_currentUserId != null) {
+        final result = await ApiService.getFriends(_currentUserId!);
+        
+        if (result['success'] == true) {
+          final friendsData = result['friends'] as List;
+          
+          setState(() {
+            allFriends = friendsData.map((f) => Friend(
+              id: f['id'] ?? '',
+              name: f['name'] ?? 'Unknown',
+              username: f['username'] ?? '',
+              email: f['email'] ?? '',
+              isOnline: f['isOnline'] ?? false,
+              lastSeen: f['lastSeen'] ?? 'Unknown',
+              profileColor: f['profileColor'] ?? 'blue',
+              location: f['location'] ?? 'Unknown',
+              locationUpdated: f['locationUpdated'] ?? 'N/A',
+            )).toList();
+            
+            filteredFriends = allFriends;
+            _isLoadingFriends = false;
+          });
+          
+          print('✅ Loaded ${allFriends.length} friends from backend');
+        }
+      } else {
+        print('⚠️ No user ID found, showing empty friends list');
+        setState(() => _isLoadingFriends = false);
+      }
+    } catch (e) {
+      print('❌ Error loading friends: $e');
+      setState(() => _isLoadingFriends = false);
+      
+      // Show error message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load friends. Please check your connection.'),
+            backgroundColor: Colors.red.shade600,
+          ),
+        );
+      }
+    }
   }
 
   void _initAnimations() {
@@ -322,49 +241,52 @@ class _FriendsScreenState extends State<FriendsScreen>
         filteredFriends = allFriends;
         searchResults = [];
       } else {
-        searchResults = _simulateUserSearch(searchQuery);
+        // Search in existing friends
         filteredFriends = allFriends.where((friend) =>
           friend.name.toLowerCase().contains(searchQuery) ||
           friend.username.toLowerCase().contains(searchQuery) ||
           friend.email.toLowerCase().contains(searchQuery)
         ).toList();
+        
+        // Search for new users via API
+        _searchUsersFromAPI(searchQuery);
       }
     });
   }
 
-  List<Friend> _simulateUserSearch(String query) {
-    List<Friend> allUsers = [
-      ...allFriends,
-      Friend(
-        id: '5',
-        name: 'Jessica Park',
-        username: 'jessica_park',
-        email: 'jessica.park@university.edu',
-        isOnline: false,
-        lastSeen: 'Not added',
-        profileColor: 'pink',
-        location: 'Unknown',
-        locationUpdated: 'Never',
-      ),
-      Friend(
-        id: '6',
-        name: 'David Kim',
-        username: 'david_kim',
-        email: 'david.kim@university.edu',
-        isOnline: true,
-        lastSeen: 'Not added',
-        profileColor: 'cyan',
-        location: 'Unknown',
-        locationUpdated: 'Never',
-      ),
-    ];
+  // Search for users from backend API
+  Future<void> _searchUsersFromAPI(String query) async {
+    if (_currentUserId == null || query.trim().isEmpty) {
+      setState(() => searchResults = []);
+      return;
+    }
 
-    return allUsers.where((user) =>
-      !allFriends.any((friend) => friend.id == user.id) &&
-      (user.name.toLowerCase().contains(query) ||
-       user.username.toLowerCase().contains(query) ||
-       user.email.toLowerCase().contains(query))
-    ).toList();
+    try {
+      final result = await ApiService.searchUsers(query.trim(), _currentUserId!);
+      
+      if (result['success'] == true && mounted) {
+        final usersData = result['users'] as List;
+        
+        setState(() {
+          searchResults = usersData.map((u) => Friend(
+            id: u['userId'] ?? '',
+            name: u['name'] ?? 'Unknown',
+            username: u['email']?.split('@')[0] ?? '',
+            email: u['email'] ?? '',
+            isOnline: false,
+            lastSeen: 'Not added',
+            profileColor: 'blue',
+            location: 'Unknown',
+            locationUpdated: 'Never',
+          )).toList();
+        });
+      }
+    } catch (e) {
+      print('❌ Error searching users: $e');
+      if (mounted) {
+        setState(() => searchResults = []);
+      }
+    }
   }
 
   @override
@@ -1528,34 +1450,68 @@ class _FriendsScreenState extends State<FriendsScreen>
     );
   }
 
-  void _addFriend(Friend user) {
+  Future<void> _addFriend(Friend user) async {
     HapticFeedback.lightImpact();
-    setState(() {
-      allFriends.add(Friend(
-        id: user.id,
-        name: user.name,
-        username: user.username,
-        email: user.email,
-        isOnline: user.isOnline,
-        lastSeen: user.isOnline ? 'Online' : 'Just added',
-        profileColor: user.profileColor,
-        location: user.isOnline ? 'Campus Area' : 'Unknown',
-        locationUpdated: user.isOnline ? 'Just now' : 'Never',
-      ));
-      _onSearchChanged();
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Added ${user.name} as friend'),
-        backgroundColor: const Color(0xFF6C5CE7),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+    
+    if (_currentUserId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: User not logged in'),
+          backgroundColor: Colors.red.shade600,
         ),
-        margin: const EdgeInsets.all(16),
-      ),
-    );
+      );
+      return;
+    }
+
+    try {
+      // Get current user info
+      final userName = await ApiService.getCurrentUserName();
+      final userEmail = await ApiService.getCurrentUserEmail();
+
+      // Add friend via API
+      final result = await ApiService.addFriend(
+        userId: _currentUserId!,
+        friendEmail: user.email,
+        userName: userName ?? 'User',
+        userEmail: userEmail ?? '',
+        profileColor: user.profileColor,
+      );
+
+      if (result['success'] == true) {
+        // Reload friends list from backend
+        await _loadRealFriends();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ Added ${user.name} as friend'),
+            backgroundColor: const Color(0xFF6C5CE7),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+
+        // Clear search to show updated friends list
+        _searchTextController.clear();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['error'] ?? 'Failed to add friend'),
+            backgroundColor: Colors.red.shade600,
+          ),
+        );
+      }
+    } catch (e) {
+      print('❌ Error adding friend: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to add friend. Please try again.'),
+          backgroundColor: Colors.red.shade600,
+        ),
+      );
+    }
   }
 
   void _openChat(Friend friend) {

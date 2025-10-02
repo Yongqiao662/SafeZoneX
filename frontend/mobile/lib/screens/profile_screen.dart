@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import '../services/api_service.dart';
 import 'backend_test_screen.dart';
 import 'login_screen.dart';
 import 'dart:io';
@@ -919,12 +920,11 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                   ),
                 );
                 
-                // Clear all local data
-                final prefs = await SharedPreferences.getInstance();
-                await prefs.clear();
-                
-                // Sign out from Google
+                // Sign out from Google first
                 await _googleSignIn.signOut();
+                
+                // Clear all user data using ApiService
+                await ApiService.logout();
                 
                 // Navigate to login screen and clear navigation stack
                 Navigator.of(context).pushAndRemoveUntil(

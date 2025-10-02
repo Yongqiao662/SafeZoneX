@@ -100,13 +100,12 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
       );
     });
 
-    // Generate automated response after a short delay
+    // Send to real support system (TODO: Integrate with support API)
+    // For now, show acknowledgment message
     Future.delayed(Duration(milliseconds: 1500), () {
-      String response = _generateResponse(userMessage.toLowerCase());
-      
       setState(() {
         _messages.add(ChatMessage(
-          text: response,
+          text: "Thank you for your message. A support team member will respond shortly. For emergencies, please use the SOS button or call emergency services.",
           isUser: false,
           timestamp: DateTime.now(),
         ));
@@ -121,52 +120,6 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
         );
       });
     });
-  }
-
-  String _generateResponse(String message) {
-    // Mock responses based on keywords
-    if (message.contains('lamp') && message.contains('broken')) {
-      return "Thank you for reporting the broken lamp. Our maintenance team has been notified and will fix it soon. Estimated time: 2-4 hours.";
-    }
-    
-    if (message.contains('lift') || message.contains('elevator')) {
-      return "We've received your elevator report. Our technician will check it within the next hour. Thank you for letting us know!";
-    }
-    
-    if (message.contains('emergency')) {
-      return "This seems like an emergency. Please call our emergency hotline at 999 immediately. We're also dispatching someone to assist you.";
-    }
-    
-    if (message.contains('water') && (message.contains('leak') || message.contains('pipe'))) {
-      return "Water leakage reported. Our plumber team will arrive within 30 minutes. Please avoid the area if possible.";
-    }
-    
-    if (message.contains('noise') || message.contains('loud')) {
-      return "We understand noise can be disruptive. Our security team will investigate the noise complaint shortly.";
-    }
-    
-    if (message.contains('parking')) {
-      return "Regarding parking issues, our management team will review your concern. Expected response within 24 hours.";
-    }
-    
-    if (message.contains('security') || message.contains('suspicious')) {
-      return "Security concern noted. Our security personnel will investigate immediately. Stay safe and contact emergency services if needed.";
-    }
-    
-    if (message.contains('help') || message.contains('support')) {
-      return "I'm here to help! You can report maintenance issues, security concerns, or any building-related problems. What specific issue would you like to report?";
-    }
-    
-    if (message.contains('thank')) {
-      return "You're welcome! Is there anything else I can help you with?";
-    }
-    
-    if (message.contains('hi') || message.contains('hello')) {
-      return "Hi there! How can I assist you today? You can report any building or maintenance issues.";
-    }
-    
-    // Default response for unrecognized messages
-    return "Thank you for your message. I've recorded your concern and our relevant team will address it soon. Is there anything else I can help you with?";
   }
 
   @override

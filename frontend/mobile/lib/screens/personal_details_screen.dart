@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'main_dashboard_screen.dart';
 import '../services/auth_service.dart';
+import '../services/api_service.dart';
 import 'package:http/http.dart' as http;
 
 // User Preferences Management Class
@@ -342,71 +343,90 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen>
     });
 
     try {
-      print('=== SAVING USER PROFILE ===');
+      print('=== REGISTERING USER TO DATABASE ===');
       
-      // Create user data object
-      final userData = {
-        '_id': _studentIdController.text.trim(),
-        'id': _studentIdController.text.trim(),
-        'studentId': _studentIdController.text.trim(),
-        'name': _nameController.text.trim(),
-        'email': _emailController.text.trim(),
-        'phone': _phoneController.text.trim(),
-        'faculty': _selectedFaculty,
-        'year': _selectedYear,
-        'course': _courseController.text.trim(),
-      };
-
-      print('User data prepared: ${userData['name']}, ${userData['phone']}');
-
-      // CRITICAL: Save to AuthService first
-      final authService = AuthService();
-      await authService.saveUserProfile(userData);
-      print('Saved to AuthService');
-
-      // Then save to local preferences for backward compatibility
-      await UserPreferences.saveUserData(
-        name: _nameController.text.trim(),
-        email: _emailController.text.trim(),
-        phone: _phoneController.text.trim(),
-        studentId: _studentIdController.text.trim(),
-        selectedYear: _selectedYear,
-        selectedFaculty: _selectedFaculty,
-        course: _courseController.text.trim(),
-        studentIdImagePath: _studentIdImage?.path,
+      final name = _nameController.text.trim();
+      final email = _emailController.text.trim();
+      final phone = _phoneController.text.trim();
+      final studentId = _studentIdController.text.trim();
+      
+      // Register user in MongoDB via API
+      final result = await ApiService.registerUser(
+        email: email,
+        name: name,
+        phone: phone,
+        studentId: studentId,
       );
-      print('Saved to UserPreferences');
+      
+      if (result['success'] == true && result['user'] != null) {
+        final user = result['user'];
+        final userId = user['userId'];
+        
+        print('✅ User registered successfully: $userId');
+        
+        // Save user credentials
+        await ApiService.saveUserCredentials(
+          userId: userId,
+          email: email,
+          name: name,
+        );
+        
+        // Also save additional profile data to local preferences
+        await UserPreferences.saveUserData(
+          name: name,
+          email: email,
+          phone: phone,
+          studentId: studentId,
+          selectedYear: _selectedYear,
+          selectedFaculty: _selectedFaculty,
+          course: _courseController.text.trim(),
+          studentIdImagePath: _studentIdImage?.path,
+        );
+        
+        // Create user data object for AuthService (backward compatibility)
+        final userData = {
+          '_id': studentId,
+          'id': studentId,
+          'studentId': studentId,
+          'name': name,
+          'email': email,
+          'phone': phone,
+          'faculty': _selectedFaculty,
+          'year': _selectedYear,
+          'course': _courseController.text.trim(),
+        };
 
-      // Verify the save worked
-      final profile = authService.getUserProfile();
-      print('Verification - getUserProfile returned: $profile');
+        // Save to AuthService
+        final authService = AuthService();
+        await authService.saveUserProfile(userData);
+        print('Profile data saved locally');
 
-      // Optional: Send to server
-      await _sendToServer();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Registration complete! You are now searchable by friends.'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Profile saved successfully!'),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 2),
-        ),
-      );
+        print('=== REGISTRATION COMPLETE ===');
 
-      print('=== PROFILE SAVE COMPLETE ===');
-
-      // Navigate to dashboard
-      await Future.delayed(const Duration(milliseconds: 500));
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => MainDashboardScreen(),
-        ),
-      );
+        // Navigate to dashboard
+        await Future.delayed(const Duration(milliseconds: 500));
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => MainDashboardScreen(),
+          ),
+        );
+      } else {
+        throw Exception(result['error'] ?? 'Registration failed');
+      }
     } catch (e) {
-      print('ERROR saving profile: $e');
+      print('ERROR registering user: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error saving profile: $e'),
+          content: Text('Error: ${e.toString()}'),
           backgroundColor: Colors.red,
         ),
       );

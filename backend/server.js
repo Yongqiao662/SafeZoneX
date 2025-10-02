@@ -11,6 +11,9 @@ const winston = require('winston');
 const Alert = require('./models/Alert');
 const Feedback = require('./models/Feedback');
 const User = require('./models/User');
+const Friend = require('./models/Friend');
+const Message = require('./models/Message');
+const VerificationCode = require('./models/VerificationCode');
 
 const submittedReports = new Set();
 
@@ -403,6 +406,472 @@ app.put('/api/reports/:id/status', async (req, res) => {
   } catch (error) {
     console.error('❌ Error updating report status:', error);
     res.status(500).json({ success: false, error: 'Failed to update report status' });
+  }
+});
+
+// ==================== FRIENDS API ====================
+
+// Get all friends for a user
+app.get('/api/friends/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Get accepted friendships
+    const friendships = await Friend.find({ 
+      userId: userId,
+      status: 'accepted'
+    }).sort({ lastInteraction: -1 });
+
+    // Get friend details from User collection
+    const friendIds = friendships.map(f => f.friendId);
+    const friendUsers = await User.find({ userId: { $in: friendIds } });
+
+    // Combine friendship data with user data
+    const friendsList = friendships.map(friendship => {
+      const friendUser = friendUsers.find(u => u.userId === friendship.friendId);
+      if (!friendUser) return null;
+
+      const lastSeenMinutes = Math.floor((Date.now() - new Date(friendUser.lastSeen)) / (1000 * 60));
+      let lastSeenText = 'Online';
+      if (lastSeenMinutes > 5) {
+        if (lastSeenMinutes < 60) {
+          lastSeenText = `${lastSeenMinutes} minutes ago`;
+        } else if (lastSeenMinutes < 1440) {
+          lastSeenText = `${Math.floor(lastSeenMinutes / 60)} hours ago`;
+        } else {
+          lastSeenText = `${Math.floor(lastSeenMinutes / 1440)} days ago`;
+        }
+      }
+
+      return {
+        id: friendUser.userId,
+        name: friendUser.name,
+        username: friendUser.email.split('@')[0],
+        email: friendUser.email,
+        isOnline: lastSeenMinutes <= 5,
+        lastSeen: lastSeenText,
+        profileColor: friendship.profileColor,
+        location: friendUser.location?.latitude 
+          ? `Last seen location` 
+          : 'Location unavailable',
+        locationUpdated: friendUser.location?.lastUpdated 
+          ? new Date(friendUser.location.lastUpdated).toLocaleString()
+          : 'N/A',
+        profilePicture: friendUser.profilePicture
+      };
+    }).filter(f => f !== null);
+
+    res.json({ success: true, friends: friendsList });
+  } catch (error) {
+    logger.error('❌ Error fetching friends:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch friends' });
+  }
+});
+
+// Add a new friend
+app.post('/api/friends/add', async (req, res) => {
+  try {
+    const { userId, friendEmail, profileColor } = req.body;
+
+    // Find the friend user by email
+    const friendUser = await User.findOne({ email: friendEmail });
+    if (!friendUser) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    // Check if already friends
+    const existingFriend = await Friend.findOne({ 
+      userId: userId, 
+      friendId: friendUser.userId 
+    });
+
+    if (existingFriend) {
+      return res.status(400).json({ success: false, error: 'Already friends or request pending' });
+    }
+
+    // Create bidirectional friendship
+    const friendship1 = new Friend({
+      userId: userId,
+      friendId: friendUser.userId,
+      friendName: friendUser.name,
+      friendEmail: friendUser.email,
+      friendUsername: friendUser.email.split('@')[0],
+      profileColor: profileColor || 'blue',
+      status: 'accepted' // Auto-accept for now
+    });
+
+    const friendship2 = new Friend({
+      userId: friendUser.userId,
+      friendId: userId,
+      friendName: req.body.userName || 'Friend',
+      friendEmail: req.body.userEmail || '',
+      friendUsername: req.body.userName?.toLowerCase().replace(/\s+/g, '_') || 'friend',
+      profileColor: 'purple',
+      status: 'accepted'
+    });
+
+    await friendship1.save();
+    await friendship2.save();
+
+    res.json({ 
+      success: true, 
+      message: 'Friend added successfully',
+      friend: {
+        id: friendUser.userId,
+        name: friendUser.name,
+        email: friendUser.email
+      }
+    });
+  } catch (error) {
+    logger.error('❌ Error adding friend:', error);
+    res.status(500).json({ success: false, error: 'Failed to add friend' });
+  }
+});
+
+// Check if user exists by email
+app.get('/api/users/check', async (req, res) => {
+  try {
+    const { email } = req.query;
+
+    if (!email) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Email is required' 
+      });
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase() });
+    
+    if (user) {
+      logger.info(`✅ User exists: ${email}`);
+      return res.json({ 
+        success: true,
+        exists: true, 
+        user: {
+          userId: user.userId,
+          email: user.email,
+          name: user.name,
+          phone: user.phone,
+          studentId: user.studentId,
+          profilePicture: user.profilePicture
+        }
+      });
+    } else {
+      logger.info(`❌ User does not exist: ${email}`);
+      return res.json({ 
+        success: true,
+        exists: false 
+      });
+    }
+  } catch (error) {
+    logger.error('❌ Error checking user existence:', error);
+    res.status(500).json({ success: false, error: 'Failed to check user' });
+  }
+});
+
+// Register a new user
+app.post('/api/users/register', async (req, res) => {
+  try {
+    const { email, name, phone, studentId, profilePicture } = req.body;
+
+    // Validate required fields
+    if (!email || !name) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Email and name are required' 
+      });
+    }
+
+    // Check if user already exists by email OR studentId
+    const existingUserByEmail = await User.findOne({ email: email.toLowerCase() });
+    if (existingUserByEmail) {
+      logger.info(`✅ User already exists: ${email}, returning existing user`);
+      return res.json({ 
+        success: true, 
+        user: existingUserByEmail,
+        message: 'User already exists' 
+      });
+    }
+
+    // Check if studentId is already taken
+    if (studentId) {
+      const existingUserByStudentId = await User.findOne({ studentId: studentId });
+      if (existingUserByStudentId) {
+        logger.info(`✅ Student ID already exists: ${studentId}, returning existing user`);
+        return res.json({ 
+          success: true, 
+          user: existingUserByStudentId,
+          message: 'User already exists' 
+        });
+      }
+    }
+
+    // Generate unique userId
+    const userId = uuidv4();
+
+    // Create new user
+    const newUser = new User({
+      userId,
+      email: email.toLowerCase(),
+      name,
+      phone: phone || '',
+      studentId: studentId || userId,
+      profilePicture: profilePicture || '',
+      isVerified: true, // Auto-verify since we're using university email
+      isActive: true,
+      lastSeen: new Date()
+    });
+
+    await newUser.save();
+    logger.info(`✅ New user registered: ${email}`);
+
+    res.json({ 
+      success: true, 
+      user: newUser,
+      message: 'Registration successful' 
+    });
+  } catch (error) {
+    // Handle duplicate key errors specifically
+    if (error.code === 11000) {
+      logger.info(`⚠️ Duplicate key error, fetching existing user`);
+      
+      // Extract which field caused the duplicate
+      const field = Object.keys(error.keyPattern)[0];
+      const value = error.keyValue[field];
+      
+      // Find and return the existing user
+      const existingUser = await User.findOne({ [field]: value });
+      if (existingUser) {
+        return res.json({ 
+          success: true, 
+          user: existingUser,
+          message: 'User already exists' 
+        });
+      }
+    }
+    
+    logger.error('❌ Error registering user:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to register user' 
+    });
+  }
+});
+
+// Search for users by email
+app.get('/api/users/search', async (req, res) => {
+  try {
+    const { email, currentUserId } = req.query;
+
+    if (!email) {
+      return res.status(400).json({ success: false, error: 'Email query required' });
+    }
+
+    const users = await User.find({ 
+      email: { $regex: email, $options: 'i' },
+      userId: { $ne: currentUserId } // Exclude current user
+    }).limit(10).select('userId name email profilePicture');
+
+    res.json({ success: true, users });
+  } catch (error) {
+    logger.error('❌ Error searching users:', error);
+    res.status(500).json({ success: false, error: 'Failed to search users' });
+  }
+});
+
+// ==================== CHAT/MESSAGING API ====================
+
+// Get chat messages between two users
+app.get('/api/messages/:userId/:friendId', async (req, res) => {
+  try {
+    const { userId, friendId } = req.params;
+    const { limit = 50, offset = 0 } = req.query;
+
+    const messages = await Message.find({
+      $or: [
+        { senderId: userId, recipientId: friendId },
+        { senderId: friendId, recipientId: userId }
+      ],
+      deletedBy: { $ne: userId }
+    })
+    .sort({ timestamp: -1 })
+    .limit(parseInt(limit))
+    .skip(parseInt(offset));
+
+    const formattedMessages = messages.reverse().map(msg => ({
+      id: msg.messageId,
+      message: msg.message,
+      isMe: msg.senderId === userId,
+      timestamp: msg.timestamp,
+      isRead: msg.isRead,
+      messageType: msg.messageType
+    }));
+
+    res.json({ success: true, messages: formattedMessages });
+  } catch (error) {
+    logger.error('❌ Error fetching messages:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch messages' });
+  }
+});
+
+// Send a message
+app.post('/api/messages/send', async (req, res) => {
+  try {
+    const { senderId, recipientId, message, senderName, messageType = 'text' } = req.body;
+
+    if (!senderId || !recipientId || !message) {
+      return res.status(400).json({ success: false, error: 'Missing required fields' });
+    }
+
+    const newMessage = new Message({
+      messageId: uuidv4(),
+      senderId,
+      recipientId,
+      senderName,
+      message,
+      messageType,
+      timestamp: new Date()
+    });
+
+    await newMessage.save();
+
+    // Emit via WebSocket to recipient if online
+    io.emit('new_message', {
+      id: newMessage.messageId,
+      senderId: senderId,
+      recipientId: recipientId,
+      senderName: senderName,
+      message: message,
+      timestamp: newMessage.timestamp,
+      messageType: messageType
+    });
+
+    res.json({ 
+      success: true, 
+      message: 'Message sent successfully',
+      messageData: {
+        id: newMessage.messageId,
+        timestamp: newMessage.timestamp
+      }
+    });
+  } catch (error) {
+    logger.error('❌ Error sending message:', error);
+    res.status(500).json({ success: false, error: 'Failed to send message' });
+  }
+});
+
+// Mark messages as read
+app.put('/api/messages/read', async (req, res) => {
+  try {
+    const { userId, friendId } = req.body;
+
+    await Message.updateMany(
+      { senderId: friendId, recipientId: userId, isRead: false },
+      { isRead: true, readAt: new Date() }
+    );
+
+    res.json({ success: true, message: 'Messages marked as read' });
+  } catch (error) {
+    logger.error('❌ Error marking messages as read:', error);
+    res.status(500).json({ success: false, error: 'Failed to mark messages as read' });
+  }
+});
+
+// ==================== VERIFICATION CODE API ====================
+
+// Send verification code
+app.post('/api/verification/send', async (req, res) => {
+  try {
+    const { email, purpose = 'email_verification' } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ success: false, error: 'Email is required' });
+    }
+
+    // Generate 6-digit code
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    // Delete any existing codes for this email
+    await VerificationCode.deleteMany({ email, purpose });
+
+    // Create new verification code
+    const verificationCode = new VerificationCode({
+      email,
+      code,
+      purpose,
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000) // 10 minutes
+    });
+
+    await verificationCode.save();
+
+    // TODO: Send email with code (integrate SendGrid/Nodemailer)
+    logger.info(`📧 Verification code for ${email}: ${code}`);
+
+    // For development, return the code
+    res.json({ 
+      success: true, 
+      message: 'Verification code sent successfully',
+      // Remove this in production:
+      code: process.env.NODE_ENV === 'development' ? code : undefined
+    });
+  } catch (error) {
+    logger.error('❌ Error sending verification code:', error);
+    res.status(500).json({ success: false, error: 'Failed to send verification code' });
+  }
+});
+
+// Verify code
+app.post('/api/verification/verify', async (req, res) => {
+  try {
+    const { email, code, purpose = 'email_verification' } = req.body;
+
+    if (!email || !code) {
+      return res.status(400).json({ success: false, error: 'Email and code are required' });
+    }
+
+    const verificationCode = await VerificationCode.findOne({ 
+      email, 
+      purpose,
+      isUsed: false 
+    });
+
+    if (!verificationCode) {
+      return res.status(404).json({ success: false, error: 'Verification code not found or expired' });
+    }
+
+    // Check if expired
+    if (new Date() > verificationCode.expiresAt) {
+      return res.status(400).json({ success: false, error: 'Verification code has expired' });
+    }
+
+    // Check attempts
+    if (verificationCode.attempts >= verificationCode.maxAttempts) {
+      return res.status(400).json({ success: false, error: 'Maximum verification attempts exceeded' });
+    }
+
+    // Verify code
+    if (verificationCode.code !== code) {
+      verificationCode.attempts += 1;
+      await verificationCode.save();
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid verification code',
+        attemptsLeft: verificationCode.maxAttempts - verificationCode.attempts
+      });
+    }
+
+    // Mark as used
+    verificationCode.isUsed = true;
+    verificationCode.usedAt = new Date();
+    await verificationCode.save();
+
+    res.json({ 
+      success: true, 
+      message: 'Verification successful'
+    });
+  } catch (error) {
+    logger.error('❌ Error verifying code:', error);
+    res.status(500).json({ success: false, error: 'Failed to verify code' });
   }
 });
 

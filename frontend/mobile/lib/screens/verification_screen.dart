@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../services/api_service.dart';
 import 'personal_details_screen.dart';
 
 class VerificationScreen extends StatefulWidget {
@@ -29,7 +30,7 @@ class _VerificationScreenState extends State<VerificationScreen>
   bool _isLoading = false;
   bool _isResending = false;
   String _verificationCode = '';
-  final String _correctCode = '123456'; // Mock verification code
+  String? _correctCode; // Will be fetched from backend
   
   int _resendTimer = 60;
   bool _canResend = false;
@@ -40,6 +41,7 @@ class _VerificationScreenState extends State<VerificationScreen>
     _initAnimations();
     _startEntryAnimation();
     _startResendTimer();
+    _sendVerificationCode(); // Send code on screen load
   }
 
   void _initAnimations() {
@@ -253,37 +255,38 @@ class _VerificationScreenState extends State<VerificationScreen>
               children: List.generate(6, (index) => _buildCodeField(index)),
             ),
             const SizedBox(height: 20),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: Colors.orange.withOpacity(0.3),
-                  width: 1,
-                ),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.info_outline,
-                    color: Colors.orange,
-                    size: 20,
+            if (_correctCode != null) // Only show in development
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.orange.withOpacity(0.3),
+                    width: 1,
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'For demo purposes, use: 123456',
-                      style: TextStyle(
-                        color: Colors.orange,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      color: Colors.orange,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Dev Mode: Code is $_correctCode',
+                        style: TextStyle(
+                          color: Colors.orange,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
           ],
         ),
       ),
@@ -464,16 +467,34 @@ class _VerificationScreenState extends State<VerificationScreen>
     );
   }
 
+  Future<void> _sendVerificationCode() async {
+    try {
+      final result = await ApiService.sendVerificationCode(widget.email);
+      
+      if (result['success'] == true) {
+        // In development, the code is returned for testing
+        if (result['code'] != null) {
+          setState(() {
+            _correctCode = result['code'];
+          });
+        }
+        print('✅ Verification code sent to ${widget.email}');
+      }
+    } catch (e) {
+      print('❌ Error sending verification code: $e');
+      _showErrorSnackBar('Failed to send verification code. Please try again.');
+    }
+  }
+
   Future<void> _verifyCode(BuildContext context) async {
     if (_isLoading) return;
     
     setState(() => _isLoading = true);
 
     try {
-      // Simulate verification process
-      await Future.delayed(const Duration(seconds: 1));
+      final result = await ApiService.verifyCode(widget.email, _verificationCode);
       
-      if (_verificationCode == _correctCode) {
+      if (result['success'] == true) {
         _showSuccessSnackBar('Email verified successfully!');
         await _exitAnimation();
         Navigator.push(
@@ -483,7 +504,7 @@ class _VerificationScreenState extends State<VerificationScreen>
           ),
         );
       } else {
-        _showErrorSnackBar('Invalid verification code. Please try again.');
+        _showErrorSnackBar(result['error'] ?? 'Invalid verification code');
         _clearCode();
         setState(() => _isLoading = false);
       }
@@ -499,17 +520,28 @@ class _VerificationScreenState extends State<VerificationScreen>
     setState(() => _isResending = true);
     
     try {
-      // Simulate resending code
-      await Future.delayed(const Duration(seconds: 2));
+      final result = await ApiService.sendVerificationCode(widget.email);
       
-      setState(() {
-        _canResend = false;
-        _resendTimer = 60;
-        _isResending = false;
-      });
-      
-      _startResendTimer();
-      _showSuccessSnackBar('Verification code resent to ${widget.email}');
+      if (result['success'] == true) {
+        // In development, the code is returned for testing
+        if (result['code'] != null) {
+          setState(() {
+            _correctCode = result['code'];
+          });
+        }
+        
+        setState(() {
+          _canResend = false;
+          _resendTimer = 60;
+          _isResending = false;
+        });
+        
+        _startResendTimer();
+        _showSuccessSnackBar('Verification code resent to ${widget.email}');
+      } else {
+        setState(() => _isResending = false);
+        _showErrorSnackBar('Failed to resend code');
+      }
     } catch (e) {
       setState(() => _isResending = false);
       _showErrorSnackBar('Failed to resend code');
