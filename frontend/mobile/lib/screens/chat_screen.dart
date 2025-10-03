@@ -57,18 +57,6 @@ class _ChatScreenState extends State<ChatScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _scrollToBottom();
       });
-      
-      // Mock auto-reply from security
-      Future.delayed(Duration(seconds: 2), () {
-        setState(() {
-          messages.add(ChatMessage(
-            sender: 'Security',
-            message: 'Thanks for the update. We\'re monitoring your situation closely.',
-            time: TimeOfDay.now().format(context),
-          ));
-        });
-        _scrollToBottom();
-      });
     }
   }
 
