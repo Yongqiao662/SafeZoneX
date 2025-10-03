@@ -747,8 +747,9 @@ app.post('/api/messages/send', async (req, res) => {
 
     await newMessage.save();
 
-    // Emit via WebSocket to recipient if online
-    io.emit('new_message', {
+    // Emit to specific recipient's room instead of broadcasting to all
+    const recipientRoom = `user_${recipientId}`;
+    io.to(recipientRoom).emit('new_message', {
       id: newMessage.messageId,
       senderId: senderId,
       recipientId: recipientId,
@@ -757,6 +758,8 @@ app.post('/api/messages/send', async (req, res) => {
       timestamp: newMessage.timestamp,
       messageType: messageType
     });
+
+    logger.info(`📤 Message sent from ${senderName} to user room: ${recipientRoom}`);
 
     res.json({ 
       success: true, 
@@ -905,6 +908,46 @@ io.on('connection', (socket) => {
     logger.info(`🔥 Client ${socket.id} joined room: ${room}`);
   });
 
+  // Handle user joining personal room for chat
+  socket.on('join_user_room', async (data) => {
+    const userId = data.userId;
+    const roomName = `user_${userId}`;
+    socket.join(roomName);
+    socket.userId = userId; // Store user ID on socket for later use
+    logger.info(`👤 User ${userId} joined personal room: ${roomName}`);
+    
+    // Update user's online status and last seen
+    try {
+      await User.findOneAndUpdate(
+        { userId: userId },
+        { 
+          isOnline: true,
+          lastSeen: new Date()
+        }
+      );
+      logger.info(`✅ Updated online status for user: ${userId}`);
+    } catch (error) {
+      logger.error(`❌ Failed to update user status: ${error.message}`);
+    }
+  });
+
+  // Handle user activity updates (for real-time status)
+  socket.on('user_activity', async (data) => {
+    const userId = data.userId;
+    try {
+      await User.findOneAndUpdate(
+        { userId: userId },
+        { 
+          lastSeen: new Date(),
+          isOnline: true
+        }
+      );
+      logger.info(`⚡ Updated activity for user: ${userId}`);
+    } catch (error) {
+      logger.error(`❌ Failed to update user activity: ${error.message}`);
+    }
+  });
+
   // SOS Alert - Broadcast to all connected friends
   socket.on('sos_alert', (data) => {
     logger.info(`🆘 SOS Alert received from ${data.userName}:`, data);
@@ -986,8 +1029,24 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('disconnect', () => {
+  socket.on('disconnect', async () => {
     logger.info(`🔌 Client disconnected: ${socket.id}`);
+    
+    // Update user's offline status if they were logged in
+    if (socket.userId) {
+      try {
+        await User.findOneAndUpdate(
+          { userId: socket.userId },
+          { 
+            isOnline: false,
+            lastSeen: new Date()
+          }
+        );
+        logger.info(`👋 Updated offline status for user: ${socket.userId}`);
+      } catch (error) {
+        logger.error(`❌ Failed to update user offline status: ${error.message}`);
+      }
+    }
   });
 });
 

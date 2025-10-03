@@ -1567,8 +1567,20 @@ class _ChatScreenState extends State<ChatScreen> {
 
     socket?.connect();
 
-    socket?.on('connect', (_) {
+    socket?.on('connect', (_) async {
       print('🔗 Connected to chat server');
+      
+      // Get current user ID for joining personal room
+      final currentUserId = await ApiService.getCurrentUserId();
+      if (currentUserId != null) {
+        // Join personal room for receiving messages
+        socket?.emit('join_user_room', {
+          'userId': currentUserId,
+          'type': 'chat'
+        });
+        print('🏠 Joined personal room for user: $currentUserId');
+      }
+      
       _loadChatHistory(); // Load chat history when connected
     });
 
@@ -2066,6 +2078,14 @@ class _ChatScreenState extends State<ChatScreen> {
       }
       
       print('📤 Sending message with logged-in user...');
+      
+      // Update user's last seen timestamp when sending message
+      socket?.emit('user_activity', {
+        'userId': currentUserId,
+        'activity': 'messaging',
+        'timestamp': DateTime.now().toIso8601String()
+      });
+      
       final response = await http.post(
         Uri.parse('http://10.0.2.2:8080/api/messages/send'),
         headers: {'Content-Type': 'application/json'},
