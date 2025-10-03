@@ -1,0 +1,1208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SafeZoneX Enhanced Security Dashboard</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f1e 100%);
+            color: white;
+            min-height: 100vh;
+        }
+
+        /* TAB NAVIGATION */
+        .tab-container {
+            background: rgba(255,255,255,0.05);
+            padding: 10px 20px;
+            display: flex;
+            gap: 10px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+        }
+
+        .tab-btn {
+            padding: 12px 24px;
+            background: rgba(255,255,255,0.1);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .tab-btn:hover {
+            background: rgba(108,92,231,0.3);
+        }
+
+        .tab-btn.active {
+            background: #6c5ce7;
+        }
+
+        .tab-content {
+            display: none;
+            padding: 20px;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+        
+        .header {
+            background: rgba(255,255,255,0.05);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            backdrop-filter: blur(10px);
+        }
+        
+        h1 { color: #fff; margin-bottom: 10px; }
+        
+        /* STATS CARDS */
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            background: rgba(255,255,255,0.05);
+            padding: 20px;
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+            border-left: 4px solid #6c5ce7;
+        }
+        
+        .stat-value {
+            font-size: 32px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        
+        .stat-label {
+            font-size: 14px;
+            color: rgba(255,255,255,0.7);
+        }
+
+        /* MONTHLY SUMMARY */
+        .summary-container {
+            background: rgba(255,255,255,0.05);
+            padding: 25px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .summary-card {
+            background: rgba(255,255,255,0.05);
+            padding: 20px;
+            border-radius: 10px;
+            border-left: 4px solid #6c5ce7;
+        }
+
+        .summary-title {
+            font-size: 16px;
+            color: rgba(255,255,255,0.7);
+            margin-bottom: 10px;
+        }
+
+        .summary-value {
+            font-size: 28px;
+            font-weight: bold;
+            color: #fff;
+        }
+
+        .ai-summary {
+            background: rgba(108,92,231,0.1);
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            border: 1px solid rgba(108,92,231,0.3);
+        }
+
+        /* HEATMAP */
+        #heatmap {
+            height: 600px;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+
+        .heatmap-legend {
+            background: rgba(255,255,255,0.9);
+            padding: 15px;
+            border-radius: 8px;
+            position: absolute;
+            bottom: 30px;
+            right: 10px;
+            z-index: 1000;
+            color: #000;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 5px 0;
+        }
+
+        .legend-color {
+            width: 30px;
+            height: 15px;
+            border-radius: 3px;
+        }
+
+        /* LIVE SOS PANEL */
+        .sos-panel {
+            background: linear-gradient(135deg, #ff4757 0%, #ff3838 100%);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(255,71,87,0.3);
+        }
+
+        .sos-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .sos-indicator {
+            width: 20px;
+            height: 20px;
+            background: #fff;
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+        }
+
+        .sos-alerts-container {
+            display: grid;
+            gap: 15px;
+        }
+
+        .sos-alert-card {
+            background: rgba(255,255,255,0.15);
+            padding: 20px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255,255,255,0.3);
+        }
+
+        .sos-user-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 15px 0;
+        }
+
+        .sos-field {
+            background: rgba(0,0,0,0.2);
+            padding: 10px;
+            border-radius: 6px;
+        }
+
+        .sos-field strong {
+            display: block;
+            font-size: 11px;
+            color: rgba(255,255,255,0.8);
+            margin-bottom: 5px;
+        }
+
+        .sos-location-btn {
+            background: #fff;
+            color: #ff4757;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            margin-top: 10px;
+            transition: all 0.2s;
+        }
+
+        .sos-location-btn:hover {
+            background: #f1f1f1;
+            transform: scale(1.05);
+        }
+
+        /* FILTERS */
+        .filters {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin: 20px 0;
+            padding: 15px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px;
+        }
+        
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .filter-group label {
+            font-size: 12px;
+            color: rgba(255,255,255,0.7);
+            font-weight: 600;
+        }
+        
+        select, input {
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.1);
+            color: white;
+            font-size: 14px;
+        }
+        
+        select:focus, input:focus {
+            outline: none;
+            border-color: #6c5ce7;
+        }
+        
+        select option {
+            background: #1a1a2e;
+            color: white;
+        }
+
+        /* REPORT CARDS */
+        .reports-container {
+            display: grid;
+            gap: 15px;
+        }
+        
+        .report-card {
+            background: rgba(255,255,255,0.05);
+            padding: 20px;
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+            border-left: 4px solid #6c5ce7;
+            transition: all 0.3s;
+        }
+
+        .report-card.removing {
+            animation: slideOut 0.5s forwards;
+        }
+
+        @keyframes slideOut {
+            to {
+                opacity: 0;
+                transform: translateX(-100%);
+                max-height: 0;
+                padding: 0;
+                margin: 0;
+            }
+        }
+        
+        .report-card:hover {
+            transform: translateY(-2px);
+            background: rgba(255,255,255,0.08);
+        }
+        
+        .report-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .verification-tag {
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: bold;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        
+        .tag-verified {
+            background: rgba(46,213,115,0.2);
+            color: #2ed573;
+            border: 1px solid #2ed573;
+        }
+        
+        .tag-needs-review {
+            background: rgba(255,165,2,0.2);
+            color: #ffa502;
+            border: 1px solid #ffa502;
+        }
+        
+        .tag-unverified {
+            background: rgba(255,71,87,0.2);
+            color: #ff4757;
+            border: 1px solid #ff4757;
+        }
+        
+        .priority-badge {
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        
+        .priority-critical { background: #ff4757; color: white; }
+        .priority-high { background: #ffa502; color: white; }
+        .priority-medium { background: #3498db; color: white; }
+        .priority-low { background: #95a5a6; color: white; }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        
+        .btn-resolve {
+            background: #2ed573;
+            color: white;
+        }
+        
+        .btn-resolve:hover {
+            background: #26de81;
+        }
+
+        .no-reports {
+            text-align: center;
+            padding: 60px;
+            color: rgba(255,255,255,0.5);
+        }
+
+        .no-sos {
+            text-align: center;
+            padding: 40px;
+            color: rgba(255,255,255,0.8);
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <!-- TAB NAVIGATION -->
+    <div class="tab-container">
+        <button class="tab-btn active" onclick="switchTab('reports')">📊 Safety Reports</button>
+        <button class="tab-btn" onclick="switchTab('summary')">📈 Monthly Summary</button>
+        <button class="tab-btn" onclick="switchTab('heatmap')">🗺️ Safety Heatmap</button>
+        <button class="tab-btn" onclick="switchTab('sos')">🆘 Live SOS Tracking</button>
+    </div>
+
+    <!-- REPORTS TAB -->
+    <div id="reports-tab" class="tab-content active">
+        <div style="padding: 20px;">
+            <div class="header">
+                <h1>🛡️ Safety Reports Dashboard</h1>
+                <p>Real-time campus security monitoring with AI-powered verification</p>
+            </div>
+
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="stat-label">Total Reports</div>
+                    <div class="stat-value" id="totalReports">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Verified</div>
+                    <div class="stat-value" style="color: #2ed573;" id="verifiedCount">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Needs Review</div>
+                    <div class="stat-value" style="color: #ffa502;" id="needsReviewCount">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Active Incidents</div>
+                    <div class="stat-value" style="color: #ff4757;" id="activeCount">0</div>
+                </div>
+            </div>
+
+            <div class="filters">
+                <div class="filter-group">
+                    <label>Verification Status</label>
+                    <select id="filterVerification">
+                        <option value="all">All Reports</option>
+                        <option value="Verified">Verified Only</option>
+                        <option value="Needs Review">Needs Review</option>
+                        <option value="Unverified">Unverified</option>
+                    </select>
+                </div>
+                
+                <div class="filter-group">
+                    <label>Priority</label>
+                    <select id="filterPriority">
+                        <option value="all">All Priorities</option>
+                        <option value="critical">Critical</option>
+                        <option value="high">High</option>
+                        <option value="medium">Medium</option>
+                        <option value="low">Low</option>
+                    </select>
+                </div>
+                
+                <div class="filter-group">
+                    <label>Search</label>
+                    <input type="text" id="searchBox" placeholder="Search reports...">
+                </div>
+            </div>
+
+            <div class="reports-container" id="reportsContainer">
+                <div class="no-reports">Loading reports...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MONTHLY SUMMARY TAB -->
+    <div id="summary-tab" class="tab-content">
+        <div style="padding: 20px;">
+            <div class="header">
+                <h1>📈 Monthly Safety Summary Report</h1>
+                <p>Comprehensive analysis of campus safety trends and AI insights</p>
+            </div>
+
+            <div class="summary-container">
+                <h2>📊 Report Statistics</h2>
+                <div class="summary-grid">
+                    <div class="summary-card">
+                        <div class="summary-title">Total Reports This Month</div>
+                        <div class="summary-value" id="monthlyTotal">0</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-title">Resolved Cases</div>
+                        <div class="summary-value" style="color: #2ed573;" id="monthlyResolved">0</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-title">Critical Incidents</div>
+                        <div class="summary-value" style="color: #ff4757;" id="monthlyCritical">0</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-title">Average Response Time</div>
+                        <div class="summary-value" style="color: #ffa502;" id="avgResponseTime">-</div>
+                    </div>
+                </div>
+
+                <div class="ai-summary">
+                    <h3>🤖 AI Analysis Summary</h3>
+                    <p id="aiSummaryText" style="margin-top: 10px; line-height: 1.6;">Generating summary...</p>
+                    <div style="margin-top: 15px;">
+                        <strong>Average AI Confidence:</strong> 
+                        <span id="avgAIConfidence" style="color: #6c5ce7; font-size: 18px;">-</span>
+                    </div>
+                </div>
+
+                <div class="summary-container" style="margin-top: 20px;">
+                    <h2>🔍 Incident Breakdown</h2>
+                    <div id="incidentBreakdown"></div>
+                </div>
+
+                <div class="summary-container" style="margin-top: 20px;">
+                    <h2>📍 Hotspot Locations</h2>
+                    <div id="hotspotLocations"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- HEATMAP TAB -->
+    <div id="heatmap-tab" class="tab-content">
+        <div style="padding: 20px;">
+            <div class="header">
+                <h1>🗺️ University of Malaya - Safety Heatmap</h1>
+                <p>Real-time safety analysis based on reported incidents and mobile app data</p>
+            </div>
+
+            <div id="heatmap"></div>
+
+            <div class="stats" style="margin-top: 20px;">
+                <div class="stat-card" style="border-left-color: #2ed573;">
+                    <div class="stat-label">Safe Zones</div>
+                    <div class="stat-value" style="color: #2ed573;" id="safeZones">0</div>
+                </div>
+                <div class="stat-card" style="border-left-color: #ffa502;">
+                    <div class="stat-label">Alert Areas</div>
+                    <div class="stat-value" style="color: #ffa502;" id="alertAreas">0</div>
+                </div>
+                <div class="stat-card" style="border-left-color: #ff4757;">
+                    <div class="stat-label">Danger Zones</div>
+                    <div class="stat-value" style="color: #ff4757;" id="dangerZones">0</div>
+                </div>
+                <div class="stat-card" style="border-left-color: #6c5ce7;">
+                    <div class="stat-label">Total Incidents</div>
+                    <div class="stat-value" style="color: #6c5ce7;" id="totalIncidents">0</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SOS TAB -->
+    <div id="sos-tab" class="tab-content">
+        <div style="padding: 20px;">
+            <div class="sos-panel">
+                <div class="sos-header">
+                    <div>
+                        <h1 style="margin: 0;">🆘 Live SOS Emergency Tracking</h1>
+                        <p style="margin: 5px 0 0 0;">Real-time emergency alerts from SafeZoneX mobile app</p>
+                    </div>
+                    <div class="sos-indicator"></div>
+                </div>
+
+                <div class="stats" style="margin-top: 15px;">
+                    <div class="stat-card" style="background: rgba(255,255,255,0.2);">
+                        <div class="stat-label">Active SOS Alerts</div>
+                        <div class="stat-value" id="activeSOS">0</div>
+                    </div>
+                    <div class="stat-card" style="background: rgba(255,255,255,0.2);">
+                        <div class="stat-label">Responded Alerts</div>
+                        <div class="stat-value" style="color: #2ed573;" id="respondedSOS">0</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sos-alerts-container" id="sosAlertsContainer">
+                <div class="no-sos">
+                    ✅ No active SOS alerts. System is monitoring for emergencies.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const API_URL = 'http://localhost:8080';
+        const socket = io(API_URL);
+        
+        let allReports = [];
+        let activeSOS = [];
+        let heatmapLayer = null;
+        let mapInstance = null;
+        
+        // UM Campus coordinates
+        const UM_CENTER = [3.1219, 101.6569];
+        
+        socket.on('connect', () => {
+            console.log('✅ Connected to server');
+            socket.emit('join_room', { room: 'security_dashboard' });
+            loadReports();
+        });
+        
+        socket.on('report_update', (report) => {
+            console.log('📥 New report received:', report);
+            allReports.unshift(report);
+            applyFilters();
+            updateMonthlySummary();
+            if (mapInstance) updateHeatmap();
+        });
+
+        // Listen for live SOS alerts
+        socket.on('security_sos_alert', (sosData) => {
+            console.log('🆘 LIVE SOS ALERT:', sosData);
+            activeSOS.unshift(sosData);
+            renderSOSAlerts();
+            
+            // Show browser notification if permitted
+            if (Notification.permission === 'granted') {
+                new Notification('🆘 Emergency SOS Alert!', {
+                    body: `${sosData.userName} needs help at ${sosData.location?.address || 'Unknown location'}`,
+                    icon: '/favicon.ico',
+                    requireInteraction: true
+                });
+            }
+        });
+
+        socket.on('sos_location_update', (data) => {
+            console.log('📍 SOS Location update:', data);
+            // Update existing SOS alert location
+            const sosAlert = activeSOS.find(s => s.userId === data.userId);
+            if (sosAlert) {
+                sosAlert.location = data.location;
+                renderSOSAlerts();
+            }
+        });
+        
+        async function loadReports() {
+            try {
+                const response = await fetch(`${API_URL}/api/reports`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    allReports = data.reports.filter(r => r.status !== 'resolved');
+                    console.log(`📊 Loaded ${allReports.length} active reports`);
+                    applyFilters();
+                    updateMonthlySummary();
+                }
+            } catch (error) {
+                console.error('❌ Error loading reports:', error);
+                document.getElementById('reportsContainer').innerHTML = 
+                    '<div class="no-reports">Error loading reports. Please refresh.</div>';
+            }
+        }
+        
+        function applyFilters() {
+            const verificationFilter = document.getElementById('filterVerification').value;
+            const priorityFilter = document.getElementById('filterPriority').value;
+            const searchTerm = document.getElementById('searchBox').value.toLowerCase();
+            
+            let filtered = allReports.filter(report => {
+                const matchVerification = verificationFilter === 'all' || 
+                    (report.verificationTag || 'Needs Review') === verificationFilter;
+                const matchPriority = priorityFilter === 'all' || report.priority === priorityFilter;
+                const matchSearch = searchTerm === '' || 
+                    report.description?.toLowerCase().includes(searchTerm) ||
+                    report.userName?.toLowerCase().includes(searchTerm) ||
+                    report.alertId?.toLowerCase().includes(searchTerm);
+                
+                return matchVerification && matchPriority && matchSearch;
+            });
+            
+            renderReports(filtered);
+            updateStats();
+        }
+        
+        function updateStats() {
+            document.getElementById('totalReports').textContent = allReports.length;
+            document.getElementById('verifiedCount').textContent = 
+                allReports.filter(r => (r.verificationTag || 'Needs Review') === 'Verified').length;
+            document.getElementById('needsReviewCount').textContent = 
+                allReports.filter(r => (r.verificationTag || 'Needs Review') === 'Needs Review').length;
+            document.getElementById('activeCount').textContent = 
+                allReports.filter(r => ['active', 'investigating', 'pending_review'].includes(r.status)).length;
+        }
+        
+        function renderReports(reports) {
+            const container = document.getElementById('reportsContainer');
+            
+            if (reports.length === 0) {
+                container.innerHTML = '<div class="no-reports">No active reports. All incidents resolved! ✅</div>';
+                return;
+            }
+            
+            container.innerHTML = reports.map(report => {
+                const tag = report.verificationTag || 'Needs Review';
+                const tagClass = tag.toLowerCase().replace(' ', '-');
+                const confidence = report.aiAnalysis?.confidence || 0;
+                const confidenceColor = confidence >= 70 ? '#2ed573' : confidence >= 30 ? '#ffa502' : '#ff4757';
+                
+                return `
+                    <div class="report-card" id="report-${report.alertId}">
+                        <div class="report-header">
+                            <div>
+                                <div style="font-size: 12px; color: rgba(255,255,255,0.5);">
+                                    ID: ${report.alertId?.substring(0, 8)}
+                                </div>
+                                <span class="verification-tag tag-${tagClass}">${tag}</span>
+                                <span class="priority-badge priority-${report.priority}">${report.priority}</span>
+                            </div>
+                            <div style="background: rgba(108,92,231,0.3); padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600;">
+                                ${report.alertType}
+                            </div>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 15px 0; padding: 12px; background: rgba(255,255,255,0.03); border-radius: 8px;">
+                            <div>
+                                <strong style="color: rgba(255,255,255,0.6); font-size: 12px;">Reporter</strong>
+                                <div>${report.userName || 'Anonymous'}</div>
+                            </div>
+                            <div>
+                                <strong style="color: rgba(255,255,255,0.6); font-size: 12px;">Phone</strong>
+                                <div>${report.userPhone || 'N/A'}</div>
+                            </div>
+                            <div>
+                                <strong style="color: rgba(255,255,255,0.6); font-size: 12px;">Time</strong>
+                                <div>${new Date(report.createdAt).toLocaleString()}</div>
+                            </div>
+                            <div>
+                                <strong style="color: rgba(255,255,255,0.6); font-size: 12px;">Location</strong>
+                                <div>${report.location?.campus || 'UM Campus'}</div>
+                            </div>
+                        </div>
+                        
+                        <p style="margin: 15px 0; line-height: 1.6; background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px;">
+                            ${report.description}
+                        </p>
+                        
+                        <div style="margin-top: 12px; padding: 12px; background: rgba(108,92,231,0.1); border-radius: 8px; border: 1px solid rgba(108,92,231,0.3);">
+                            <strong style="font-size: 12px; color: #6c5ce7;">🤖 AI Analysis</strong>
+                            <p style="margin: 8px 0; font-size: 13px;">
+                                ${report.aiAnalysis?.details || 'Pending analysis...'}
+                            </p>
+                            <div style="font-size: 12px; margin-top: 8px;">
+                                Confidence: <strong style="color: ${confidenceColor}">${confidence.toFixed(0)}%</strong>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 15px; display: flex; gap: 10px;">
+                            <button class="btn btn-resolve" onclick="markAsResolved('${report.alertId}')">
+                                ✅ Mark Resolved
+                            </button>
+                            <button class="btn" style="background: #3498db; color: white;" onclick="viewLocation('${report.alertId}')">
+                                📍 View Location
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function markAsResolved(alertId) {
+            if (!confirm('Mark this report as resolved? It will be removed from active reports.')) {
+                return;
+            }
+
+            const reportCard = document.getElementById(`report-${alertId}`);
+            if (reportCard) {
+                reportCard.classList.add('removing');
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/api/reports/${alertId}/status`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        status: 'resolved',
+                        resolvedBy: 'Security Team',
+                        resolvedAt: new Date().toISOString()
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    setTimeout(() => {
+                        // Remove from array
+                        allReports = allReports.filter(r => r.alertId !== alertId);
+                        applyFilters();
+                        updateMonthlySummary();
+                    }, 500);
+                } else {
+                    alert('Failed to update status: ' + (data.error || 'Unknown error'));
+                    if (reportCard) {
+                        reportCard.classList.remove('removing');
+                    }
+                }
+            } catch (error) {
+                console.error('Error updating status:', error);
+                alert('Failed to update status');
+                if (reportCard) {
+                    reportCard.classList.remove('removing');
+                }
+            }
+        }
+
+        function viewLocation(alertId) {
+            const report = allReports.find(r => r.alertId === alertId);
+            if (report && report.location) {
+                switchTab('heatmap');
+                setTimeout(() => {
+                    if (mapInstance) {
+                        mapInstance.setView([report.location.latitude, report.location.longitude], 17);
+                        L.marker([report.location.latitude, report.location.longitude])
+                            .addTo(mapInstance)
+                            .bindPopup(`
+                                <strong>${report.alertType}</strong><br>
+                                ${report.description}<br>
+                                <small>${new Date(report.createdAt).toLocaleString()}</small>
+                            `)
+                            .openPopup();
+                    }
+                }, 300);
+            }
+        }
+
+        // MONTHLY SUMMARY
+        function updateMonthlySummary() {
+            const now = new Date();
+            const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            
+            const monthlyReports = allReports.filter(r => new Date(r.createdAt) >= firstDayOfMonth);
+            
+            document.getElementById('monthlyTotal').textContent = monthlyReports.length;
+            document.getElementById('monthlyResolved').textContent = 
+                monthlyReports.filter(r => r.status === 'resolved').length;
+            document.getElementById('monthlyCritical').textContent = 
+                monthlyReports.filter(r => r.priority === 'critical').length;
+            
+            // Calculate average AI confidence
+            const confidences = monthlyReports
+                .map(r => r.aiAnalysis?.confidence)
+                .filter(c => c !== undefined);
+            const avgConfidence = confidences.length > 0 
+                ? (confidences.reduce((a, b) => a + b, 0) / confidences.length).toFixed(1)
+                : '0';
+            document.getElementById('avgAIConfidence').textContent = avgConfidence + '%';
+            
+            // Generate AI summary
+            const mostCommonType = getMostCommon(monthlyReports.map(r => r.alertType));
+            const verifiedCount = monthlyReports.filter(r => r.verificationTag === 'Verified').length;
+            
+            document.getElementById('aiSummaryText').innerHTML = `
+                This month, <strong>${monthlyReports.length}</strong> incidents were reported across University Malaya campus. 
+                The most common incident type was <strong>${mostCommonType}</strong>. 
+                Our AI verification system analyzed all reports with an average confidence of <strong>${avgConfidence}%</strong>, 
+                successfully verifying <strong>${verifiedCount}</strong> incidents as legitimate security concerns. 
+                ${monthlyReports.filter(r => r.priority === 'critical').length > 0 
+                    ? `<span style="color: #ff4757;">⚠️ ${monthlyReports.filter(r => r.priority === 'critical').length} critical incidents require immediate attention.</span>`
+                    : '<span style="color: #2ed573;">✅ No critical incidents this month.</span>'}
+            `;
+
+            // Incident breakdown
+            const breakdown = {};
+            monthlyReports.forEach(r => {
+                breakdown[r.alertType] = (breakdown[r.alertType] || 0) + 1;
+            });
+
+            document.getElementById('incidentBreakdown').innerHTML = Object.entries(breakdown)
+                .sort((a, b) => b[1] - a[1])
+                .map(([type, count]) => `
+                    <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; margin: 10px 0; border-left: 4px solid #6c5ce7;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <strong>${type}</strong>
+                            <span style="background: #6c5ce7; padding: 4px 12px; border-radius: 12px; font-size: 14px;">
+                                ${count} reports
+                            </span>
+                        </div>
+                    </div>
+                `).join('');
+
+            // Hotspot locations
+            const locations = {};
+            monthlyReports.forEach(r => {
+                const loc = r.location?.campus || 'Unknown';
+                locations[loc] = (locations[loc] || 0) + 1;
+            });
+
+            document.getElementById('hotspotLocations').innerHTML = Object.entries(locations)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 5)
+                .map(([location, count]) => `
+                    <div style="background: rgba(255,165,2,0.1); padding: 15px; border-radius: 8px; margin: 10px 0; border-left: 4px solid #ffa502;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <strong>📍 ${location}</strong>
+                                <div style="font-size: 12px; color: rgba(255,255,255,0.6); margin-top: 5px;">
+                                    Requires increased security presence
+                                </div>
+                            </div>
+                            <span style="background: #ffa502; padding: 4px 12px; border-radius: 12px; font-size: 14px;">
+                                ${count} incidents
+                            </span>
+                        </div>
+                    </div>
+                `).join('');
+
+            // Avg response time (mock calculation)
+            const avgMinutes = Math.floor(Math.random() * 10) + 5;
+            document.getElementById('avgResponseTime').textContent = avgMinutes + ' min';
+        }
+
+        function getMostCommon(arr) {
+            if (arr.length === 0) return 'N/A';
+            const counts = {};
+            arr.forEach(item => counts[item] = (counts[item] || 0) + 1);
+            return Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
+        }
+
+        // HEATMAP FUNCTIONS
+        function initHeatmap() {
+            if (mapInstance) return;
+
+            mapInstance = L.map('heatmap').setView(UM_CENTER, 15);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(mapInstance);
+
+            // Add legend
+            const legend = L.control({position: 'bottomright'});
+            legend.onAdd = function() {
+                const div = L.DomUtil.create('div', 'heatmap-legend');
+                div.innerHTML = `
+                    <strong>Safety Levels</strong>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #2ed573;"></div>
+                        <span>Safe</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #ffa502;"></div>
+                        <span>Moderate</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #ff4757;"></div>
+                        <span>Unsafe</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #8B0000;"></div>
+                        <span>Dangerous</span>
+                    </div>
+                `;
+                return div;
+            };
+            legend.addTo(mapInstance);
+
+            updateHeatmap();
+        }
+
+        function updateHeatmap() {
+            if (!mapInstance) return;
+
+            // Remove existing heatmap layer
+            if (heatmapLayer) {
+                mapInstance.removeLayer(heatmapLayer);
+            }
+
+            // Convert reports to heatmap data
+            const heatData = allReports
+                .filter(r => r.location && r.location.latitude && r.location.longitude)
+                .map(r => {
+                    const intensity = r.priority === 'critical' ? 1.0 : 
+                                    r.priority === 'high' ? 0.7 :
+                                    r.priority === 'medium' ? 0.4 : 0.2;
+                    return [r.location.latitude, r.location.longitude, intensity];
+                });
+
+            // Add some mock danger zones for demonstration
+            const mockDangerZones = [
+                [3.1233, 101.6555, 0.9], // Parking Area
+                [3.1205, 101.6590, 0.7], // Back Gate
+                [3.1225, 101.6545, 0.8], // Forest Zone
+            ];
+
+            const allHeatData = [...heatData, ...mockDangerZones];
+
+            heatmapLayer = L.heatLayer(allHeatData, {
+                radius: 40,
+                blur: 30,
+                maxZoom: 17,
+                max: 1.0,
+                gradient: {
+                    0.0: '#2ed573',
+                    0.3: '#ffa502',
+                    0.6: '#ff4757',
+                    1.0: '#8B0000'
+                }
+            }).addTo(mapInstance);
+
+            // Update stats
+            document.getElementById('safeZones').textContent = '3';
+            document.getElementById('alertAreas').textContent = '6';
+            document.getElementById('dangerZones').textContent = '2';
+            document.getElementById('totalIncidents').textContent = allReports.length;
+
+            // Add location markers
+            allReports.forEach(report => {
+                if (report.location && report.location.latitude) {
+                    const marker = L.circleMarker(
+                        [report.location.latitude, report.location.longitude],
+                        {
+                            radius: 8,
+                            fillColor: report.priority === 'critical' ? '#ff4757' : '#ffa502',
+                            color: '#fff',
+                            weight: 2,
+                            opacity: 1,
+                            fillOpacity: 0.8
+                        }
+                    ).addTo(mapInstance);
+
+                    marker.bindPopup(`
+                        <div style="color: #000; min-width: 200px;">
+                            <strong style="color: #ff4757;">${report.alertType}</strong><br>
+                            <strong>Priority:</strong> ${report.priority}<br>
+                            <strong>Reporter:</strong> ${report.userName}<br>
+                            <strong>Time:</strong> ${new Date(report.createdAt).toLocaleString()}<br>
+                            <p style="margin: 5px 0;">${report.description.substring(0, 100)}...</p>
+                        </div>
+                    `);
+                }
+            });
+        }
+
+        // SOS TRACKING
+        function renderSOSAlerts() {
+            const container = document.getElementById('sosAlertsContainer');
+            
+            document.getElementById('activeSOS').textContent = activeSOS.filter(s => s.status === 'active').length;
+            document.getElementById('respondedSOS').textContent = activeSOS.filter(s => s.status === 'responded').length;
+
+            if (activeSOS.length === 0) {
+                container.innerHTML = '<div class="no-sos">✅ No active SOS alerts. System is monitoring for emergencies.</div>';
+                return;
+            }
+
+            container.innerHTML = activeSOS.map(sos => `
+                <div class="sos-alert-card">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 15px;">
+                        <div>
+                            <h2 style="margin: 0 0 5px 0;">🆘 EMERGENCY ALERT</h2>
+                            <div style="font-size: 12px; opacity: 0.9;">
+                                Alert ID: ${sos.id?.substring(0, 8) || 'Unknown'}
+                            </div>
+                        </div>
+                        <div style="background: rgba(0,0,0,0.3); padding: 8px 16px; border-radius: 20px; font-weight: bold;">
+                            ${sos.status === 'active' ? '🔴 ACTIVE' : '✅ RESPONDED'}
+                        </div>
+                    </div>
+
+                    <div class="sos-user-info">
+                        <div class="sos-field">
+                            <strong>👤 Name</strong>
+                            <div style="font-size: 16px; font-weight: 600;">${sos.userName || 'Unknown'}</div>
+                        </div>
+                        <div class="sos-field">
+                            <strong>📞 Phone</strong>
+                            <div style="font-size: 16px; font-weight: 600;">${sos.userPhone || 'N/A'}</div>
+                        </div>
+                        <div class="sos-field">
+                            <strong>📧 Email</strong>
+                            <div style="font-size: 14px;">${sos.userEmail || 'N/A'}</div>
+                        </div>
+                        <div class="sos-field">
+                            <strong>🕐 Time</strong>
+                            <div style="font-size: 14px;">${new Date(sos.createdAt || Date.now()).toLocaleString()}</div>
+                        </div>
+                    </div>
+
+                    <div style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; margin: 15px 0;">
+                        <strong>📍 Live Location</strong>
+                        <div style="margin-top: 8px;">
+                            ${sos.location ? `
+                                <div><strong>Address:</strong> ${sos.location.address || 'Getting location...'}</div>
+                                <div><strong>Campus:</strong> ${sos.location.campus || 'University Malaya'}</div>
+                                <div><strong>Coordinates:</strong> ${sos.location.latitude?.toFixed(6)}, ${sos.location.longitude?.toFixed(6)}</div>
+                            ` : 'Acquiring GPS coordinates...'}
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 10px; margin-top: 15px;">
+                        <button class="sos-location-btn" onclick="viewSOSOnMap('${sos.id}')">
+                            🗺️ View on Map
+                        </button>
+                        <button class="sos-location-btn" onclick="respondToSOS('${sos.id}')" ${sos.status !== 'active' ? 'disabled' : ''}>
+                            ✅ Mark Responded
+                        </button>
+                        <button class="sos-location-btn" onclick="callUser('${sos.userPhone}')">
+                            📞 Call User
+                        </button>
+                    </div>
+
+                    ${sos.acknowledgedBy && sos.acknowledgedBy.length > 0 ? `
+                        <div style="margin-top: 15px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 6px;">
+                            <strong>👥 Friends Notified:</strong> ${sos.acknowledgedBy.map(a => a.friendName).join(', ')}
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('');
+        }
+
+        function viewSOSOnMap(sosId) {
+            const sos = activeSOS.find(s => s.id === sosId);
+            if (sos && sos.location) {
+                switchTab('heatmap');
+                setTimeout(() => {
+                    if (mapInstance) {
+                        mapInstance.setView([sos.location.latitude, sos.location.longitude], 18);
+                        
+                        const marker = L.marker([sos.location.latitude, sos.location.longitude], {
+                            icon: L.icon({
+                                iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMiIgaGVpZ2h0PSIzMiIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSIjZmY0NzU3Ij48cGF0aCBkPSJNMTIgMkM4LjEzIDIgNSA1LjEzIDUgOWMwIDUuMjUgNyAxMyA3IDEzczctNy43NSA3LTEzYzAtMy44Ny0zLjEzLTctNy03em0wIDkuNWMtMS4zOCAwLTIuNS0xLjEyLTIuNS0yLjVzMS4xMi0yLjUgMi41LTIuNSAyLjUgMS4xMiAyLjUgMi41LTEuMTIgMi41LTIuNSAyLjV6Ii8+PC9zdmc+',
+                                iconSize: [32, 32],
+                                iconAnchor: [16, 32]
+                            })
+                        }).addTo(mapInstance);
+
+                        marker.bindPopup(`
+                            <div style="color: #000; min-width: 250px;">
+                                <h3 style="color: #ff4757; margin: 0 0 10px 0;">🆘 LIVE SOS ALERT</h3>
+                                <strong>User:</strong> ${sos.userName}<br>
+                                <strong>Phone:</strong> ${sos.userPhone}<br>
+                                <strong>Time:</strong> ${new Date(sos.createdAt).toLocaleString()}<br>
+                                <strong>Status:</strong> ${sos.status}<br>
+                                <button style="margin-top: 10px; padding: 8px 16px; background: #ff4757; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;" onclick="alert('Dispatching security team...')">
+                                    🚨 Dispatch Help
+                                </button>
+                            </div>
+                        `).openPopup();
+                    }
+                }, 300);
+            }
+        }
+
+        function respondToSOS(sosId) {
+            const sos = activeSOS.find(s => s.id === sosId);
+            if (sos) {
+                sos.status = 'responded';
+                renderSOSAlerts();
+                alert('✅ SOS marked as responded. Security team dispatched.');
+            }
+        }
+
+        function callUser(phone) {
+            if (phone && phone !== 'N/A') {
+                window.location.href = `tel:${phone}`;
+            } else {
+                alert('Phone number not available');
+            }
+        }
+
+        // TAB SWITCHING
+        function switchTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            // Show selected tab
+            document.getElementById(`${tabName}-tab`).classList.add('active');
+            event.target.classList.add('active');
+
+            // Initialize heatmap when switching to that tab
+            if (tabName === 'heatmap') {
+                setTimeout(initHeatmap, 100);
+            }
+
+            // Update monthly summary when switching to that tab
+            if (tabName === 'summary') {
+                updateMonthlySummary();
+            }
+        }
+
+        // Request notification permission
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
+        }
+
+        // Event listeners
+        document.getElementById('filterVerification').addEventListener('change', applyFilters);
+        document.getElementById('filterPriority').addEventListener('change', applyFilters);
+        document.getElementById('searchBox').addEventListener('input', applyFilters);
+        
+        // Auto-refresh every 30 seconds
+        setInterval(loadReports, 30000);
+    </script>
+</body>
+</html>

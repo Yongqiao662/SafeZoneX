@@ -55,9 +55,18 @@ app.use((req, res, next) => {
 // Serve static files (for dashboard.html)
 app.use(express.static('public'));
 
-// Or serve dashboard.html directly
+// Serve dashboard.html (classic version)
 app.get('/dashboard.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'dashboard.html'));
+});
+
+// Serve enhanced dashboard (new features)
+app.get('/dashboard', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dashboard_enhanced.html'));
+});
+
+app.get('/dashboard-enhanced.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dashboard_enhanced.html'));
 });
 
 const mongoURI = process.env.MONGODB_URI;
@@ -294,13 +303,16 @@ app.post('/api/report', async (req, res) => {
 
 app.get('/api/reports', async (req, res) => {
   try {
-    console.log('📊 Dashboard fetching all reports');
+    console.log('📊 Dashboard fetching active reports');
     
-    const reports = await Alert.find({})
+    // Exclude resolved and false_alarm reports by default
+    const reports = await Alert.find({
+      status: { $nin: ['resolved', 'false_alarm'] }
+    })
       .sort({ createdAt: -1 })
       .limit(100);
 
-    console.log(`📋 Found ${reports.length} total reports for dashboard`);
+    console.log(`📋 Found ${reports.length} active reports for dashboard`);
 
     const transformedReports = reports.map(report => ({
       id: report.alertId,
@@ -982,5 +994,5 @@ io.on('connection', (socket) => {
 const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
   logger.info(`🚀 Server running on http://localhost:${PORT}`);
-  logger.info(`📊 Dashboard available at: http://localhost:${PORT}/dashboard.html`);
+  logger.info(`📊 Dashboard available at: http://localhost:${PORT}/dashboard-enhanced.html`);
 });
