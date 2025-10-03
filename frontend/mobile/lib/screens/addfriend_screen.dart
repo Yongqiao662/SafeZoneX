@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'dart:async';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/api_service.dart';
@@ -1548,11 +1550,109 @@ class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   late List<ChatMessage> messages;
+  IO.Socket? socket;
 
   @override
   void initState() {
     super.initState();
     messages = List.from(widget.messages);
+    _initializeSocket();
+  }
+
+  void _initializeSocket() {
+    socket = IO.io('http://10.0.2.2:8080', <String, dynamic>{
+      'transports': ['websocket'],
+      'autoConnect': true,
+    });
+
+    socket?.connect();
+
+    socket?.on('connect', (_) {
+      print('🔗 Connected to chat server');
+      _loadChatHistory(); // Load chat history when connected
+    });
+
+    // Listen for incoming messages
+    socket?.on('new_message', (data) {
+      print('📥 Received message: $data');
+      
+      // Only add message if it's for this chat (from this friend)
+      if (data['senderId'] == widget.friend.id) {
+        setState(() {
+          messages.add(ChatMessage(
+            id: data['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
+            message: data['message'] ?? '',
+            isMe: false,
+            timestamp: data['timestamp'] != null 
+                ? DateTime.parse(data['timestamp']) 
+                : DateTime.now(),
+            status: 'received',
+          ));
+        });
+
+        // Auto scroll to bottom when receiving message
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollController.hasClients) {
+            _scrollController.animateTo(
+              _scrollController.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOut,
+            );
+          }
+        });
+      }
+    });
+
+    socket?.on('disconnect', (_) {
+      print('❌ Disconnected from chat server');
+    });
+  }
+
+  // Load chat history from backend
+  void _loadChatHistory() async {
+    try {
+      // TODO: Get current user ID from auth service
+      final currentUserId = 'current-user-id'; // Replace with actual user ID
+      
+      final response = await http.get(
+        Uri.parse('http://10.0.2.2:8080/api/messages/$currentUserId/${widget.friend.id}'),
+      );
+      
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] && data['messages'] != null) {
+          setState(() {
+            messages = (data['messages'] as List).map((msg) => ChatMessage(
+              id: msg['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
+              message: msg['message'] ?? '',
+              isMe: msg['isMe'] ?? false,
+              timestamp: msg['timestamp'] != null 
+                  ? DateTime.parse(msg['timestamp']) 
+                  : DateTime.now(),
+              status: msg['isRead'] ? 'read' : 'sent',
+            )).toList();
+          });
+          
+          // Auto scroll to bottom after loading
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (_scrollController.hasClients) {
+              _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+            }
+          });
+        }
+      }
+    } catch (e) {
+      print('❌ Error loading chat history: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    socket?.disconnect();
+    socket?.dispose();
+    _messageController.dispose();
+    _scrollController.dispose();
+    super.dispose();
   }
 
   @override
@@ -1912,44 +2012,37 @@ class _ChatScreenState extends State<ChatScreen> {
         }
       });
 
-      // Simulate friend response after 2 seconds
-      Future.delayed(const Duration(seconds: 2), () {
-        if (mounted) {
-          setState(() {
-            messages.add(ChatMessage(
-              id: DateTime.now().millisecondsSinceEpoch.toString(),
-              message: _getAutoResponse(),
-              isMe: false,
-              timestamp: DateTime.now(),
-            ));
-          });
-          
-          // Auto scroll to bottom for response
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (_scrollController.hasClients) {
-              _scrollController.animateTo(
-                _scrollController.position.maxScrollExtent,
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeOut,
-              );
-            }
-          });
-        }
-      });
+      // TODO: Send message to backend for real-time delivery
+      _sendMessageToBackend(_messageController.text.trim());
     }
   }
 
-  String _getAutoResponse() {
-    final responses = [
-      "Thanks for the message! I'm currently busy but will get back to you soon.",
-      "Hey! Just saw your message. What's up?",
-      "I'm at ${widget.friend.location} right now. Want to meet up?",
-      "Sure thing! Let me know when you're free.",
-      "That sounds great! I'll check my schedule and let you know.",
-      "Thanks for checking in! I'm doing well, how about you?",
-    ];
-    
-    return responses[DateTime.now().millisecond % responses.length];
+  // Send message to backend for real-time delivery
+  void _sendMessageToBackend(String message) async {
+    try {
+      // TODO: Get current user ID from shared preferences or auth service
+      final currentUserId = 'current-user-id'; // Replace with actual user ID
+      
+      final response = await http.post(
+        Uri.parse('http://10.0.2.2:8080/api/messages/send'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'senderId': currentUserId,
+          'recipientId': widget.friend.id,
+          'message': message,
+          'senderName': 'You', // Replace with actual user name
+          'messageType': 'text',
+        }),
+      );
+      
+      if (response.statusCode == 200) {
+        print('✅ Message sent successfully');
+      } else {
+        print('❌ Failed to send message: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('❌ Error sending message: $e');
+    }
   }
 
   String _formatTime(DateTime timestamp) {
@@ -2034,12 +2127,5 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    _messageController.dispose();
-    _scrollController.dispose();
-    super.dispose();
   }
 }
