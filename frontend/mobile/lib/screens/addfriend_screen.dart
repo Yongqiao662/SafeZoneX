@@ -1611,8 +1611,13 @@ class _ChatScreenState extends State<ChatScreen> {
   // Load chat history from backend
   void _loadChatHistory() async {
     try {
-      // TODO: Get current user ID from auth service
-      final currentUserId = 'current-user-id'; // Replace with actual user ID
+      // Get current user ID from shared preferences
+      final currentUserId = await ApiService.getCurrentUserId();
+      
+      if (currentUserId == null) {
+        print('❌ No user logged in, cannot load chat history');
+        return;
+      }
       
       final response = await http.get(
         Uri.parse('http://10.0.2.2:8080/api/messages/$currentUserId/${widget.friend.id}'),
@@ -1988,11 +1993,12 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _sendMessage() {
-    if (_messageController.text.trim().isNotEmpty) {
+    final messageText = _messageController.text.trim();
+    if (messageText.isNotEmpty) {
       setState(() {
         messages.add(ChatMessage(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
-          message: _messageController.text.trim(),
+          message: messageText,
           isMe: true,
           timestamp: DateTime.now(),
           status: 'sent',
@@ -2012,17 +2018,54 @@ class _ChatScreenState extends State<ChatScreen> {
         }
       });
 
-      // TODO: Send message to backend for real-time delivery
-      _sendMessageToBackend(_messageController.text.trim());
+      // Send message to backend for real-time delivery
+      _sendMessageToBackend(messageText);
     }
   }
 
   // Send message to backend for real-time delivery
   void _sendMessageToBackend(String message) async {
     try {
-      // TODO: Get current user ID from shared preferences or auth service
-      final currentUserId = 'current-user-id'; // Replace with actual user ID
+      // Get current user ID and name from shared preferences
+      final currentUserId = await ApiService.getCurrentUserId();
+      final currentUserName = await ApiService.getCurrentUserName();
       
+      print('🔍 Debug - User ID: $currentUserId');
+      print('🔍 Debug - User Name: $currentUserName');
+      print('🔍 Debug - Friend ID: ${widget.friend.id}');
+      print('🔍 Debug - Message: $message');
+      
+      if (currentUserId == null || currentUserName == null) {
+        print('❌ No user logged in, cannot send message');
+        // Use fallback user ID for testing
+        final fallbackUserId = 'test_user_${DateTime.now().millisecondsSinceEpoch}';
+        final fallbackUserName = 'Test User';
+        print('🔄 Using fallback user: $fallbackUserId');
+        
+        final response = await http.post(
+          Uri.parse('http://10.0.2.2:8080/api/messages/send'),
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode({
+            'senderId': fallbackUserId,
+            'recipientId': widget.friend.id,
+            'message': message,
+            'senderName': fallbackUserName,
+            'messageType': 'text',
+          }),
+        );
+        
+        print('📤 Response status: ${response.statusCode}');
+        print('📤 Response body: ${response.body}');
+        
+        if (response.statusCode == 200) {
+          print('✅ Message sent successfully with fallback user');
+        } else {
+          print('❌ Failed to send message: ${response.statusCode}');
+        }
+        return;
+      }
+      
+      print('📤 Sending message with logged-in user...');
       final response = await http.post(
         Uri.parse('http://10.0.2.2:8080/api/messages/send'),
         headers: {'Content-Type': 'application/json'},
@@ -2030,10 +2073,13 @@ class _ChatScreenState extends State<ChatScreen> {
           'senderId': currentUserId,
           'recipientId': widget.friend.id,
           'message': message,
-          'senderName': 'You', // Replace with actual user name
+          'senderName': currentUserName,
           'messageType': 'text',
         }),
       );
+      
+      print('📤 Response status: ${response.statusCode}');
+      print('📤 Response body: ${response.body}');
       
       if (response.statusCode == 200) {
         print('✅ Message sent successfully');

@@ -565,6 +565,9 @@
             height: 100%;
             background-color: rgba(0,0,0,0.9);
             backdrop-filter: blur(5px);
+            overflow: auto;
+            padding: 20px;
+            box-sizing: border-box;
         }
 
         .image-modal.show {
@@ -581,20 +584,27 @@
 
         .image-modal-content {
             position: relative;
-            max-width: 90%;
-            max-height: 90%;
+            max-width: 95vw;
+            max-height: 95vh;
             background: rgba(255,255,255,0.1);
             border-radius: 12px;
             padding: 20px;
             backdrop-filter: blur(20px);
             border: 1px solid rgba(255,255,255,0.2);
+            overflow: auto;
+            display: flex;
+            flex-direction: column;
         }
 
         .image-modal img {
             max-width: 100%;
-            max-height: 70vh;
+            max-height: 75vh;
+            width: auto;
+            height: auto;
             border-radius: 8px;
             display: block;
+            margin: 0 auto;
+            object-fit: contain;
         }
 
         .image-modal-header {
@@ -616,6 +626,10 @@
             font-size: 20px;
             font-weight: bold;
             transition: all 0.2s;
+            position: sticky;
+            top: 0;
+            flex-shrink: 0;
+            z-index: 1001;
         }
 
         .close-modal:hover {
@@ -630,6 +644,31 @@
             background: rgba(255,255,255,0.1);
             border-radius: 8px;
             color: white;
+            max-height: 150px;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        /* Responsive adjustments for mobile */
+        @media (max-width: 768px) {
+            .image-modal {
+                padding: 10px;
+            }
+            
+            .image-modal-content {
+                max-width: 98vw;
+                max-height: 98vh;
+                padding: 15px;
+            }
+            
+            .image-modal img {
+                max-height: 60vh;
+            }
+            
+            .image-info {
+                max-height: 100px;
+                font-size: 14px;
+            }
         }
 
         .report-images {
@@ -1334,15 +1373,18 @@
             
             // Prevent body scroll when modal is open
             document.body.style.overflow = 'hidden';
+            
+            // Ensure the modal content is scrollable
+            modal.style.overflow = 'auto';
         }
 
         function closeImageModal(event) {
-            if (event && event.target !== event.currentTarget) return;
+            if (event && event.target !== event.currentTarget && !event.target.classList.contains('close-modal')) return;
             
             const modal = document.getElementById('imageModal');
             modal.classList.remove('show');
             
-            // Restore body scroll
+            // Re-enable body scrolling
             document.body.style.overflow = 'auto';
         }
 
