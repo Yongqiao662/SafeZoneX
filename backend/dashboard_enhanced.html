@@ -405,9 +405,178 @@
             background: rgba(255,255,255,0.1);
             border-radius: 8px;
         }
+
+        /* NOTIFICATION BELL */
+        .notification-bell {
+            position: fixed;
+            top: 80px;
+            right: 30px;
+            z-index: 999;
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: 2px solid rgba(255,255,255,0.2);
+        }
+
+        .notification-bell:hover {
+            background: rgba(108,92,231,0.3);
+            transform: scale(1.05);
+        }
+
+        .notification-bell.has-notifications {
+            animation: bellShake 0.5s ease-in-out;
+            background: rgba(255,71,87,0.2);
+            border-color: #ff4757;
+        }
+
+        @keyframes bellShake {
+            0%, 100% { transform: rotate(0deg); }
+            10%, 30%, 50%, 70%, 90% { transform: rotate(-10deg); }
+            20%, 40%, 60%, 80% { transform: rotate(10deg); }
+        }
+
+        .bell-icon {
+            font-size: 28px;
+            position: relative;
+        }
+
+        .notification-badge {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: #ff4757;
+            color: white;
+            font-size: 11px;
+            font-weight: bold;
+            padding: 2px 6px;
+            border-radius: 10px;
+            min-width: 20px;
+            text-align: center;
+            border: 2px solid #1a1a2e;
+            animation: badgePulse 1.5s infinite;
+        }
+
+        @keyframes badgePulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .notification-dropdown {
+            position: fixed;
+            top: 150px;
+            right: 30px;
+            width: 350px;
+            max-height: 500px;
+            background: rgba(26,26,46,0.98);
+            border-radius: 12px;
+            padding: 15px;
+            display: none;
+            z-index: 998;
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            overflow-y: auto;
+        }
+
+        .notification-dropdown.show {
+            display: block;
+            animation: slideDown 0.3s ease-out;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .notification-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .notification-item {
+            background: rgba(255,255,255,0.05);
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border-left: 3px solid #6c5ce7;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .notification-item:hover {
+            background: rgba(255,255,255,0.1);
+            transform: translateX(-5px);
+        }
+
+        .notification-item.sos {
+            border-left-color: #ff4757;
+            background: rgba(255,71,87,0.1);
+        }
+
+        .notification-item.report {
+            border-left-color: #ffa502;
+            background: rgba(255,165,2,0.1);
+        }
+
+        .notification-time {
+            font-size: 11px;
+            color: rgba(255,255,255,0.5);
+            margin-top: 5px;
+        }
+
+        .clear-notifications {
+            background: transparent;
+            color: #6c5ce7;
+            border: none;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .clear-notifications:hover {
+            color: #8b7ce7;
+        }
     </style>
 </head>
 <body>
+    <!-- LIVE NOTIFICATION BELL -->
+    <div class="notification-bell" id="notificationBell" onclick="toggleNotifications()">
+        <div class="bell-icon">
+            🔔
+            <span class="notification-badge" id="notificationBadge" style="display: none;">0</span>
+        </div>
+    </div>
+
+    <!-- NOTIFICATION DROPDOWN -->
+    <div class="notification-dropdown" id="notificationDropdown">
+        <div class="notification-header">
+            <strong>🔔 Live Notifications</strong>
+            <button class="clear-notifications" onclick="clearNotifications()">Clear All</button>
+        </div>
+        <div id="notificationList">
+            <div style="text-align: center; padding: 20px; color: rgba(255,255,255,0.5);">
+                No new notifications
+            </div>
+        </div>
+    </div>
+
     <!-- TAB NAVIGATION -->
     <div class="tab-container">
         <button class="tab-btn active" onclick="switchTab('reports')">📊 Safety Reports</button>
@@ -600,9 +769,132 @@
         let activeSOS = [];
         let heatmapLayer = null;
         let mapInstance = null;
+        let notifications = [];
         
         // UM Campus coordinates
         const UM_CENTER = [3.1219, 101.6569];
+
+        // NOTIFICATION FUNCTIONS
+        function addNotification(type, title, message, data) {
+            const notification = {
+                id: Date.now() + Math.random(),
+                type: type, // 'report' or 'sos'
+                title: title,
+                message: message,
+                time: new Date(),
+                data: data
+            };
+            
+            notifications.unshift(notification);
+            updateNotificationBell();
+            updateNotificationDropdown();
+            
+            // Play sound and shake animation
+            const bell = document.getElementById('notificationBell');
+            bell.classList.add('has-notifications');
+            setTimeout(() => bell.classList.remove('has-notifications'), 500);
+            
+            // Play notification sound
+            playNotificationSound();
+        }
+
+        function updateNotificationBell() {
+            const badge = document.getElementById('notificationBadge');
+            const count = notifications.length;
+            
+            if (count > 0) {
+                badge.style.display = 'block';
+                badge.textContent = count > 99 ? '99+' : count;
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+
+        function updateNotificationDropdown() {
+            const list = document.getElementById('notificationList');
+            
+            if (notifications.length === 0) {
+                list.innerHTML = '<div style="text-align: center; padding: 20px; color: rgba(255,255,255,0.5);">No new notifications</div>';
+                return;
+            }
+            
+            list.innerHTML = notifications.map(notif => {
+                const timeAgo = getTimeAgo(notif.time);
+                return `
+                    <div class="notification-item ${notif.type}" onclick="handleNotificationClick('${notif.id}', '${notif.type}')">
+                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 5px;">
+                            <strong>${notif.type === 'sos' ? '🆘' : '📊'} ${notif.title}</strong>
+                            <span style="font-size: 10px; color: rgba(255,255,255,0.5);">${timeAgo}</span>
+                        </div>
+                        <div style="font-size: 13px; color: rgba(255,255,255,0.8);">${notif.message}</div>
+                        <div class="notification-time">${notif.time.toLocaleString()}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function toggleNotifications() {
+            const dropdown = document.getElementById('notificationDropdown');
+            dropdown.classList.toggle('show');
+        }
+
+        function clearNotifications() {
+            if (confirm('Clear all notifications?')) {
+                notifications = [];
+                updateNotificationBell();
+                updateNotificationDropdown();
+            }
+        }
+
+        function handleNotificationClick(notifId, type) {
+            // Switch to appropriate tab
+            if (type === 'sos') {
+                switchTab('sos');
+            } else {
+                switchTab('reports');
+            }
+            
+            // Close dropdown
+            document.getElementById('notificationDropdown').classList.remove('show');
+        }
+
+        function getTimeAgo(date) {
+            const seconds = Math.floor((new Date() - date) / 1000);
+            
+            if (seconds < 60) return 'Just now';
+            if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+            if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+            return `${Math.floor(seconds / 86400)}d ago`;
+        }
+
+        function playNotificationSound() {
+            // Create a simple beep sound
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.value = 800;
+            oscillator.type = 'sine';
+            
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.3);
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            const bell = document.getElementById('notificationBell');
+            const dropdown = document.getElementById('notificationDropdown');
+            
+            if (!bell.contains(e.target) && !dropdown.contains(e.target)) {
+                dropdown.classList.remove('show');
+            }
+        });
         
         socket.on('connect', () => {
             console.log('✅ Connected to server');
@@ -616,6 +908,14 @@
             applyFilters();
             updateMonthlySummary();
             if (mapInstance) updateHeatmap();
+            
+            // Add notification for new report
+            addNotification(
+                'report',
+                'New Safety Report',
+                `${report.alertType} reported by ${report.userName || 'Anonymous'} at ${report.location?.campus || 'UM Campus'}`,
+                report
+            );
         });
 
         // Listen for live SOS alerts
@@ -623,6 +923,14 @@
             console.log('🆘 LIVE SOS ALERT:', sosData);
             activeSOS.unshift(sosData);
             renderSOSAlerts();
+            
+            // Add notification for SOS alert
+            addNotification(
+                'sos',
+                'EMERGENCY SOS ALERT!',
+                `${sosData.userName || 'User'} pressed SOS button at ${sosData.location?.campus || 'UM Campus'}`,
+                sosData
+            );
             
             // Show browser notification if permitted
             if (Notification.permission === 'granted') {
