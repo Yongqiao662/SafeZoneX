@@ -1051,7 +1051,7 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 8080;
-server.listen(PORT, () => {
-  logger.info(`🚀 Server running on http://localhost:${PORT}`);
-  logger.info(`📊 Dashboard available at: http://localhost:${PORT}/dashboard-enhanced.html`);
+server.listen(PORT, "0.0.0.0", () => {
+  logger.info(`🚀 Server running on port ${PORT}`);
+  logger.info(`📊 Dashboard available at: /dashboard-enhanced.html`);
 });
