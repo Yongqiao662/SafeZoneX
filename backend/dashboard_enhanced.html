@@ -553,6 +553,134 @@
         .clear-notifications:hover {
             color: #8b7ce7;
         }
+
+        /* IMAGE MODAL */
+        .image-modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.9);
+            backdrop-filter: blur(5px);
+        }
+
+        .image-modal.show {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .image-modal-content {
+            position: relative;
+            max-width: 90%;
+            max-height: 90%;
+            background: rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 20px;
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .image-modal img {
+            max-width: 100%;
+            max-height: 70vh;
+            border-radius: 8px;
+            display: block;
+        }
+
+        .image-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            color: white;
+        }
+
+        .close-modal {
+            background: rgba(255,71,87,0.2);
+            color: #ff4757;
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 20px;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        .close-modal:hover {
+            background: #ff4757;
+            color: white;
+            transform: scale(1.1);
+        }
+
+        .image-info {
+            margin-top: 15px;
+            padding: 15px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+            color: white;
+        }
+
+        .report-images {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+            margin: 15px 0;
+            padding: 15px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px;
+        }
+
+        .image-thumbnail {
+            position: relative;
+            aspect-ratio: 1;
+            border-radius: 8px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 2px solid rgba(255,255,255,0.2);
+        }
+
+        .image-thumbnail:hover {
+            transform: scale(1.05);
+            border-color: #6c5ce7;
+        }
+
+        .image-thumbnail img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .image-count {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: bold;
+        }
+
+        .no-images {
+            text-align: center;
+            padding: 20px;
+            color: rgba(255,255,255,0.5);
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
@@ -573,6 +701,24 @@
         <div id="notificationList">
             <div style="text-align: center; padding: 20px; color: rgba(255,255,255,0.5);">
                 No new notifications
+            </div>
+        </div>
+    </div>
+
+    <!-- IMAGE MODAL -->
+    <div class="image-modal" id="imageModal" onclick="closeImageModal(event)">
+        <div class="image-modal-content" onclick="event.stopPropagation()">
+            <div class="image-modal-header">
+                <div>
+                    <h3 id="imageModalTitle">Report Evidence</h3>
+                    <small id="imageModalSubtitle">Click image to view full size</small>
+                </div>
+                <button class="close-modal" onclick="closeImageModal()">&times;</button>
+            </div>
+            <img id="imageModalImg" src="" alt="Report Image" />
+            <div class="image-info" id="imageModalInfo">
+                <strong>Report Details:</strong>
+                <div id="imageModalDetails"></div>
             </div>
         </div>
     </div>
@@ -1053,6 +1199,20 @@
                             ${report.description}
                         </p>
                         
+                        ${report.evidenceImages && report.evidenceImages.length > 0 ? `
+                            <div class="report-images">
+                                <div style="grid-column: 1/-1; margin-bottom: 10px;">
+                                    <strong style="color: rgba(255,255,255,0.8); font-size: 14px;">📸 Evidence (${report.evidenceImages.length} ${report.evidenceImages.length === 1 ? 'image' : 'images'})</strong>
+                                </div>
+                                ${report.evidenceImages.slice(0, 4).map((imageUrl, index) => `
+                                    <div class="image-thumbnail" onclick="openImageModal('${imageUrl}', '${report.alertType}', '${report.alertId}', ${index}, ${JSON.stringify(report.evidenceImages).replace(/"/g, '&quot;')})">
+                                        <img src="${imageUrl}" alt="Evidence ${index + 1}" onerror="this.parentElement.style.display='none'" />
+                                        ${index === 3 && report.evidenceImages.length > 4 ? `<div class="image-count">+${report.evidenceImages.length - 4}</div>` : ''}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : '<div class="no-images">📷 No images attached</div>'}
+                        
                         <div style="margin-top: 12px; padding: 12px; background: rgba(108,92,231,0.1); border-radius: 8px; border: 1px solid rgba(108,92,231,0.3);">
                             <strong style="font-size: 12px; color: #6c5ce7;">🤖 AI Analysis</strong>
                             <p style="margin: 8px 0; font-size: 13px;">
@@ -1063,13 +1223,18 @@
                             </div>
                         </div>
                         
-                        <div style="margin-top: 15px; display: flex; gap: 10px;">
+                        <div style="margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
                             <button class="btn btn-resolve" onclick="markAsResolved('${report.alertId}')">
                                 ✅ Mark Resolved
                             </button>
                             <button class="btn" style="background: #3498db; color: white;" onclick="viewLocation('${report.alertId}')">
                                 📍 View Location
                             </button>
+                            ${report.evidenceImages && report.evidenceImages.length > 0 ? `
+                                <button class="btn" style="background: #6c5ce7; color: white;" onclick="viewAllImages('${report.alertId}')">
+                                    📸 View Images (${report.evidenceImages.length})
+                                </button>
+                            ` : ''}
                         </div>
                     </div>
                 `;
@@ -1139,6 +1304,61 @@
                 }, 300);
             }
         }
+
+        // IMAGE VIEWING FUNCTIONS
+        function openImageModal(imageUrl, alertType, alertId, imageIndex, allImages) {
+            const modal = document.getElementById('imageModal');
+            const img = document.getElementById('imageModalImg');
+            const title = document.getElementById('imageModalTitle');
+            const subtitle = document.getElementById('imageModalSubtitle');
+            const details = document.getElementById('imageModalDetails');
+            
+            // Find the report
+            const report = allReports.find(r => r.alertId === alertId);
+            
+            img.src = imageUrl;
+            title.textContent = `${alertType} - Evidence ${imageIndex + 1}`;
+            subtitle.textContent = `Image ${imageIndex + 1} of ${allImages.length} • Click to close`;
+            
+            if (report) {
+                details.innerHTML = `
+                    <div style="margin: 5px 0;"><strong>Report ID:</strong> ${report.alertId?.substring(0, 8)}</div>
+                    <div style="margin: 5px 0;"><strong>Reporter:</strong> ${report.userName || 'Anonymous'}</div>
+                    <div style="margin: 5px 0;"><strong>Location:</strong> ${report.location?.campus || 'UM Campus'}</div>
+                    <div style="margin: 5px 0;"><strong>Time:</strong> ${new Date(report.createdAt).toLocaleString()}</div>
+                    <div style="margin: 5px 0;"><strong>Priority:</strong> ${report.priority}</div>
+                `;
+            }
+            
+            modal.classList.add('show');
+            
+            // Prevent body scroll when modal is open
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeImageModal(event) {
+            if (event && event.target !== event.currentTarget) return;
+            
+            const modal = document.getElementById('imageModal');
+            modal.classList.remove('show');
+            
+            // Restore body scroll
+            document.body.style.overflow = 'auto';
+        }
+
+        function viewAllImages(alertId) {
+            const report = allReports.find(r => r.alertId === alertId);
+            if (report && report.evidenceImages && report.evidenceImages.length > 0) {
+                openImageModal(report.evidenceImages[0], report.alertType, alertId, 0, report.evidenceImages);
+            }
+        }
+
+        // Keyboard navigation for modal
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeImageModal();
+            }
+        });
 
         // MONTHLY SUMMARY
         function updateMonthlySummary() {
