@@ -1345,6 +1345,23 @@
                 }
             });
 
+            // Generic SOS updates (e.g., phone number updated)
+            socket.on('sos_updated', (sos) => {
+                try {
+                    console.log('🔄 SOS updated received:', sos);
+                    const idx = activeSOS.findIndex(s => s.id === sos.id);
+                    if (idx !== -1) {
+                        activeSOS[idx] = Object.assign({}, activeSOS[idx], sos);
+                    } else {
+                        // If not found, prepend to activeSOS
+                        activeSOS.unshift(sos);
+                    }
+                    renderSOSAlerts();
+                } catch (e) {
+                    console.warn('Failed to process sos_updated:', e);
+                }
+            });
+
             socket.on('connect_error', (err) => {
                 console.error('Socket connect_error:', err);
             });
@@ -1955,7 +1972,7 @@
         }
 
         // TAB SWITCHING
-        function switchTab(tabName) {
+        function switchTab(tabName, ev) {
             // Hide all tabs
             document.querySelectorAll('.tab-content').forEach(tab => {
                 tab.classList.remove('active');
@@ -1965,8 +1982,26 @@
             });
 
             // Show selected tab
-            document.getElementById(`${tabName}-tab`).classList.add('active');
-            event.target.classList.add('active');
+            const targetTab = document.getElementById(`${tabName}-tab`);
+            if (targetTab) targetTab.classList.add('active');
+
+            // Try to activate the button that triggered this switch.
+            // If called programmatically (no event), find the .tab-btn with matching onclick
+            try {
+                if (ev && ev.target) {
+                    ev.target.classList.add('active');
+                } else {
+                    const buttons = Array.from(document.querySelectorAll('.tab-btn'));
+                    const btnToActivate = buttons.find(b => {
+                        const onclick = b.getAttribute('onclick') || '';
+                        // matches patterns like: switchTab('heatmap') or switchTab("heatmap")
+                        return onclick.includes(`'${tabName}'`) || onclick.includes(`\"${tabName}\"`);
+                    });
+                    if (btnToActivate) btnToActivate.classList.add('active');
+                }
+            } catch (e) {
+                // ignore
+            }
 
             // Initialize heatmap when switching to that tab
             if (tabName === 'heatmap') {

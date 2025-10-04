@@ -435,15 +435,28 @@ app.post('/api/sos', (req, res) => {
       return res.status(400).json({ success: false, error: 'Missing userId' });
     }
 
-    const sosAlert = {
+    // Normalize location if latitude/longitude present at top-level
+    let locationObj = null;
+    if (data.location && typeof data.location.latitude === 'number' && typeof data.location.longitude === 'number') {
+      locationObj = data.location;
+    } else if (typeof data.latitude === 'number' && typeof data.longitude === 'number') {
+      locationObj = {
+        latitude: data.latitude,
+        longitude: data.longitude,
+        address: data.address || '',
+        campus: data.campus || 'University Malaya'
+      };
+    }
+
+    const sosAlert = Object.assign({}, data, {
       id: uuidv4(),
-      ...data,
       socketId: null,
       status: 'active',
       acknowledgedBy: [],
       createdAt: new Date().toISOString(),
-      isSOS: true
-    };
+      isSOS: true,
+      location: locationObj
+    });
 
     alertsCache.set(sosAlert.id, sosAlert);
     logger.info(`📡 SOS received via HTTP and stored: ${sosAlert.id}`);
@@ -457,6 +470,38 @@ app.post('/api/sos', (req, res) => {
   } catch (err) {
     logger.error('❌ Error handling HTTP SOS:', err);
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Update SOS phone number (and optionally other small fields) by SOS id
+app.put('/api/sos/:id/phone', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { userPhone } = req.body;
+
+    if (!userPhone) {
+      return res.status(400).json({ success: false, error: 'userPhone is required' });
+    }
+
+    const sos = alertsCache.get(id);
+    if (!sos) {
+      return res.status(404).json({ success: false, error: 'SOS not found' });
+    }
+
+    sos.userPhone = userPhone;
+    sos.updatedAt = new Date().toISOString();
+    alertsCache.set(id, sos);
+
+    logger.info(`📞 SOS ${id} phone updated to ${userPhone}`);
+
+    // Broadcast the update - dashboards may listen for 'sos_updated'
+    io.to('security_dashboard').emit('sos_updated', sos);
+    io.emit('friend_sos_alert', sos); // reuse existing channel so friends get updated info too
+
+    return res.json({ success: true, sos });
+  } catch (err) {
+    logger.error('❌ Error updating SOS phone:', err);
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 
@@ -1088,18 +1133,31 @@ io.on('connection', (socket) => {
   socket.on('sos_alert', (data) => {
     logger.info(`🆘 SOS Alert received from ${data.userName}:`, data);
     
+    // Normalize location: some clients send { latitude, longitude } at top-level
+    // while dashboard expects sos.location.latitude / sos.location.longitude
+    let locationObj = null;
+    if (data && data.location && typeof data.location.latitude === 'number' && typeof data.location.longitude === 'number') {
+      locationObj = data.location;
+    } else if (data && typeof data.latitude === 'number' && typeof data.longitude === 'number') {
+      locationObj = {
+        latitude: data.latitude,
+        longitude: data.longitude,
+        address: data.address || '',
+        campus: data.campus || 'University Malaya'
+      };
+    }
+
     // Store SOS alert in memory (or database)
-    const sosAlert = {
+    const sosAlert = Object.assign({}, data, {
       id: uuidv4(),
-      ...data,
       socketId: socket.id,
       status: 'active',
       acknowledgedBy: [],
-      createdAt: new Date().toISOString()
-    };
-    
-    // mark clearly as SOS and store
-    sosAlert.isSOS = true;
+      createdAt: new Date().toISOString(),
+      isSOS: true,
+      location: locationObj
+    });
+
     alertsCache.set(sosAlert.id, sosAlert);
     logger.info(`🗂️ SOS stored in cache: ${sosAlert.id} (cache size=${alertsCache.size})`);
 
@@ -1132,6 +1190,54 @@ io.on('connection', (socket) => {
     io.to('security_dashboard').emit('sos_location_update', locationPayload);
     // Fallback broadcast in case dashboard isn't in the room
     io.emit('sos_location_update', locationPayload);
+  });
+
+  // Generic message envelope support (some mobile/web clients emit a 'message' event with { type, payload })
+  socket.on('message', (msg) => {
+    try {
+      if (!msg) return;
+      const type = msg.type || (msg.payload && msg.payload.type);
+      const payload = msg.payload || msg;
+
+      if (type === 'sos_alert') {
+        logger.info('🛰️ Received generic message envelope with sos_alert payload');
+
+        // Reuse same normalization as above
+        let data = payload.payload || payload; // support nested payload
+
+        let locationObj = null;
+        if (data && data.location && typeof data.location.latitude === 'number' && typeof data.location.longitude === 'number') {
+          locationObj = data.location;
+        } else if (data && typeof data.latitude === 'number' && typeof data.longitude === 'number') {
+          locationObj = {
+            latitude: data.latitude,
+            longitude: data.longitude,
+            address: data.address || '',
+            campus: data.campus || 'University Malaya'
+          };
+        }
+
+        const sosAlert = Object.assign({}, data, {
+          id: uuidv4(),
+          socketId: socket.id,
+          status: 'active',
+          acknowledgedBy: [],
+          createdAt: new Date().toISOString(),
+          isSOS: true,
+          location: locationObj
+        });
+
+        alertsCache.set(sosAlert.id, sosAlert);
+
+        io.emit('friend_sos_alert', sosAlert);
+        io.to('security_dashboard').emit('security_sos_alert', sosAlert);
+        io.emit('security_sos_alert', sosAlert);
+
+        logger.info(`📡 SOS (envelope) broadcasted to all friends and security`);
+      }
+    } catch (err) {
+      logger.error('❌ Error processing generic message envelope:', err);
+    }
   });
 
   // Friend acknowledges SOS
