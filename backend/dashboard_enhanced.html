@@ -945,10 +945,161 @@
         </div>
     </div>
 
-    <script src="/socket.io/socket.io.js"></script>
+    <!-- Load socket.io client from CDN to avoid loading from page origin -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script>
-        const API_URL = 'http://localhost:8080';
-        const socket = io(API_URL);
+    // Backend selector defaults
+    const BACKENDS = {
+        production: 'https://safezonex-production.up.railway.app',
+        localhost: 'http://localhost:8080',
+        emulator: 'http://10.0.2.2:8080'
+    };
+
+    // Create a small control UI for selecting backend
+        (function createBackendSelector() {
+        const container = document.createElement('div');
+        container.style.position = 'fixed';
+        container.style.left = '16px';
+        container.style.bottom = '16px';
+        container.style.zIndex = 2000;
+        container.style.background = 'rgba(0,0,0,0.6)';
+        container.style.padding = '10px';
+        container.style.borderRadius = '8px';
+        container.style.color = 'white';
+        container.style.fontSize = '13px';
+
+        container.innerHTML = `
+            <label style="font-weight:600; margin-right:8px;">Backend:</label>
+            <select id="backendSelect">
+                <option value="production">Production (Railway)</option>
+                <option value="localhost">Localhost (http://localhost:8080)</option>
+                <option value="emulator">Android Emulator (10.0.2.2)</option>
+                <option value="custom">Custom...</option>
+            </select>
+            <input id="customBackend" placeholder="https://my-host" style="display:none; margin-left:8px; padding:4px; border-radius:4px; border: none; width:200px;" />
+            <button id="connectBackendBtn" style="margin-left:8px; padding:6px 10px; border-radius:6px; background:#6c5ce7; color:white; border:none; cursor:pointer;">Connect</button>
+            <span id="backendHealth" style="margin-left:12px; font-size:12px; display:inline-flex; align-items:center; gap:8px;">
+                <span id="healthDot" style="width:10px; height:10px; border-radius:50%; background:#999; display:inline-block;"></span>
+                <span id="healthText" style="color:#fff; opacity:0.9;">Unknown</span>
+                <button id="healthCheckBtn" style="margin-left:8px; padding:4px 8px; border-radius:6px; background:#2d3436; color:white; border:none; cursor:pointer;">Check</button>
+            </span>
+        `;
+
+        document.body.appendChild(container);
+
+        const select = document.getElementById('backendSelect');
+        const custom = document.getElementById('customBackend');
+        const btn = document.getElementById('connectBackendBtn');
+    const healthBtn = document.getElementById('healthCheckBtn');
+    const healthDot = document.getElementById('healthDot');
+    const healthText = document.getElementById('healthText');
+
+        select.addEventListener('change', (e) => {
+            if (e.target.value === 'custom') {
+                custom.style.display = 'inline-block';
+            } else {
+                custom.style.display = 'none';
+            }
+        });
+
+        btn.addEventListener('click', () => {
+            const val = select.value;
+            let url;
+            if (val === 'custom') url = custom.value.trim();
+            else url = BACKENDS[val];
+
+            if (!url) return alert('Please enter a valid backend URL');
+
+            // save choice for page session
+            sessionStorage.setItem('dashboard_backend', url);
+            // reinitialize connection
+            initConnection(url);
+        });
+
+        healthBtn.addEventListener('click', () => {
+            const current = sessionStorage.getItem('dashboard_backend') || BACKENDS.production;
+            performHealthCheck(current);
+        });
+
+        // If user already selected a backend in this session, use it; otherwise default to production
+        const saved = sessionStorage.getItem('dashboard_backend') || BACKENDS.production;
+        // set selector to match saved
+        if (saved === BACKENDS.localhost) select.value = 'localhost';
+        else if (saved === BACKENDS.emulator) select.value = 'emulator';
+        else if (Object.values(BACKENDS).includes(saved)) select.value = 'production';
+        else {
+            select.value = 'custom';
+            custom.style.display = 'inline-block';
+            custom.value = saved;
+        }
+
+        // connect immediately
+        initConnection(saved);
+        // initial health check
+        performHealthCheck(saved);
+    })();
+
+    let socket = null;
+    let API_URL = null;
+
+    function initConnection(baseUrl) {
+        try {
+            API_URL = baseUrl.replace(/\/$/, '');
+            console.log('Dashboard connecting to API_URL:', API_URL);
+
+            // close previous socket if present
+            if (socket && socket.connected) {
+                try { socket.disconnect(); } catch (e) { console.warn('Error disconnecting previous socket', e); }
+            }
+
+            // Ensure socket.io client uses the correct origin and handshake
+            socket = io(API_URL, {
+                transports: ['polling', 'websocket'],
+                path: '/socket.io',
+                withCredentials: true,
+                // Force reconnection attempts
+                reconnectionAttempts: 10,
+                reconnectionDelay: 1000
+            });
+
+            // Re-bind event handlers
+            bindSocketHandlers();
+
+            // Load reports from the chosen backend
+            loadReports();
+            // perform an immediate health check
+            performHealthCheck(API_URL);
+        } catch (err) {
+            console.error('Failed to initialize connection', err);
+        }
+    }
+
+    async function performHealthCheck(baseUrl) {
+        if (!baseUrl) return;
+        const url = baseUrl.replace(/\/$/, '') + '/api/status';
+        try {
+            const res = await fetch(url, { method: 'GET' });
+            if (res.ok) {
+                const json = await res.json().catch(() => null);
+                healthDot.style.background = '#2ed573';
+                healthText.textContent = `Online • ${new Date().toLocaleTimeString()}`;
+                console.log('Health check OK', url, json);
+                return true;
+            }
+        } catch (e) {
+            // ignore
+        }
+        healthDot.style.background = '#ff4757';
+        healthText.textContent = `Offline • ${new Date().toLocaleTimeString()}`;
+        console.warn('Health check failed for', url);
+        return false;
+    }
+
+    // Periodic health check every 30s for the selected backend
+    setInterval(() => {
+        const current = sessionStorage.getItem('dashboard_backend') || BACKENDS.production;
+        performHealthCheck(current);
+    }, 30000);
         
         let allReports = [];
         let activeSOS = [];
@@ -1081,67 +1232,82 @@
             }
         });
         
-        socket.on('connect', () => {
-            console.log('✅ Connected to server');
-            socket.emit('join_room', { room: 'security_dashboard' });
-            loadReports();
-        });
-        
-        socket.on('report_update', (report) => {
-            console.log('📥 New report received:', report);
-            allReports.unshift(report);
-            applyFilters();
-            updateMonthlySummary();
-            if (mapInstance) updateHeatmap();
-            
-            // Add notification for new report
-            addNotification(
-                'report',
-                'New Safety Report',
-                `${report.alertType} reported by ${report.userName || 'Anonymous'} at ${report.location?.campus || 'UM Campus'}`,
-                report
-            );
-        });
+        function bindSocketHandlers() {
+            if (!socket) return;
 
-        // Listen for live SOS alerts
-        socket.on('security_sos_alert', (sosData) => {
-            console.log('🆘 LIVE SOS ALERT:', sosData);
-            activeSOS.unshift(sosData);
-            renderSOSAlerts();
-            
-            // Add notification for SOS alert
-            addNotification(
-                'sos',
-                'EMERGENCY SOS ALERT!',
-                `${sosData.userName || 'User'} pressed SOS button at ${sosData.location?.campus || 'UM Campus'}`,
-                sosData
-            );
-            
-            // Show browser notification if permitted
-            if (Notification.permission === 'granted') {
-                new Notification('🆘 Emergency SOS Alert!', {
-                    body: `${sosData.userName} needs help at ${sosData.location?.address || 'Unknown location'}`,
-                    icon: '/favicon.ico',
-                    requireInteraction: true
-                });
-            }
-        });
+            socket.off();
 
-        socket.on('sos_location_update', (data) => {
-            console.log('📍 SOS Location update:', data);
-            // Update existing SOS alert location
-            const sosAlert = activeSOS.find(s => s.userId === data.userId);
-            if (sosAlert) {
-                sosAlert.location = data.location;
+            socket.on('connect', () => {
+                console.log('✅ Connected to server');
+                try { socket.emit('join_room', { room: 'security_dashboard' }); } catch (e) { console.warn(e); }
+                loadReports();
+            });
+
+            socket.on('report_update', (report) => {
+                console.log('📥 New report received:', report);
+                allReports.unshift(report);
+                applyFilters();
+                updateMonthlySummary();
+                if (mapInstance) updateHeatmap();
+
+                // Add notification for new report
+                addNotification(
+                    'report',
+                    'New Safety Report',
+                    `${report.alertType} reported by ${report.userName || 'Anonymous'} at ${report.location?.campus || 'UM Campus'}`,
+                    report
+                );
+            });
+
+            // Listen for live SOS alerts
+            socket.on('security_sos_alert', (sosData) => {
+                console.log('🆘 LIVE SOS ALERT:', sosData);
+                activeSOS.unshift(sosData);
                 renderSOSAlerts();
-            }
-        });
+
+                // Add notification for SOS alert
+                addNotification(
+                    'sos',
+                    'EMERGENCY SOS ALERT!',
+                    `${sosData.userName || 'User'} pressed SOS button at ${sosData.location?.campus || 'UM Campus'}`,
+                    sosData
+                );
+
+                // Show browser notification if permitted
+                if (Notification.permission === 'granted') {
+                    new Notification('🆘 Emergency SOS Alert!', {
+                        body: `${sosData.userName} needs help at ${sosData.location?.address || 'Unknown location'}`,
+                        icon: '/favicon.ico',
+                        requireInteraction: true
+                    });
+                }
+            });
+
+            socket.on('sos_location_update', (data) => {
+                console.log('📍 SOS Location update:', data);
+                // Update existing SOS alert location
+                const sosAlert = activeSOS.find(s => s.userId === data.userId);
+                if (sosAlert) {
+                    sosAlert.location = data.location;
+                    renderSOSAlerts();
+                }
+            });
+
+            socket.on('connect_error', (err) => {
+                console.error('Socket connect_error:', err);
+            });
+
+            socket.on('disconnect', (reason) => {
+                console.warn('Socket disconnected:', reason);
+            });
+        }
         
         async function loadReports() {
+            if (!API_URL) return console.warn('API_URL not set yet');
             try {
                 const response = await fetch(`${API_URL}/api/reports`);
                 const data = await response.json();
-                
+
                 if (data.success) {
                     allReports = data.reports.filter(r => r.status !== 'resolved');
                     console.log(`📊 Loaded ${allReports.length} active reports`);
