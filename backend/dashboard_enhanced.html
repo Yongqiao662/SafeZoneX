@@ -983,6 +983,16 @@
                 <span id="healthText" style="color:#fff; opacity:0.9;">Unknown</span>
                 <button id="healthCheckBtn" style="margin-left:8px; padding:4px 8px; border-radius:6px; background:#2d3436; color:white; border:none; cursor:pointer;">Check</button>
             </span>
+            <span style="margin-left:12px; display:inline-flex; align-items:center; gap:8px;">
+                <label style="font-weight:600; margin-right:6px;">Refresh:</label>
+                <select id="refreshIntervalSelect" style="background:transparent; color:#fff; border-radius:6px; padding:4px;">
+                    <option value="0">Off</option>
+                    <option value="5">5s</option>
+                    <option value="10">10s</option>
+                    <option value="30">30s</option>
+                    <option value="60">60s</option>
+                </select>
+            </span>
         `;
 
         document.body.appendChild(container);
@@ -1097,11 +1107,8 @@
         return false;
     }
 
-    // Periodic health check every 30s for the selected backend
-    setInterval(() => {
-        const current = sessionStorage.getItem('dashboard_backend') || BACKENDS.production;
-        performHealthCheck(current);
-    }, 30000);
+    // NOTE: Refresh interval is now controlled by the Refresh selector in the UI.
+    // A configurable timer will be started later (default saved to sessionStorage).
         
         let allReports = [];
         let activeSOS = [];
@@ -1372,7 +1379,11 @@
         }
         
         async function loadReports() {
-            if (!API_URL) return console.warn('API_URL not set yet');
+                if (!API_URL) {
+                    // Try to recover API_URL from the saved backend selection so periodic refresh works
+                    API_URL = sessionStorage.getItem('dashboard_backend') || BACKENDS.production;
+                    console.log('Using fallback API_URL for periodic refresh:', API_URL);
+                }
             try {
                 const response = await fetch(`${API_URL}/api/reports`);
                 const data = await response.json();
@@ -2024,8 +2035,59 @@
         document.getElementById('filterPriority').addEventListener('change', applyFilters);
         document.getElementById('searchBox').addEventListener('input', applyFilters);
         
-        // Auto-refresh every 30 seconds
-        setInterval(loadReports, 30000);
+        // Single configurable refresh timer (controlled by UI)
+        // Refresh timer management
+        let refreshTimerId = null;
+        const REFRESH_KEY = 'dashboard_refresh_interval';
+
+        function stopRefreshTimer() {
+            if (refreshTimerId) {
+                clearInterval(refreshTimerId);
+                refreshTimerId = null;
+                console.log('Stopped dashboard refresh timer');
+            }
+        }
+
+        function startRefreshTimer() {
+            stopRefreshTimer();
+            const saved = sessionStorage.getItem(REFRESH_KEY) || '10';
+            const seconds = parseInt(saved, 10);
+            if (!seconds || seconds <= 0) {
+                console.log('Dashboard auto-refresh disabled');
+                return;
+            }
+            // Run an immediate tick, then schedule
+            const current = sessionStorage.getItem('dashboard_backend') || BACKENDS.production;
+            performHealthCheck(current);
+            loadReports();
+            refreshTimerId = setInterval(() => {
+                const cur = sessionStorage.getItem('dashboard_backend') || BACKENDS.production;
+                performHealthCheck(cur);
+                loadReports();
+            }, seconds * 1000);
+            console.log('Started dashboard refresh timer:', seconds, 's');
+        }
+
+        // Wire the refresh selector
+        try {
+            const refreshSelect = document.getElementById('refreshIntervalSelect');
+            const initial = sessionStorage.getItem(REFRESH_KEY) || '10';
+            if (refreshSelect) {
+                refreshSelect.value = initial;
+                refreshSelect.addEventListener('change', (e) => {
+                    const val = e.target.value;
+                    sessionStorage.setItem(REFRESH_KEY, val);
+                    if (parseInt(val, 10) > 0) startRefreshTimer();
+                    else stopRefreshTimer();
+                });
+            }
+        } catch (e) {
+            console.warn('Failed wiring refresh selector', e);
+        }
+
+        // Start timer according to saved preference
+        const _saved = sessionStorage.getItem(REFRESH_KEY) || '10';
+        if (parseInt(_saved, 10) > 0) startRefreshTimer();
     </script>
 </body>
 </html>
