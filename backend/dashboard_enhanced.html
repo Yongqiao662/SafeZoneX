@@ -1054,9 +1054,11 @@
 
             // Ensure socket.io client uses the correct origin and handshake
             socket = io(API_URL, {
-                transports: ['polling', 'websocket'],
+                // Prefer websocket transport to avoid XHR polling (which triggers CORS with credentials)
+                transports: ['websocket', 'polling'],
                 path: '/socket.io',
-                withCredentials: true,
+                // Do not send credentials on XHR polling; allow server-side CORS to handle authorized requests
+                withCredentials: false,
                 // Force reconnection attempts
                 reconnectionAttempts: 10,
                 reconnectionDelay: 1000
@@ -1307,6 +1309,20 @@
                 activeSOS.unshift(sosData);
                 renderSOSAlerts();
                 addNotification('sos', 'EMERGENCY SOS ALERT!', `${sosData.userName || 'User'} pressed SOS button (fallback)`, sosData);
+            });
+
+            // When dashboard joins, server may send existing active SOS alerts
+            socket.on('initial_sos', (payload) => {
+                try {
+                    if (!payload || !Array.isArray(payload.sos)) return;
+                    console.log(`📥 Received initial SOS batch: ${payload.count} items`);
+                    const existingIds = new Set(activeSOS.map(s => s.id || s.socketId || s.userId));
+                    const newSOS = payload.sos.filter(s => !existingIds.has(s.id || s.socketId || s.userId));
+                    activeSOS = newSOS.concat(activeSOS);
+                    renderSOSAlerts();
+                } catch (e) {
+                    console.warn('Failed processing initial_sos:', e);
+                }
             });
 
             socket.on('sos_location_update', (data) => {

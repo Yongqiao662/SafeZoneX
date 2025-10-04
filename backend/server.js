@@ -35,7 +35,11 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: "*",
+    // Allow dynamic origin so we can support requests from the dashboard host
+    origin: (origin, callback) => {
+      // Allow if no origin (server-to-server) or allow all origins dynamically.
+      callback(null, true);
+    },
     methods: ["GET", "POST"],
     credentials: true
   },
@@ -46,9 +50,22 @@ const io = socketIo(server, {
 app.use(express.json({ limit: '10mb' }));
 
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
+  // Echo the request Origin header to allow credentials-based CORS requests.
+  const requestOrigin = req.headers.origin;
+  if (requestOrigin) {
+    res.header('Access-Control-Allow-Origin', requestOrigin);
+  } else {
+    res.header('Access-Control-Allow-Origin', '*');
+  }
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
+
+  // Handle preflight
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+
   next();
 });
 
@@ -957,6 +974,23 @@ io.on('connection', (socket) => {
         logger.info(`📤 Sent ${transformedReports.length} initial reports to ${socket.id}`);
       } catch (err) {
         logger.error('❌ Failed to send initial reports to dashboard:', err);
+      }
+      // Also send any active SOS alerts from the in-memory cache as an initial batch
+      try {
+        const sosItems = [];
+        for (const entry of alertsCache.values()) {
+          // SOS alerts created via socket.sos flow have 'acknowledgedBy' and typically no 'alertId'
+          if (entry && entry.acknowledgedBy && !entry.alertId && entry.status === 'active') {
+            sosItems.push(entry);
+          }
+        }
+
+        if (sosItems.length > 0) {
+          socket.emit('initial_sos', { success: true, count: sosItems.length, sos: sosItems });
+          logger.info(`📤 Sent ${sosItems.length} initial SOS alerts to ${socket.id}`);
+        }
+      } catch (err) {
+        logger.error('❌ Failed to send initial SOS alerts to dashboard:', err);
       }
     }
   });
