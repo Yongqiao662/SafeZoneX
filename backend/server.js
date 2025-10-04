@@ -411,6 +411,55 @@ app.get('/api/reports/:id', async (req, res) => {
   }
 });
 
+// Debug endpoint: list active SOS alerts stored in memory
+app.get('/api/debug/active_sos', (req, res) => {
+  try {
+    const sos = [];
+    for (const [key, entry] of alertsCache.entries()) {
+      if (entry && entry.isSOS && entry.status === 'active') {
+        sos.push(entry);
+      }
+    }
+
+    res.json({ success: true, count: sos.length, sos });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Accept SOS via HTTP POST (for clients that cannot use sockets)
+app.post('/api/sos', (req, res) => {
+  try {
+    const data = req.body;
+    if (!data || !data.userId) {
+      return res.status(400).json({ success: false, error: 'Missing userId' });
+    }
+
+    const sosAlert = {
+      id: uuidv4(),
+      ...data,
+      socketId: null,
+      status: 'active',
+      acknowledgedBy: [],
+      createdAt: new Date().toISOString(),
+      isSOS: true
+    };
+
+    alertsCache.set(sosAlert.id, sosAlert);
+    logger.info(`📡 SOS received via HTTP and stored: ${sosAlert.id}`);
+
+    // Broadcast the SOS to friends and security dashboards
+    io.emit('friend_sos_alert', sosAlert);
+    io.to('security_dashboard').emit('security_sos_alert', sosAlert);
+    io.emit('security_sos_alert', sosAlert);
+
+    res.json({ success: true, sosId: sosAlert.id });
+  } catch (err) {
+    logger.error('❌ Error handling HTTP SOS:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 app.put('/api/reports/:id/status', async (req, res) => {
   try {
     const { id } = req.params;
@@ -1049,8 +1098,11 @@ io.on('connection', (socket) => {
       createdAt: new Date().toISOString()
     };
     
+    // mark clearly as SOS and store
+    sosAlert.isSOS = true;
     alertsCache.set(sosAlert.id, sosAlert);
-    
+    logger.info(`🗂️ SOS stored in cache: ${sosAlert.id} (cache size=${alertsCache.size})`);
+
     // Broadcast to ALL connected clients (friends)
     io.emit('friend_sos_alert', sosAlert);
     
