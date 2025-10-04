@@ -69,6 +69,16 @@ app.get('/dashboard-enhanced.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'dashboard_enhanced.html'));
 });
 
+// Simple health/status endpoint used by mobile clients
+app.get('/api/status', (req, res) => {
+  return res.json({ success: true, message: 'SafeZoneX API server is running' });
+});
+
+// ML status endpoint (stub) - mobile expects this; returns basic info
+app.get('/api/ml/status', (req, res) => {
+  return res.json({ success: true, status: 'idle', message: 'ML subsystem not active on this deployment' });
+});
+
 const mongoURI = process.env.MONGODB_URI;
 mongoose.connect(mongoURI, {
   useNewUrlParser: true,
@@ -287,8 +297,12 @@ app.post('/api/report', async (req, res) => {
       createdAt: new Date()
     };
     
-    io.to('security_dashboard').emit('report_update', reportPayload);
-    console.log(`📢 Sent to dashboard - ${verificationTag} (${confidence}%), Priority: ${priority}`);
+  // Primary: send to security dashboard room
+  io.to('security_dashboard').emit('report_update', reportPayload);
+  // Fallback: also broadcast to all connected clients in case the dashboard
+  // did not join the room (helps during debugging or when clients connect late)
+  io.emit('report_update', reportPayload);
+  console.log(`📢 Sent to dashboard room and broadcast - ${verificationTag} (${confidence}%), Priority: ${priority}`);
 
   } catch (error) {
     console.error('❌ Report submission error:', error);
@@ -902,10 +916,49 @@ io.on('connection', (socket) => {
     socket.join('security_dashboard');
   }
 
-  socket.on('join_room', (data) => {
+  socket.on('join_room', async (data) => {
     const room = data.room || 'security_dashboard';
     socket.join(room);
     logger.info(`🔥 Client ${socket.id} joined room: ${room}`);
+
+    // If a security dashboard joins, send the latest active reports
+    // as an initial batch so the dashboard doesn't miss recent events.
+    if (room === 'security_dashboard') {
+      try {
+        const reports = await Alert.find({
+          status: { $nin: ['resolved', 'false_alarm'] }
+        })
+          .sort({ createdAt: -1 })
+          .limit(100);
+
+        const transformedReports = reports.map(report => ({
+          id: report.alertId,
+          alertId: report.alertId,
+          userId: report.userId,
+          userName: report.userName,
+          userPhone: report.userPhone,
+          alertType: report.alertType,
+          description: report.description,
+          location: report.location,
+          status: report.status,
+          verificationTag: report.verificationTag || 'Needs Review',
+          priority: report.priority,
+          createdAt: report.createdAt,
+          aiAnalysis: report.aiAnalysis,
+          evidenceImages: report.evidenceImages || []
+        }));
+
+        socket.emit('initial_reports', {
+          success: true,
+          count: transformedReports.length,
+          reports: transformedReports
+        });
+
+        logger.info(`📤 Sent ${transformedReports.length} initial reports to ${socket.id}`);
+      } catch (err) {
+        logger.error('❌ Failed to send initial reports to dashboard:', err);
+      }
+    }
   });
 
   // Handle user joining personal room for chat
@@ -968,7 +1021,9 @@ io.on('connection', (socket) => {
     io.emit('friend_sos_alert', sosAlert);
     
     // Also send to security dashboard
-    io.to('security_dashboard').emit('security_sos_alert', sosAlert);
+  io.to('security_dashboard').emit('security_sos_alert', sosAlert);
+  // Fallback: also broadcast the security event in case dashboard didn't join the room
+  io.emit('security_sos_alert', sosAlert);
     
     logger.info(`📡 SOS broadcasted to all friends and security`);
   });
@@ -978,11 +1033,19 @@ io.on('connection', (socket) => {
     logger.info(`📍 Location update from ${data.userId}`);
     
     // Broadcast location update to all friends
-    io.emit('friend_location_update', {
+    const locationPayload = {
       ...data,
       socketId: socket.id,
       timestamp: new Date().toISOString()
-    });
+    };
+
+    // Existing broadcast used by friend clients
+    io.emit('friend_location_update', locationPayload);
+
+    // Also emit a standardized event name for dashboards and security clients
+    io.to('security_dashboard').emit('sos_location_update', locationPayload);
+    // Fallback broadcast in case dashboard isn't in the room
+    io.emit('sos_location_update', locationPayload);
   });
 
   // Friend acknowledges SOS

@@ -950,7 +950,7 @@
     <script>
     // Backend selector defaults
     const BACKENDS = {
-        production: 'https://safezonex-production.up.railway.app',
+    production: 'https://safezonex-production-978a.up.railway.app',
         localhost: 'http://localhost:8080',
         emulator: 'http://10.0.2.2:8080'
     };
@@ -1259,6 +1259,24 @@
                 );
             });
 
+            // When dashboard joins, server may send an initial batch of active reports
+            socket.on('initial_reports', (payload) => {
+                try {
+                    if (!payload || !Array.isArray(payload.reports)) return;
+                    console.log(`📥 Received initial reports batch: ${payload.count} items`);
+                    // Merge received reports, avoiding duplicates by alertId
+                    const existingIds = new Set(allReports.map(r => r.alertId));
+                    const newReports = payload.reports.filter(r => !existingIds.has(r.alertId));
+                    // Prepend newest first
+                    allReports = newReports.concat(allReports);
+                    applyFilters();
+                    updateMonthlySummary();
+                    if (mapInstance) updateHeatmap();
+                } catch (e) {
+                    console.warn('Failed processing initial_reports:', e);
+                }
+            });
+
             // Listen for live SOS alerts
             socket.on('security_sos_alert', (sosData) => {
                 console.log('🆘 LIVE SOS ALERT:', sosData);
@@ -1283,9 +1301,27 @@
                 }
             });
 
+            // Fallback: some clients may receive the friend broadcast event
+            socket.on('friend_sos_alert', (sosData) => {
+                console.log('🆘 FALLBACK friend_sos_alert received:', sosData);
+                activeSOS.unshift(sosData);
+                renderSOSAlerts();
+                addNotification('sos', 'EMERGENCY SOS ALERT!', `${sosData.userName || 'User'} pressed SOS button (fallback)`, sosData);
+            });
+
             socket.on('sos_location_update', (data) => {
                 console.log('📍 SOS Location update:', data);
                 // Update existing SOS alert location
+                const sosAlert = activeSOS.find(s => s.userId === data.userId);
+                if (sosAlert) {
+                    sosAlert.location = data.location;
+                    renderSOSAlerts();
+                }
+            });
+
+            // Fallback for friend location updates
+            socket.on('friend_location_update', (data) => {
+                console.log('📍 FALLBACK friend_location_update received:', data);
                 const sosAlert = activeSOS.find(s => s.userId === data.userId);
                 if (sosAlert) {
                     sosAlert.location = data.location;
