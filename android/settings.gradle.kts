@@ -1,3 +1,5 @@
+import org.gradle.api.initialization.dsl.RepositoriesMode
+
 pluginManagement {
     val flutterSdkPath =
         run {
@@ -10,6 +12,15 @@ pluginManagement {
 
     includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
 
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(org.gradle.api.initialization.dsl.RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         google()
         mavenCentral()

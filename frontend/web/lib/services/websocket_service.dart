@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:io' show Platform;
 import 'dart:async';
 import 'dart:convert';
+import 'dart:html' as html;
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import '../models/sos_alert.dart';
 
@@ -24,7 +25,8 @@ class WebSocketService {
   Future<void> connect() async {
     String socketUrl;
     if (kIsWeb) {
-      socketUrl = 'http://localhost:8080';
+      // Use the page origin so the web dashboard connects to the same host it's served from
+      socketUrl = html.window.location.origin;
     } else if (Platform.isAndroid) {
       socketUrl = 'http://10.0.2.2:8080';
     } else {

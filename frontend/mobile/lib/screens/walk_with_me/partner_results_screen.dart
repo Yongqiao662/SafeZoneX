@@ -4,11 +4,14 @@ import './models.dart';
 import './walk_confirmation_screen.dart';
 
 class PartnerResultsScreen extends StatefulWidget {
+  // Support either a human-readable destination name or a LatLng
   final String? destination;
+  final LatLng? destinationLatLng;
 
   const PartnerResultsScreen({
     Key? key,
     this.destination,
+    this.destinationLatLng,
   }) : super(key: key);
 
   @override
@@ -31,8 +34,8 @@ class _PartnerResultsScreenState extends State<PartnerResultsScreen> {
     setState(() {
       nearbyPartners = [
         const UserProfile(
-          id: '1',
-          name: 'Sarah Chen',
+          id: '23003849',
+          name: 'Ivan Ooi',
           profilePicture: '👩‍🎓',
           rating: 4.8,
           walkCount: 156,
@@ -43,7 +46,7 @@ class _PartnerResultsScreenState extends State<PartnerResultsScreen> {
           estimatedMinutes: 5,
         ),
         const UserProfile(
-          id: '2',
+          id: '24064850',
           name: 'Ahmad Rahman',
           profilePicture: '👨‍🎓',
           rating: 4.9,
@@ -55,20 +58,20 @@ class _PartnerResultsScreenState extends State<PartnerResultsScreen> {
           estimatedMinutes: 8,
         ),
         const UserProfile(
-          id: '3',
-          name: 'Priya Sharma',
+          id: '25012951',
+          name: 'Tai Jin Wei',
           profilePicture: '👩‍🔬',
           rating: 4.7,
           walkCount: 89,
           isVerified: false,
-          department: 'Biology',
+          department: 'Computer Science',
           creditScore: 780,
           location: LatLng(3.1240, 101.6520),
           estimatedMinutes: 12,
         ),
         const UserProfile(
           id: '4',
-          name: 'David Lim',
+          name: 'Liam Chen',
           profilePicture: '👨‍💼',
           rating: 4.6,
           walkCount: 134,
@@ -373,7 +376,7 @@ class _PartnerResultsScreenState extends State<PartnerResultsScreen> {
       MaterialPageRoute(
         builder: (context) => WalkConfirmationScreen(
           partner: partner,
-          destination: widget.destination ?? 'Student Center',
+          destination: widget.destination ?? (widget.destinationLatLng != null ? '${widget.destinationLatLng!.latitude.toStringAsFixed(5)}, ${widget.destinationLatLng!.longitude.toStringAsFixed(5)}' : 'Student Center'),
           departureTime: DateTime.now().add(const Duration(minutes: 10)), // Default to 10 minutes from now
         ),
       ),

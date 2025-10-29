@@ -1,8 +1,10 @@
 import 'dart:convert';
+import 'dart:html' as html;
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  static const String baseUrl = 'http://localhost:8080/api';
+  // On web, prefer the origin the page is served from and append /api
+  static final String baseUrl = '${html.window.location.origin}/api';
   
   // Fetch all reports from backend
   static Future<List<Map<String, dynamic>>> fetchReports() async {

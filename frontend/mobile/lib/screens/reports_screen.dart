@@ -74,6 +74,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
       'coordinates': {'lat': 3.1210, 'lng': 101.6520},
     },
   ];
+  // For searchable campus location selection
+  late List<Map<String, dynamic>> _filteredCampusLocations;
+  final TextEditingController _locationSearchCtrl = TextEditingController();
   
   final List<Map<String, dynamic>> _suspiciousActivities = [
     {
@@ -131,6 +134,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
     super.initState();
     _getCurrentLocation();
 
+    // Initialize filtered list for location search
+    _filteredCampusLocations = List<Map<String, dynamic>>.from(_campusLocations);
+
     AuthService().initialize().then((success) {
       if (mounted) {
         setState(() {
@@ -163,6 +169,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
   @override
   void dispose() {
     _descriptionController.dispose();
+    _locationSearchCtrl.dispose();
     _webSocketService.dispose();
     super.dispose();
   }
@@ -1226,16 +1233,48 @@ void _submitReport() async {
                   ),
                 ),
               ),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20),
+                child: TextField(
+                  controller: _locationSearchCtrl,
+                  style: TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    hintText: 'Search campus locations',
+                    hintStyle: TextStyle(color: Colors.white54),
+                    prefixIcon: Icon(Icons.search, color: Colors.white70),
+                    filled: true,
+                    fillColor: Colors.white.withOpacity(0.03),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  onChanged: (q) {
+                    final query = q.toLowerCase().trim();
+                    setState(() {
+                      if (query.isEmpty) {
+                        _filteredCampusLocations = List<Map<String, dynamic>>.from(_campusLocations);
+                      } else {
+                        _filteredCampusLocations = _campusLocations.where((loc) {
+                          final name = (loc['name'] as String).toLowerCase();
+                          final building = (loc['building'] as String).toLowerCase();
+                          return name.contains(query) || building.contains(query);
+                        }).toList();
+                      }
+                    });
+                  },
+                ),
+              ),
               Expanded(
                 child: ListView.separated(
                   padding: EdgeInsets.symmetric(horizontal: 20),
-                  itemCount: _campusLocations.length,
+                  itemCount: _filteredCampusLocations.length,
                   separatorBuilder: (context, index) => Divider(
                     color: Colors.white.withOpacity(0.1),
                     height: 1,
                   ),
                   itemBuilder: (context, index) {
-                    final location = _campusLocations[index];
+                    final location = _filteredCampusLocations[index];
                     return ListTile(
                       leading: Container(
                         width: 40,

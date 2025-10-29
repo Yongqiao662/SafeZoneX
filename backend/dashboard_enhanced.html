@@ -948,9 +948,10 @@
     <!-- Load socket.io client from CDN to avoid loading from page origin -->
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script>
-    // Backend selector defaults
-    const BACKENDS = {
-    production: 'https://safezonex-production-978a.up.railway.app',
+    // Backend selector defaults (include the current page origin so hosted dashboards connect back to the same host)
+    let BACKENDS = {
+        production: 'https://safezonex-production-978a.up.railway.app',
+        origin: window.location.origin,
         localhost: 'http://localhost:8080',
         emulator: 'http://10.0.2.2:8080'
     };
@@ -972,6 +973,7 @@
             <label style="font-weight:600; margin-right:8px;">Backend:</label>
             <select id="backendSelect">
                 <option value="production">Production (Railway)</option>
+                <option value="origin">Page Origin (window.location.origin)</option>
                 <option value="localhost">Localhost (http://localhost:8080)</option>
                 <option value="emulator">Android Emulator (10.0.2.2)</option>
                 <option value="custom">Custom...</option>

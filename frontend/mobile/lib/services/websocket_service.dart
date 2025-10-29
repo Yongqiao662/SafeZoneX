@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'api_service.dart';
 import 'location_tracking_service.dart';
 
 class WebSocketService {
@@ -18,14 +19,7 @@ class WebSocketService {
   /// Connect to Socket.IO server with JWT token for authentication
   void connect(String token) {
   _jwtToken = token;
-    String serverUrl;
-    if (Platform.isAndroid) {
-      serverUrl = 'http://10.0.2.2:8080';
-    } else if (Platform.isIOS) {
-      serverUrl = 'http://localhost:8080';
-    } else {
-      serverUrl = 'http://192.168.1.100:8080'; // UPDATE THIS IP!
-    }
+    final serverUrl = ApiService.baseUrl; // Use central base URL (env-driven)
     print('🔌 Attempting Socket.IO connection to $serverUrl');
     _socket = IO.io(serverUrl, <String, dynamic>{
       'transports': ['websocket'],

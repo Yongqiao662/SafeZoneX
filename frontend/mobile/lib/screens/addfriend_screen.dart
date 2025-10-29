@@ -311,8 +311,8 @@ class _FriendsScreenState extends State<FriendsScreen>
   // Connect to backend for real-time SOS alerts
   void _connectToBackendForSOSAlerts() async {
     try {
-      // Initialize socket connection (use 10.0.2.2 for Android emulator)
-      _socket = IO.io('http://10.0.2.2:8080', <String, dynamic>{
+      // Initialize socket connection (use ApiService.baseUrl to allow env overrides)
+        _socket = IO.io(ApiService.baseUrl, <String, dynamic>{
         'transports': ['websocket'],
         'autoConnect': false,
       });
@@ -1560,7 +1560,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _initializeSocket() {
-    socket = IO.io('http://10.0.2.2:8080', <String, dynamic>{
+    socket = IO.io(ApiService.baseUrl, <String, dynamic>{
       'transports': ['websocket'],
       'autoConnect': true,
     });
@@ -1632,7 +1632,7 @@ class _ChatScreenState extends State<ChatScreen> {
       }
       
       final response = await http.get(
-        Uri.parse('http://10.0.2.2:8080/api/messages/$currentUserId/${widget.friend.id}'),
+        Uri.parse('${ApiService.baseUrl}/api/messages/$currentUserId/${widget.friend.id}'),
       );
       
       if (response.statusCode == 200) {
@@ -2055,7 +2055,7 @@ class _ChatScreenState extends State<ChatScreen> {
         print('🔄 Using fallback user: $fallbackUserId');
         
         final response = await http.post(
-          Uri.parse('http://10.0.2.2:8080/api/messages/send'),
+          Uri.parse('${ApiService.baseUrl}/api/messages/send'),
           headers: {'Content-Type': 'application/json'},
           body: json.encode({
             'senderId': fallbackUserId,
@@ -2087,7 +2087,7 @@ class _ChatScreenState extends State<ChatScreen> {
       });
       
       final response = await http.post(
-        Uri.parse('http://10.0.2.2:8080/api/messages/send'),
+        Uri.parse('${ApiService.baseUrl}/api/messages/send'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'senderId': currentUserId,

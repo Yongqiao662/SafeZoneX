@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'dart:async';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import '../services/backend_api_service.dart';
+import '../services/api_service.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -249,11 +250,11 @@ class _SOSActiveScreenState extends State<SOSActiveScreen>
 
   void _connectToBackend() async {
     try {
-      // Initialize socket connection (use 10.0.2.2 for Android emulator, or actual IP for physical device)
-      _socket = IO.io('http://10.0.2.2:8080', <String, dynamic>{
-        'transports': ['websocket'],
-        'autoConnect': false,
-      });
+      // Initialize socket connection (use ApiService.baseUrl so env overrides apply)
+        _socket = IO.io(ApiService.baseUrl, <String, dynamic>{
+          'transports': ['websocket'],
+          'autoConnect': false,
+        });
 
       _socket?.connect();
 

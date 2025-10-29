@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'screens/splash_screen.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Load environment variables from frontend/mobile/.env
+  await dotenv.load(fileName: '.env');
   runApp(SafeZoneApp());
 }
 

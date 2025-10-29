@@ -143,6 +143,8 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen>
   @override
   void initState() {
     super.initState();
+    print('DEBUG PersonalDetails: Received name: "${widget.name}"');
+    print('DEBUG PersonalDetails: Received email: "${widget.email}"');
     _initAnimations();
     _startEntryAnimation();
     _loadExistingData();
@@ -151,7 +153,9 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen>
   // Load existing user data
   void _loadExistingData() async {
     final savedData = await UserPreferences.getUserData();
+    print('DEBUG PersonalDetails: Saved data exists: ${savedData != null}');
     if (savedData != null) {
+      print('DEBUG PersonalDetails: Using saved data: $savedData');
       setState(() {
         _nameController.text = savedData['name'] ?? widget.name;
         _emailController.text = savedData['email'] ?? widget.email;
@@ -170,12 +174,18 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen>
       });
     } else {
       // First time setup
+      print('DEBUG PersonalDetails: First time setup - using widget data');
+      print('DEBUG PersonalDetails: Setting name to: "${widget.name}"');
+      print('DEBUG PersonalDetails: Setting email to: "${widget.email}"');
+      
       _nameController.text = widget.name;
       _emailController.text = widget.email;
       if (widget.email.length >= 8) {
         _studentIdController.text = widget.email.substring(0, 8);
+        print('DEBUG PersonalDetails: Setting student ID to: "${widget.email.substring(0, 8)}"');
       } else {
         _studentIdController.text = widget.email;
+        print('DEBUG PersonalDetails: Setting student ID to email: "${widget.email}"');
       }
     }
   }

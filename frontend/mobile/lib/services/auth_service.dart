@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
 import 'backend_api_service.dart';
 
 class AuthService {
@@ -33,24 +34,44 @@ class AuthService {
   }
 
   /// Google Sign-In Authentication
-  Future<Map<String, dynamic>> signInWithGoogle(String idToken, String accessToken) async {
+  Future<Map<String, dynamic>> signInWithGoogle(String idToken, String accessToken, {String? userEmail, String? userName}) async {
     try {
-      final result = await _apiService.authenticateWithGoogle(
-        idToken: idToken,
-        accessToken: accessToken,
-      );
-
-      if (result['success']) {
-        await _saveAuthData(result['token'], result['user']);
-        return {
-          'success': true,
-          'user': result['user'],
-          'message': 'Google sign-in successful'
-        };
-      }
-
-      return result;
+      // TODO: Implement proper backend Google authentication
+      // For now, create a temporary user object from Google data
+      print('DEBUG AuthService: Google sign-in with email: $userEmail, name: $userName');
+      
+      // Create a user object from Google data
+      final user = {
+        'email': userEmail ?? '',
+        'name': userName ?? '',
+        'id': userEmail?.split('@')[0] ?? '', // Use email prefix as temporary ID
+      };
+      
+      // Save minimal auth data (no real token since backend auth isn't implemented)
+      await _saveAuthData('temp_google_token', user);
+      
+      return {
+        'success': true,
+        'user': user,
+        'message': 'Google sign-in successful'
+      };
+      
+      // TODO: Replace with actual backend call when implemented
+      // final result = await _apiService.authenticateWithGoogle(
+      //   idToken: idToken,
+      //   accessToken: accessToken,
+      // );
+      // if (result['success']) {
+      //   await _saveAuthData(result['token'], result['user']);
+      //   return {
+      //     'success': true,
+      //     'user': result['user'],
+      //     'message': 'Google sign-in successful'
+      //   };
+      // }
+      // return result;
     } catch (e) {
+      print('DEBUG AuthService: Error in Google sign-in: $e');
       return {
         'success': false,
         'message': 'Google sign-in failed: $e'
@@ -80,6 +101,34 @@ class AuthService {
       return {
         'success': false,
         'message': 'Login failed: $e'
+      };
+    }
+  }
+
+  Future<Map<String, dynamic>> verifyGoogleToken(String idToken) async {
+    try {
+      // Replace with your Railway backend URL
+      final response = await http.post(
+        Uri.parse('https://your-railway-app.railway.app/api/auth/google'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'idToken': idToken}),
+      );
+
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'user': json.decode(response.body),
+        };
+      } else {
+        return {
+          'success': false,
+          'error': 'Token verification failed',
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'error': e.toString(),
       };
     }
   }

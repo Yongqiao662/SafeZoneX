@@ -6,6 +6,7 @@ import 'main_dashboard_screen.dart';
 import 'personal_details_screen.dart';
 import 'signup_screen.dart';
 
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
 
@@ -443,29 +444,50 @@ class _LoginScreenState extends State<LoginScreen>
   Widget _buildGoogleSignInButton() {
     return SlideTransition(
       position: _slideAnim,
-      child: SizedBox(
+      child: Container(
         width: double.infinity,
+        height: 56,
+        decoration: BoxDecoration(
+          color: Colors.red,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 10,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
         child: ElevatedButton.icon(
-          icon: Image.asset(
-            'assets/google_logo.png',
-            height: 24,
-            width: 24,
+          icon: Container(
+            padding: const EdgeInsets.all(2),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: const Icon(
+              Icons.g_mobiledata,
+              color: Colors.red,
+              size: 20,
+            ),
           ),
           label: const Text(
-            'Sign in with Google',
+            'Continue with Google',
             style: TextStyle(
               fontSize: 16,
-              color: Colors.white,
-              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+              fontWeight: FontWeight.w500,
             ),
           ),
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.redAccent,
+            backgroundColor: Colors.white,
+            foregroundColor: Colors.black87,
+            elevation: 0,
+            shadowColor: Colors.transparent,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
             ),
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            disabledBackgroundColor: Colors.redAccent,
+            padding: const EdgeInsets.symmetric(vertical: 16),
           ),
           onPressed: _isLoading ? null : _handleGoogleSignIn,
         ),
@@ -474,50 +496,87 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Future<void> _handleGoogleSignIn() async {
-    try {
-      setState(() => _isLoading = true);
-      
-      await _googleSignIn.signOut();
-      
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      if (googleUser != null) {
-        await _processGoogleUser(googleUser);
-      }
-    } catch (error) {
-      print('Error during Google Sign-In: $error');
-    } finally {
-      setState(() => _isLoading = false);
+  try {
+    setState(() => _isLoading = true);
+    
+    await _googleSignIn.signOut();
+    
+    final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+    if (googleUser != null) {
+      await _processGoogleUser(googleUser);
     }
+  } catch (error) {  // ✅ Fixed - removed duplicate catch
+    print('Error during Google Sign-In: $error');
+    _showErrorSnackBar('Google Sign-In failed: ${error.toString()}');
+  } finally {
+    setState(() => _isLoading = false);
   }
+}
 
   Future<void> _processGoogleUser(GoogleSignInAccount googleUser) async {
     final email = googleUser.email.trim().toLowerCase();
     
-    final bool isValidDomain = email.endsWith('siswa-old.um.edu.my');
+    final bool isValidDomain = email.endsWith('siswa.um.edu.my');
 
     if (!isValidDomain) {
       await _googleSignIn.signOut();
+      _showErrorSnackBar('Please use your siswa.um.edu.my email address');
       return;
     }
+
+    print('DEBUG: Processing user: ${googleUser.email}');
+    print('DEBUG: Google user displayName: ${googleUser.displayName}');
+    print('DEBUG: Google user email: ${googleUser.email}');
 
     final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
     final String? idToken = googleAuth.idToken;
     final String? accessToken = googleAuth.accessToken;
     
     if (idToken != null && accessToken != null) {
-      _showSuccessSnackBar('Welcome, ${googleUser.displayName ?? googleUser.email}!');
-      await _exitAnimation();
-      
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (context) => PersonalDetailsScreen(
-            name: googleUser.displayName ?? '',
-            email: googleUser.email,
-          ),
-        ),
+      final authService = AuthService();
+      final result = await authService.signInWithGoogle(
+        idToken, 
+        accessToken,
+        userEmail: googleUser.email,
+        userName: googleUser.displayName,
       );
+      
+      print('DEBUG: Auth service result: $result');
+      
+      if (result['success']) {
+        print('DEBUG: Backend user data: ${result['user']}');
+        
+        final String userName = result['user']?['name'] ?? googleUser.displayName ?? '';
+        final String userEmail = result['user']?['email'] ?? googleUser.email ?? '';
+        
+        print('DEBUG: Final name: $userName');
+        print('DEBUG: Final email: $userEmail');
+        
+        _showSuccessSnackBar('Welcome, ${googleUser.displayName ?? googleUser.email}!');
+        await _exitAnimation();
+        
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (context) => PersonalDetailsScreen(
+              name: userName,
+              email: userEmail,
+            ),
+          ),
+        );
+      } else {
+        // Better error handling for different failure types
+        String errorMessage = result['message'] ?? 'Unknown error';
+        
+        if (errorMessage.contains('Network error') || errorMessage.contains('service unavailable')) {
+          errorMessage = 'Authentication server is currently unavailable. Please try again later.';
+        } else if (errorMessage.contains('invalid response')) {
+          errorMessage = 'Server configuration error. Please contact support.';
+        }
+        
+        _showErrorSnackBar('Sign-in failed: $errorMessage');
+      }
     } else {
-      _showErrorSnackBar('Failed to get authentication tokens');
+      _showErrorSnackBar('Failed to get Google authentication tokens');
     }
   }
 

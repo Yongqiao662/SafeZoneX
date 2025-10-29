@@ -1,12 +1,37 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:io' show Platform;
 
 class ApiService {
-  // Backend URL - change this to your actual backend URL
-  static const String baseUrl = 'http://10.0.2.2:8080'; // For Android emulator
-  // Use 'http://localhost:8080' for iOS simulator
-  // Use 'http://YOUR_IP:8080' for physical devices
+  // Backend URL - resolved from .env with platform-aware fallbacks
+  static final String baseUrl = _resolveBaseUrl();
+
+  static String _resolveBaseUrl() {
+    final env = dotenv.env;
+    // Allow an explicit override (useful for CI or production)
+    final override = env['API_BASE_URL_OVERRIDE'];
+    if (override != null && override.isNotEmpty) return override.trim();
+
+    // Web default: prefer API_BASE_URL from .env, else localhost
+    if (kIsWeb) return env['API_BASE_URL']?.trim() ?? 'http://localhost:8080';
+
+    try {
+      if (Platform.isAndroid) {
+        // Use Android emulator localhost (10.0.2.2 maps to host localhost)
+        return env['API_BASE_URL']?.trim() ?? 'http://10.0.2.2:8080';
+      } else if (Platform.isIOS) {
+        return env['API_BASE_URL_IOS']?.trim() ?? env['API_BASE_URL']?.trim() ?? 'http://localhost:8080';
+      }
+    } catch (_) {
+      // Platform not available (e.g., tests) - fall back below
+    }
+
+    // Final fallback: localhost backend
+    return env['API_BASE_URL']?.trim() ?? 'http://localhost:8080';
+  }
 
   // ==================== USER MANAGEMENT API ====================
 

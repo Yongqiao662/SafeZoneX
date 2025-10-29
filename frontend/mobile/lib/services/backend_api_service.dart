@@ -1,19 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'api_service.dart';
 
 class BackendApiService {
-  // AI-Powered SafeZoneX Backend URL
-  static const String _baseUrl = 'http://localhost:8080';
-  static const String _mobileUrl = 'http://10.0.2.2:8080'; // For Android emulator
-
-  // Auto-detect the correct URL based on platform
-  String get baseUrl {
-    if (Platform.isAndroid) {
-      return _mobileUrl;
-    }
-    return _baseUrl;
-  }
+  // Use centralized ApiService baseUrl (env-driven) so mobile can target Netlify or local
+  String get baseUrl => ApiService.baseUrl;
 
   // Headers for all requests
   Map<String, String> get _headers => {
@@ -171,32 +163,59 @@ class BackendApiService {
     };
 
     try {
+      print('🔐 Authenticating with Google...');
+      print('🔗 Backend URL: ${baseUrl}/api/auth/google');
+      
       final response = await http.post(
         Uri.parse('${baseUrl}/api/auth/google'),
         headers: _headers,
         body: json.encode(payload),
-      );
+      ).timeout(const Duration(seconds: 10));
 
-      print('🔐 Authenticating with Google...');
+      print('� Response status: ${response.statusCode}');
+      print('📥 Response headers: ${response.headers}');
+      
       if (response.statusCode == 200) {
-        final result = json.decode(response.body);
-        return {
-          'success': true,
-          'user': result['user'],
-          'token': result['token'],
-          'message': 'Google authentication successful'
-        };
+        try {
+          final result = json.decode(response.body);
+          return {
+            'success': true,
+            'user': result['user'],
+            'token': result['token'],
+            'message': 'Google authentication successful'
+          };
+        } catch (jsonError) {
+          print('❌ JSON decode error: $jsonError');
+          print('📄 Response body: ${response.body}');
+          return {
+            'success': false,
+            'message': 'Server returned invalid response format'
+          };
+        }
       } else {
-        final error = json.decode(response.body);
-        return {
-          'success': false,
-          'message': error['message'] ?? 'Google authentication failed'
-        };
+        print('❌ Server error: ${response.statusCode}');
+        print('📄 Error response: ${response.body}');
+        
+        // Try to parse error response, but handle HTML responses gracefully
+        try {
+          final error = json.decode(response.body);
+          return {
+            'success': false,
+            'message': error['message'] ?? 'Google authentication failed'
+          };
+        } catch (_) {
+          // Server returned HTML or non-JSON (likely 404/500 page)
+          return {
+            'success': false,
+            'message': 'Authentication service unavailable (${response.statusCode})'
+          };
+        }
       }
     } catch (e) {
+      print('❌ Authentication request failed: $e');
       return {
         'success': false,
-        'message': 'Google authentication error: $e'
+        'message': 'Network error: Unable to connect to authentication service'
       };
     }
   }

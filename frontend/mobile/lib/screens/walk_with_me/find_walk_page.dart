@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 
 import 'models.dart';
 import 'partner_results_screen.dart';
@@ -23,24 +25,83 @@ class FindWalkPage extends StatefulWidget {
 
 class _FindWalkPageState extends State<FindWalkPage> {
   String? selectedDestination;
+  LatLng? selectedLatLng;
   DateTime? departureTime;
   String walkSpeed = 'normal';
   bool onlyHighCreditScore = true;
   bool onlyVerified = true;
   
-  // Note: These are demo campus locations. In a real app, these would be:
-  // 1. Loaded from a campus database/API
-  // 2. Set to actual campus coordinates
-  // 3. Configured per institution
+ 
+  // Enhanced UM Campus Locations - Option A: Essential Buildings
   final List<CampusLocation> campusLocations = [
-    CampusLocation(name: 'Main Campus Building', category: 'Academic', lat: 3.1225, lng: 101.6532, building: 'Main Campus'),
-    CampusLocation(name: 'Perpustakaan Utama UM (Library)', category: 'Library', lat: 3.1203, lng: 101.6539, building: 'Main Library Building'),
-    CampusLocation(name: 'Student Affairs Division', category: 'Social', lat: 3.1198, lng: 101.6540, building: 'Administration Complex'),
+    // Academic Buildings - Major Faculties
     CampusLocation(name: 'Faculty of Engineering', category: 'Academic', lat: 3.1210, lng: 101.6535, building: 'Engineering Complex'),
-    CampusLocation(name: 'UM Cafeteria Central', category: 'Dining', lat: 3.1195, lng: 101.6538, building: 'Student Center'),
+    CampusLocation(name: 'Faculty of Medicine', category: 'Academic', lat: 3.1240, lng: 101.6520, building: 'Medical Center'),
+    CampusLocation(name: 'Faculty of Law', category: 'Academic', lat: 3.1195, lng: 101.6545, building: 'Law Building'),
+    CampusLocation(name: 'Faculty of Business & Economics', category: 'Academic', lat: 3.1215, lng: 101.6525, building: 'FBE Complex'),
+    CampusLocation(name: 'Faculty of Computer Science & IT', category: 'Academic', lat: 3.1230, lng: 101.6540, building: 'FSKTM Building'),
+    
+    // Libraries
+    CampusLocation(name: 'Perpustakaan Utama UM (Central Library)', category: 'Library', lat: 3.1203, lng: 101.6539, building: 'Central Library'),
+    CampusLocation(name: 'Medical Library', category: 'Library', lat: 3.1242, lng: 101.6518, building: 'Medical Center'),
+    CampusLocation(name: 'Engineering Library', category: 'Library', lat: 3.1212, lng: 101.6533, building: 'Engineering Complex'),
+    
+    // Student Housing - Residential Colleges
+    CampusLocation(name: 'Kolej Kediaman Pertama (KK1)', category: 'Housing', lat: 3.1250, lng: 101.6580, building: 'First College'),
+    CampusLocation(name: 'Kolej Kediaman Keempat (KK4)', category: 'Housing', lat: 3.1240, lng: 101.6599, building: 'Fourth College'),
+    CampusLocation(name: 'Kolej Kediaman Kelima (KK5)', category: 'Housing', lat: 3.1260, lng: 101.6570, building: 'Fifth College'),
+    CampusLocation(name: 'Kolej Kediaman Ketujuh (KK7)', category: 'Housing', lat: 3.1235, lng: 101.6610, building: 'Seventh College'),
+    
+    // Dining Areas
+    CampusLocation(name: 'Dewan Selera Siswa (Main Food Court)', category: 'Dining', lat: 3.1195, lng: 101.6538, building: 'Student Center'),
+    CampusLocation(name: 'KK5 Cafeteria', category: 'Dining', lat: 3.1262, lng: 101.6568, building: 'Fifth College'),
+    CampusLocation(name: 'Medical Cafeteria', category: 'Dining', lat: 3.1238, lng: 101.6522, building: 'Medical Center'),
+    
+    // Recreation & Sports
     CampusLocation(name: 'UM Sports Centre', category: 'Recreation', lat: 3.1226, lng: 101.6592, building: 'Sports Complex'),
-    CampusLocation(name: 'Kolej Kediaman 4th College', category: 'Housing', lat: 3.1240, lng: 101.6599, building: 'Residential College'),
+    CampusLocation(name: 'Swimming Pool Complex', category: 'Recreation', lat: 3.1228, lng: 101.6590, building: 'Aquatic Center'),
+    CampusLocation(name: 'Stadium Malawati UM', category: 'Recreation', lat: 3.1220, lng: 101.6595, building: 'Main Stadium'),
+    
+    // Essential Services
+    CampusLocation(name: 'Student Affairs Division', category: 'Services', lat: 3.1198, lng: 101.6540, building: 'Administration Complex'),
+    CampusLocation(name: 'UM Health Center', category: 'Services', lat: 3.1205, lng: 101.6535, building: 'Health Center'),
+    CampusLocation(name: 'UM Post Office', category: 'Services', lat: 3.1200, lng: 101.6542, building: 'Administration Complex'),
+    CampusLocation(name: 'UM Bank (Maybank)', category: 'Services', lat: 3.1197, lng: 101.6538, building: 'Student Center'),
+    
+    // Main Campus Buildings
+    CampusLocation(name: 'Dewan Tunku Canselor (DTC)', category: 'Academic', lat: 3.1225, lng: 101.6532, building: 'Main Campus'),
+    CampusLocation(name: 'Canselori Building', category: 'Academic', lat: 3.1190, lng: 101.6545, building: 'Administration'),
   ];
+
+  // Local campus search state (removed Google Places)
+  List<CampusLocation> _filteredLocations = [];
+  final TextEditingController _searchCtrl = TextEditingController();
+  bool _showSearchResults = false;
+  
+  // Favorites functionality
+  Set<String> _favoriteLocations = {};
+  bool _showFavoritesOnly = false;
+  bool _showAllLocations = false; // Toggle to show all vs featured locations
+
+  // Featured locations (most commonly used)
+  List<String> get featuredLocationNames => [
+    'Perpustakaan Utama UM (Central Library)',
+    'Faculty of Engineering',
+    'Dewan Selera Siswa (Main Food Court)',
+    'UM Sports Centre',
+    'Kolej Kediaman Keempat (KK4)',
+    'Faculty of Computer Science & IT',
+  ];
+
+  List<CampusLocation> get featuredLocations => 
+      campusLocations.where((loc) => featuredLocationNames.contains(loc.name)).toList();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFavorites();
+    _filteredLocations = campusLocations; // Initialize with all locations
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -95,13 +156,14 @@ class _FindWalkPageState extends State<FindWalkPage> {
                   ],
                 ),
               ),
-              // Rest of the content
+              // Scrollable content
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Welcome card as part of scrollable content
                       _buildWelcomeCard(),
                       const SizedBox(height: 20),
                       _buildDestinationSelector(),
@@ -111,6 +173,7 @@ class _FindWalkPageState extends State<FindWalkPage> {
                       _buildPreferences(),
                       const SizedBox(height: 30),
                       _buildFindWalkButton(),
+                      const SizedBox(height: 20), // Extra space at bottom
                     ],
                   ),
                 ),
@@ -124,7 +187,9 @@ class _FindWalkPageState extends State<FindWalkPage> {
 
   Widget _buildWelcomeCard() {
     return Container(
-      padding: const EdgeInsets.all(20),
+      width: double.infinity,
+      margin: const EdgeInsets.all(8),
+      padding: const EdgeInsets.all(32),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.05),
         borderRadius: BorderRadius.circular(20),
@@ -141,9 +206,12 @@ class _FindWalkPageState extends State<FindWalkPage> {
         ],
       ),
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 80,
+            width: 120,
             height: 80,
             decoration: BoxDecoration(
               gradient: const LinearGradient(
@@ -164,21 +232,24 @@ class _FindWalkPageState extends State<FindWalkPage> {
               color: Colors.white,
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           const Text(
             'Walk Safely Together',
+            textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: 24,
+              fontSize: 26,
               fontWeight: FontWeight.bold,
               color: Colors.white,
+              letterSpacing: 0.5,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           Text(
-            'Searching your partner\'s location',
+            'Find study partners to walk with\naround UM campus safely',
             style: TextStyle(
               fontSize: 16,
               color: Colors.white.withOpacity(0.7),
+              height: 1.3,
             ),
             textAlign: TextAlign.center,
           ),
@@ -201,16 +272,229 @@ class _FindWalkPageState extends State<FindWalkPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Where are you going?',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
+          Row(
+            children: [
+              const Text(
+                'Where are you going?',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              if (selectedDestination != null) ...[
+                const SizedBox(width: 8),
+                Icon(Icons.check_circle, color: Colors.green, size: 16),
+              ],
+            ],
           ),
-          const SizedBox(height: 15),
-          ...campusLocations.map((location) => _buildLocationTile(location)),
+          if (selectedDestination != null)
+            Container(
+              margin: const EdgeInsets.only(top: 8),
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.green.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.location_on, color: Colors.green, size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Selected: $selectedDestination',
+                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(height: 12),
+          // Campus-only search box
+          TextField(
+            controller: _searchCtrl,
+            style: const TextStyle(color: Colors.white),
+            decoration: InputDecoration(
+              hintText: 'Search campus locations',
+              hintStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
+              prefixIcon: const Icon(Icons.search, color: Colors.white70),
+              suffixIcon: _searchCtrl.text.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear, color: Colors.white70),
+                      onPressed: () => _clearSearch(),
+                    )
+                  : null,
+              filled: true,
+              fillColor: Colors.white.withOpacity(0.03),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+            ),
+            onChanged: (v) => _onCampusSearchChanged(v),
+            onTap: () => setState(() => _showSearchResults = true),
+          ),
+          if (_showSearchResults && _filteredLocations.isNotEmpty && _searchCtrl.text.isNotEmpty)
+            Container(
+              margin: const EdgeInsets.only(top: 8),
+              constraints: const BoxConstraints(maxHeight: 200),
+              child: Card(
+                color: Colors.white.withOpacity(0.08),
+                child: ListView.builder(
+                  itemCount: _filteredLocations.length,
+                  itemBuilder: (context, i) {
+                    final location = _filteredLocations[i];
+                    final isFavorite = _favoriteLocations.contains(location.name);
+                    
+                    return ListTile(
+                      leading: Icon(_getCategoryIcon(location.category), color: Colors.white70, size: 20),
+                      title: Text(
+                        location.name, 
+                        style: const TextStyle(color: Colors.white, fontSize: 14),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                      subtitle: Text(
+                        '${location.category} • ${location.building}', 
+                        style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                      trailing: SizedBox(
+                        width: 80, // Fixed width to prevent overflow
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            // Favorite star button in search results
+                            GestureDetector(
+                              onTap: () {
+                                _toggleFavorite(location.name);
+                                // Keep search results open after favoriting
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(4), // Reduced padding
+                                decoration: BoxDecoration(
+                                  color: isFavorite 
+                                      ? Colors.amber.withOpacity(0.2) 
+                                      : Colors.white.withOpacity(0.05),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
+                                    color: isFavorite 
+                                        ? Colors.amber.withOpacity(0.5) 
+                                        : Colors.white.withOpacity(0.1),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Icon(
+                                  isFavorite ? Icons.star : Icons.star_border,
+                                  color: isFavorite ? Colors.amber : Colors.white.withOpacity(0.7),
+                                  size: 16, // Slightly smaller
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 6), // Reduced spacing
+                            // Select arrow
+                            Icon(Icons.arrow_forward_ios, color: Colors.white.withOpacity(0.4), size: 14), // Smaller arrow
+                          ],
+                        ),
+                      ),
+                      onTap: () => _selectCampusLocation(location),
+                    );
+                  },
+                ),
+              ),
+            ),
+          const SizedBox(height: 12),
+          // Location list controls
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _showFavoritesOnly 
+                          ? 'Favorite Locations' 
+                          : _showAllLocations 
+                              ? 'All Campus Locations' 
+                              : 'Popular Locations',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white.withOpacity(0.9),
+                      ),
+                    ),
+                    if (!_showFavoritesOnly)
+                      Text(
+                        'Tap ⭐ to favorite locations',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.white.withOpacity(0.5),
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              Flexible(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                  // Favorites toggle
+                  GestureDetector(
+                    onTap: () => setState(() {
+                      _showFavoritesOnly = !_showFavoritesOnly;
+                      if (_showFavoritesOnly) _showAllLocations = false;
+                    }),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.star,
+                            color: _showFavoritesOnly ? Colors.amber : Colors.white.withOpacity(0.4),
+                            size: 16,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Favs',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: _showFavoritesOnly ? Colors.amber : Colors.white.withOpacity(0.7),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Show all toggle
+                  GestureDetector(
+                    onTap: () => setState(() {
+                      _showAllLocations = !_showAllLocations;
+                      if (_showAllLocations) _showFavoritesOnly = false;
+                    }),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      child: Text(
+                        _showAllLocations ? 'Less' : 'More',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: _showAllLocations ? Colors.blue.shade300 : Colors.white.withOpacity(0.7),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Location list based on current filter
+          ...(_getDisplayLocations()).map((location) => _buildLocationTile(location)),
         ],
       ),
     );
@@ -218,10 +502,22 @@ class _FindWalkPageState extends State<FindWalkPage> {
 
   Widget _buildLocationTile(CampusLocation location) {
     final isSelected = selectedDestination == location.name;
+    final isFavorite = _favoriteLocations.contains(location.name);
+    
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       child: InkWell(
-        onTap: () => setState(() => selectedDestination = location.name),
+        onTap: () {
+          print('🎯 Location selected: ${location.name}');
+          setState(() {
+            selectedDestination = location.name;
+            selectedLatLng = LatLng(location.lat, location.lng);
+            _searchCtrl.text = location.name;
+            _showSearchResults = false; // Hide search results after selection
+          });
+          // Show confirmation
+          _showSnackBar('Selected: ${location.name}', Icons.location_on, Colors.green);
+        },
         child: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
@@ -276,6 +572,31 @@ class _FindWalkPageState extends State<FindWalkPage> {
                   ],
                 ),
               ),
+              // Favorite star button - more prominent
+              GestureDetector(
+                onTap: () => _toggleFavorite(location.name),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: isFavorite 
+                        ? Colors.amber.withOpacity(0.2) 
+                        : Colors.white.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: isFavorite 
+                          ? Colors.amber.withOpacity(0.5) 
+                          : Colors.white.withOpacity(0.1),
+                      width: 1,
+                    ),
+                  ),
+                  child: Icon(
+                    isFavorite ? Icons.star : Icons.star_border,
+                    color: isFavorite ? Colors.amber : Colors.white.withOpacity(0.8),
+                    size: 22,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
               if (isSelected)
                 Icon(Icons.check_circle, color: Colors.blue.shade400),
             ],
@@ -293,6 +614,7 @@ class _FindWalkPageState extends State<FindWalkPage> {
       case 'Dining': return Icons.restaurant;
       case 'Recreation': return Icons.fitness_center;
       case 'Housing': return Icons.home;
+      case 'Services': return Icons.local_hospital; // For health center, bank, etc.
       default: return Icons.location_on;
     }
   }
@@ -436,26 +758,49 @@ class _FindWalkPageState extends State<FindWalkPage> {
   }
 
   Widget _buildFindWalkButton() {
-    final canSearch = selectedDestination != null && departureTime != null;
+    final hasDestination = selectedDestination != null || selectedLatLng != null;
+    final hasTime = departureTime != null;
+    final canSearch = hasDestination && hasTime;
+    
+    String buttonText;
+    if (!hasDestination && !hasTime) {
+      buttonText = 'Select Location & Time';
+    } else if (!hasDestination) {
+      buttonText = 'Select a Location First';
+    } else if (!hasTime) {
+      buttonText = 'Select Departure Time';
+    } else {
+      buttonText = 'Find Walking Partners';
+    }
     
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
         onPressed: canSearch ? () => _findWalkingPartners() : null,
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.deepPurple,
+          backgroundColor: canSearch ? Colors.deepPurple : Colors.grey.withOpacity(0.3),
           padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
         ),
-        child: const Text(
-          'Find Walking Partners',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (canSearch) 
+              const Icon(Icons.search, color: Colors.white, size: 20)
+            else
+              Icon(Icons.info_outline, color: Colors.white.withOpacity(0.7), size: 20),
+            const SizedBox(width: 8),
+            Text(
+              buttonText,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: canSearch ? Colors.white : Colors.white.withOpacity(0.7),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -481,12 +826,13 @@ class _FindWalkPageState extends State<FindWalkPage> {
   }
 
   void _findWalkingPartners() {
-    // Navigate to partner results screen
+    // Navigate to partner results screen, pass selected LatLng when available
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => PartnerResultsScreen(
-          destination: selectedDestination,  // Make sure selectedDestination is LatLng type
+          destination: selectedDestination,
+          destinationLatLng: selectedLatLng,
         ),
       ),
     );
@@ -499,6 +845,7 @@ class _FindWalkPageState extends State<FindWalkPage> {
         MaterialPageRoute(
           builder: (context) => PartnerResultsScreen(
             destination: selectedDestination,
+            destinationLatLng: selectedLatLng,
           ),
         ),
       );
@@ -513,5 +860,112 @@ class _FindWalkPageState extends State<FindWalkPage> {
       'Sports Complex': const LatLng(3.1265, 101.6525),
     };
     return locationMap[destination] ?? const LatLng(3.1225, 101.6532);
+  }
+
+  // Campus-only search functionality
+  void _onCampusSearchChanged(String value) {
+    if (value.isEmpty) {
+      setState(() {
+        _filteredLocations = [];
+        _showSearchResults = false;
+      });
+      return;
+    }
+
+    final query = value.toLowerCase();
+    setState(() {
+      _filteredLocations = campusLocations.where((location) {
+        return location.name.toLowerCase().contains(query) ||
+               location.category.toLowerCase().contains(query) ||
+               location.building.toLowerCase().contains(query);
+      }).toList();
+      _showSearchResults = true;
+    });
+  }
+
+  void _selectCampusLocation(CampusLocation location) {
+    setState(() {
+      selectedDestination = location.name;
+      selectedLatLng = LatLng(location.lat, location.lng);
+      _searchCtrl.text = location.name;
+      _showSearchResults = false;
+      _filteredLocations = [];
+    });
+  }
+
+  void _clearSearch() {
+    setState(() {
+      _searchCtrl.clear();
+      _filteredLocations = [];
+      _showSearchResults = false;
+    });
+  }
+
+  // Get locations to display based on current filters
+  List<CampusLocation> _getDisplayLocations() {
+    if (_showFavoritesOnly) {
+      return campusLocations.where((location) => _favoriteLocations.contains(location.name)).toList();
+    } else if (_showAllLocations) {
+      return campusLocations;
+    } else {
+      return featuredLocations;
+    }
+  }
+
+  // Favorites Management Functions
+  Future<void> _loadFavorites() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final favoritesJson = prefs.getString('walk_favorite_locations');
+      if (favoritesJson != null) {
+        final List<dynamic> favoritesList = json.decode(favoritesJson);
+        setState(() {
+          _favoriteLocations = favoritesList.cast<String>().toSet();
+        });
+      }
+    } catch (e) {
+      print('Error loading favorites: $e');
+    }
+  }
+
+  Future<void> _saveFavorites() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final favoritesJson = json.encode(_favoriteLocations.toList());
+      await prefs.setString('walk_favorite_locations', favoritesJson);
+    } catch (e) {
+      print('Error saving favorites: $e');
+    }
+  }
+
+  void _toggleFavorite(String locationName) {
+    setState(() {
+      if (_favoriteLocations.contains(locationName)) {
+        _favoriteLocations.remove(locationName);
+        _showSnackBar('Removed from favorites: $locationName', Icons.star_border);
+      } else {
+        _favoriteLocations.add(locationName);
+        _showSnackBar('Added to favorites: $locationName', Icons.star, Colors.amber);
+      }
+    });
+    _saveFavorites();
+  }
+
+  void _showSnackBar(String message, IconData icon, [Color? color]) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(icon, color: color ?? Colors.white, size: 20),
+            const SizedBox(width: 8),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: Colors.deepPurple.withOpacity(0.9),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 }

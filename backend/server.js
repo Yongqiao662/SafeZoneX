@@ -917,6 +917,176 @@ app.put('/api/messages/read', async (req, res) => {
   }
 });
 
+// ==================== AUTHENTICATION API ====================
+
+// Google Sign-In Authentication
+app.post('/api/auth/google', async (req, res) => {
+  try {
+    const { idToken, accessToken, authProvider } = req.body;
+
+    if (!idToken || !accessToken) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Missing idToken or accessToken' 
+      });
+    }
+
+    // In a real implementation, you would:
+    // 1. Verify the Google ID token with Google's API
+    // 2. Extract user info from the verified token
+    // 3. Create or update user in database
+    // 4. Generate your own JWT token
+
+    // For now, we'll create a mock response that works with your frontend
+    logger.info(`🔐 Google authentication request received`);
+    logger.info(`📋 Token length: idToken=${idToken.length}, accessToken=${accessToken.length}`);
+
+    // Mock user data - replace with actual Google token verification
+    const mockUser = {
+      userId: `google_${Date.now()}`,
+      email: 'user@siswa.um.edu.my', // You'd get this from the verified token
+      name: 'Google User',
+      authProvider: 'google',
+      createdAt: new Date(),
+      isVerified: true
+    };
+
+    // Generate a simple session token (use JWT in production)
+    const sessionToken = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    // Save user to database (optional - you can store Google users)
+    try {
+      const existingUser = await User.findOne({ email: mockUser.email });
+      if (!existingUser) {
+        const newUser = new User(mockUser);
+        await newUser.save();
+        logger.info(`✅ Created new Google user: ${mockUser.email}`);
+      } else {
+        logger.info(`👤 Existing Google user: ${mockUser.email}`);
+      }
+    } catch (dbError) {
+      logger.warn(`⚠️ Database error (continuing anyway): ${dbError.message}`);
+    }
+
+    res.json({
+      success: true,
+      user: mockUser,
+      token: sessionToken,
+      message: 'Google authentication successful'
+    });
+
+  } catch (error) {
+    logger.error('❌ Google authentication error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error during authentication'
+    });
+  }
+});
+
+// User Registration (for signup flow)
+app.post('/api/users/register', async (req, res) => {
+  try {
+    const { email, name, phone, studentId } = req.body;
+
+    if (!email || !name) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Email and name are required' 
+      });
+    }
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.json({
+        success: true,
+        user: {
+          userId: existingUser.userId,
+          name: existingUser.name,
+          email: existingUser.email,
+          phone: existingUser.phone || phone
+        },
+        message: 'User already registered'
+      });
+    }
+
+    // Create new user
+    const newUser = new User({
+      userId: `user_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+      name,
+      email,
+      phone: phone || '',
+      studentId: studentId || '',
+      createdAt: new Date(),
+      isVerified: false,
+      lastSeen: new Date()
+    });
+
+    await newUser.save();
+    logger.info(`✅ Registered new user: ${email}`);
+
+    res.json({
+      success: true,
+      user: {
+        userId: newUser.userId,
+        name: newUser.name,
+        email: newUser.email,
+        phone: newUser.phone
+      },
+      message: 'User registered successfully'
+    });
+
+  } catch (error) {
+    logger.error('❌ User registration error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to register user'
+    });
+  }
+});
+
+// Check if user exists (for Google sign-in flow)
+app.get('/api/users/check', async (req, res) => {
+  try {
+    const { email } = req.query;
+
+    if (!email) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Email query parameter required' 
+      });
+    }
+
+    const user = await User.findOne({ email });
+    
+    if (user) {
+      res.json({
+        success: true,
+        exists: true,
+        user: {
+          userId: user.userId,
+          name: user.name,
+          email: user.email,
+          phone: user.phone
+        }
+      });
+    } else {
+      res.json({
+        success: true,
+        exists: false
+      });
+    }
+
+  } catch (error) {
+    logger.error('❌ User check error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to check user'
+    });
+  }
+});
+
 // ==================== VERIFICATION CODE API ====================
 
 // Send verification code
