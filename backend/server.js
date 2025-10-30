@@ -314,12 +314,10 @@ app.post('/api/report', async (req, res) => {
       createdAt: new Date()
     };
     
-  // Primary: send to security dashboard room
+  // FIXED: Send ONLY to security dashboard room (no general broadcast)
   io.to('security_dashboard').emit('report_update', reportPayload);
-  // Fallback: also broadcast to all connected clients in case the dashboard
-  // did not join the room (helps during debugging or when clients connect late)
-  io.emit('report_update', reportPayload);
-  console.log(`📢 Sent to dashboard room and broadcast - ${verificationTag} (${confidence}%), Priority: ${priority}`);
+  
+  console.log(`📢 Sent to dashboard room - ${verificationTag} (${confidence}%), Priority: ${priority}`);
 
   } catch (error) {
     console.error('❌ Report submission error:', error);
@@ -435,6 +433,16 @@ app.post('/api/sos', (req, res) => {
       return res.status(400).json({ success: false, error: 'Missing userId' });
     }
 
+    // Check for duplicate SOS within 5 seconds from same user
+    const sosKey = `http_sos_${data.userId}_${data.userName}`;
+    if (submittedReports.has(sosKey)) {
+      logger.warn(`🚫 Duplicate HTTP SOS blocked from ${data.userName}`);
+      return res.json({ success: false, error: 'Duplicate SOS submission blocked' });
+    }
+    
+    submittedReports.add(sosKey);
+    setTimeout(() => submittedReports.delete(sosKey), 5000); // 5 second window
+
     // Normalize location if latitude/longitude present at top-level
     let locationObj = null;
     if (data.location && typeof data.location.latitude === 'number' && typeof data.location.longitude === 'number') {
@@ -461,10 +469,8 @@ app.post('/api/sos', (req, res) => {
     alertsCache.set(sosAlert.id, sosAlert);
     logger.info(`📡 SOS received via HTTP and stored: ${sosAlert.id}`);
 
-    // Broadcast the SOS to friends and security dashboards
-    io.emit('friend_sos_alert', sosAlert);
+    // FIXED: Send ONLY to security dashboard room (no general broadcast)
     io.to('security_dashboard').emit('security_sos_alert', sosAlert);
-    io.emit('security_sos_alert', sosAlert);
 
     res.json({ success: true, sosId: sosAlert.id });
   } catch (err) {
@@ -896,23 +902,7 @@ app.post('/api/messages/send', async (req, res) => {
     });
   } catch (error) {
     logger.error('❌ Error sending message:', error);
-    
-    let errorMessage = 'Failed to send message';
-    
-    // Provide more specific error messages
-    if (error.name === 'ValidationError') {
-      errorMessage = `Validation error: ${error.message}`;
-    } else if (error.code === 11000) {
-      errorMessage = 'Duplicate message ID error';
-    } else if (error.message) {
-      errorMessage = error.message;
-    }
-    
-    res.status(500).json({ 
-      success: false, 
-      error: errorMessage,
-      details: error.name || 'UnknownError'
-    });
+    res.status(500).json({ success: false, error: 'Failed to send message' });
   }
 });
 
@@ -1209,68 +1199,36 @@ io.use((socket, next) => {
 io.on('connection', (socket) => {
   logger.info(`🔌 Client connected: ${socket.id}`);
 
-  if (socket.user.role === 'security') {
-    socket.join('security_dashboard');
-  }
-
-  socket.on('join_room', async (data) => {
-    const room = data.room || 'security_dashboard';
-    socket.join(room);
-    logger.info(`🔥 Client ${socket.id} joined room: ${room}`);
-
-    // If a security dashboard joins, send the latest active reports
-    // as an initial batch so the dashboard doesn't miss recent events.
-    if (room === 'security_dashboard') {
-      try {
-        const reports = await Alert.find({
-          status: { $nin: ['resolved', 'false_alarm'] }
-        })
-          .sort({ createdAt: -1 })
-          .limit(100);
-
-        const transformedReports = reports.map(report => ({
-          id: report.alertId,
-          alertId: report.alertId,
-          userId: report.userId,
-          userName: report.userName,
-          userPhone: report.userPhone,
-          alertType: report.alertType,
-          description: report.description,
-          location: report.location,
-          status: report.status,
-          verificationTag: report.verificationTag || 'Needs Review',
-          priority: report.priority,
-          createdAt: report.createdAt,
-          aiAnalysis: report.aiAnalysis,
-          evidenceImages: report.evidenceImages || []
-        }));
-
-        socket.emit('initial_reports', {
-          success: true,
-          count: transformedReports.length,
-          reports: transformedReports
-        });
-
-        logger.info(`📤 Sent ${transformedReports.length} initial reports to ${socket.id}`);
-      } catch (err) {
-        logger.error('❌ Failed to send initial reports to dashboard:', err);
+  // Allow dashboard to join security_dashboard room and send existing SOS alerts
+  socket.on('join_room', (data) => {
+    const roomName = data.room;
+    if (roomName === 'security_dashboard') {
+      // Check if this socket already joined the room (prevent duplicate sends)
+      if (socket.alreadyJoinedDashboard) {
+        logger.info(`⚠️ Dashboard ${socket.id} already joined room, skipping duplicate join`);
+        return;
       }
-      // Also send any active SOS alerts from the in-memory cache as an initial batch
-      try {
-        const sosItems = [];
-        for (const entry of alertsCache.values()) {
-          // SOS alerts created via socket.sos flow have 'acknowledgedBy' and typically no 'alertId'
-          if (entry && entry.acknowledgedBy && !entry.alertId && entry.status === 'active') {
-            sosItems.push(entry);
-          }
+      
+      socket.join(roomName);
+      socket.alreadyJoinedDashboard = true; // Mark as joined
+      logger.info(`🔐 Dashboard ${socket.id} joined room: ${roomName}`);
+      
+      // Send existing active SOS alerts to the newly connected dashboard (ONLY ONCE)
+      const activeSOS = [];
+      for (const [key, entry] of alertsCache.entries()) {
+        if (entry && entry.isSOS && entry.status === 'active') {
+          activeSOS.push(entry);
         }
-
-        if (sosItems.length > 0) {
-          socket.emit('initial_sos', { success: true, count: sosItems.length, sos: sosItems });
-          logger.info(`📤 Sent ${sosItems.length} initial SOS alerts to ${socket.id}`);
-        }
-      } catch (err) {
-        logger.error('❌ Failed to send initial SOS alerts to dashboard:', err);
+      }
+      
+      if (activeSOS.length > 0) {
+        logger.info(`📤 Sending ${activeSOS.length} active SOS alerts to dashboard ${socket.id}`);
+        // Send each SOS alert individually to match the real-time event format
+        activeSOS.forEach(sos => {
+          socket.emit('security_sos_alert', sos);
+        });
+      } else {
+        logger.info(`📭 No active SOS alerts to send to dashboard ${socket.id}`);
       }
     }
   });
@@ -1315,8 +1273,21 @@ io.on('connection', (socket) => {
     }
   });
 
-  // SOS Alert - Broadcast to all connected friends
+  // SOS Alert - Broadcast to all connected friends (SINGLE HANDLER - NO DUPLICATES)
   socket.on('sos_alert', (data) => {
+    // Check for duplicate SOS within 5 seconds from same user
+    const sosKey = `${data.userId}_${data.userName}`;
+    const lastSOSTime = socket.lastSOSTime || {};
+    const now = Date.now();
+    
+    if (lastSOSTime[sosKey] && (now - lastSOSTime[sosKey]) < 5000) {
+      logger.warn(`🚫 Duplicate SOS blocked from ${data.userName} (within 5s)`);
+      return;
+    }
+    
+    lastSOSTime[sosKey] = now;
+    socket.lastSOSTime = lastSOSTime;
+    
     logger.info(`🆘 SOS Alert received from ${data.userName}:`, data);
     
     // Normalize location: some clients send { latitude, longitude } at top-level
@@ -1347,15 +1318,10 @@ io.on('connection', (socket) => {
     alertsCache.set(sosAlert.id, sosAlert);
     logger.info(`🗂️ SOS stored in cache: ${sosAlert.id} (cache size=${alertsCache.size})`);
 
-    // Broadcast to ALL connected clients (friends)
-    io.emit('friend_sos_alert', sosAlert);
+    // FIXED: Send ONLY to security dashboard room (no general broadcast)
+    io.to('security_dashboard').emit('security_sos_alert', sosAlert);
     
-    // Also send to security dashboard
-  io.to('security_dashboard').emit('security_sos_alert', sosAlert);
-  // Fallback: also broadcast the security event in case dashboard didn't join the room
-  io.emit('security_sos_alert', sosAlert);
-    
-    logger.info(`📡 SOS broadcasted to all friends and security`);
+    logger.info(`📡 SOS sent to security dashboard room only`);
   });
 
   // SOS Location Update - Real-time location sharing
@@ -1369,61 +1335,8 @@ io.on('connection', (socket) => {
       timestamp: new Date().toISOString()
     };
 
-    // Existing broadcast used by friend clients
-    io.emit('friend_location_update', locationPayload);
-
-    // Also emit a standardized event name for dashboards and security clients
+    // FIXED: Send ONLY to security dashboard room (no general broadcast)
     io.to('security_dashboard').emit('sos_location_update', locationPayload);
-    // Fallback broadcast in case dashboard isn't in the room
-    io.emit('sos_location_update', locationPayload);
-  });
-
-  // Generic message envelope support (some mobile/web clients emit a 'message' event with { type, payload })
-  socket.on('message', (msg) => {
-    try {
-      if (!msg) return;
-      const type = msg.type || (msg.payload && msg.payload.type);
-      const payload = msg.payload || msg;
-
-      if (type === 'sos_alert') {
-        logger.info('🛰️ Received generic message envelope with sos_alert payload');
-
-        // Reuse same normalization as above
-        let data = payload.payload || payload; // support nested payload
-
-        let locationObj = null;
-        if (data && data.location && typeof data.location.latitude === 'number' && typeof data.location.longitude === 'number') {
-          locationObj = data.location;
-        } else if (data && typeof data.latitude === 'number' && typeof data.longitude === 'number') {
-          locationObj = {
-            latitude: data.latitude,
-            longitude: data.longitude,
-            address: data.address || '',
-            campus: data.campus || 'University Malaya'
-          };
-        }
-
-        const sosAlert = Object.assign({}, data, {
-          id: uuidv4(),
-          socketId: socket.id,
-          status: 'active',
-          acknowledgedBy: [],
-          createdAt: new Date().toISOString(),
-          isSOS: true,
-          location: locationObj
-        });
-
-        alertsCache.set(sosAlert.id, sosAlert);
-
-        io.emit('friend_sos_alert', sosAlert);
-        io.to('security_dashboard').emit('security_sos_alert', sosAlert);
-        io.emit('security_sos_alert', sosAlert);
-
-        logger.info(`📡 SOS (envelope) broadcasted to all friends and security`);
-      }
-    } catch (err) {
-      logger.error('❌ Error processing generic message envelope:', err);
-    }
   });
 
   // Friend acknowledges SOS
@@ -1472,6 +1385,11 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', async () => {
     logger.info(`🔌 Client disconnected: ${socket.id}`);
+    
+    // Clean up dashboard join flag
+    if (socket.alreadyJoinedDashboard) {
+      delete socket.alreadyJoinedDashboard;
+    }
     
     // Update user's offline status if they were logged in
     if (socket.userId) {

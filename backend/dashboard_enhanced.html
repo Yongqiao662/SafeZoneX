@@ -1246,11 +1246,17 @@
         function bindSocketHandlers() {
             if (!socket) return;
 
+            // CRITICAL: Remove ALL old listeners before adding new ones
             socket.off();
 
             socket.on('connect', () => {
                 console.log('✅ Connected to server');
-                try { socket.emit('join_room', { room: 'security_dashboard' }); } catch (e) { console.warn(e); }
+                try { 
+                    socket.emit('join_room', { room: 'security_dashboard' }); 
+                    console.log('📥 Joined security_dashboard room');
+                } catch (e) { 
+                    console.warn(e); 
+                }
                 loadReports();
             });
 
@@ -1261,7 +1267,6 @@
                 updateMonthlySummary();
                 if (mapInstance) updateHeatmap();
 
-                // Add notification for new report
                 addNotification(
                     'report',
                     'New Safety Report',
@@ -1270,31 +1275,23 @@
                 );
             });
 
-            // When dashboard joins, server may send an initial batch of active reports
-            socket.on('initial_reports', (payload) => {
-                try {
-                    if (!payload || !Array.isArray(payload.reports)) return;
-                    console.log(`📥 Received initial reports batch: ${payload.count} items`);
-                    // Merge received reports, avoiding duplicates by alertId
-                    const existingIds = new Set(allReports.map(r => r.alertId));
-                    const newReports = payload.reports.filter(r => !existingIds.has(r.alertId));
-                    // Prepend newest first
-                    allReports = newReports.concat(allReports);
-                    applyFilters();
-                    updateMonthlySummary();
-                    if (mapInstance) updateHeatmap();
-                } catch (e) {
-                    console.warn('Failed processing initial_reports:', e);
-                }
-            });
-
-            // Listen for live SOS alerts
+            // FIXED: ONLY listen to 'security_sos_alert' - remove duplicate listeners
             socket.on('security_sos_alert', (sosData) => {
-                console.log('🆘 LIVE SOS ALERT:', sosData);
-                activeSOS.unshift(sosData);
+                console.log('🆘 SECURITY SOS ALERT:', sosData);
+                
+                // Check if this SOS already exists (prevent duplicates)
+                const existingIndex = activeSOS.findIndex(s => s.id === sosData.id || (s.userId === sosData.userId && s.createdAt === sosData.createdAt));
+                
+                if (existingIndex !== -1) {
+                    console.log('⚠️ Duplicate SOS detected, updating existing entry');
+                    activeSOS[existingIndex] = sosData;
+                } else {
+                    console.log('✅ New SOS added to active list');
+                    activeSOS.unshift(sosData);
+                }
+                
                 renderSOSAlerts();
 
-                // Add notification for SOS alert
                 addNotification(
                     'sos',
                     'EMERGENCY SOS ALERT!',
@@ -1302,7 +1299,6 @@
                     sosData
                 );
 
-                // Show browser notification if permitted
                 if (Notification.permission === 'granted') {
                     new Notification('🆘 Emergency SOS Alert!', {
                         body: `${sosData.userName} needs help at ${sosData.location?.address || 'Unknown location'}`,
@@ -1312,49 +1308,22 @@
                 }
             });
 
-            // Fallback: some clients may receive the friend broadcast event
-            socket.on('friend_sos_alert', (sosData) => {
-                console.log('🆘 FALLBACK friend_sos_alert received:', sosData);
-                activeSOS.unshift(sosData);
-                renderSOSAlerts();
-                addNotification('sos', 'EMERGENCY SOS ALERT!', `${sosData.userName || 'User'} pressed SOS button (fallback)`, sosData);
-            });
-
-            // When dashboard joins, server may send existing active SOS alerts
-            socket.on('initial_sos', (payload) => {
-                try {
-                    if (!payload || !Array.isArray(payload.sos)) return;
-                    console.log(`📥 Received initial SOS batch: ${payload.count} items`);
-                    const existingIds = new Set(activeSOS.map(s => s.id || s.socketId || s.userId));
-                    const newSOS = payload.sos.filter(s => !existingIds.has(s.id || s.socketId || s.userId));
-                    activeSOS = newSOS.concat(activeSOS);
-                    renderSOSAlerts();
-                } catch (e) {
-                    console.warn('Failed processing initial_sos:', e);
-                }
-            });
-
             socket.on('sos_location_update', (data) => {
                 console.log('📍 SOS Location update:', data);
+                const sosAlert = activeSOS.find(s => s.userId === data.userId);
+                if (sosAlert) {
+                    sosAlert.location = data.location || data;
+                    renderSOSAlerts();
+                }
+            });
                 // Update existing SOS alert location
                 const sosAlert = activeSOS.find(s => s.userId === data.userId);
                 if (sosAlert) {
-                    sosAlert.location = data.location;
+                    sosAlert.location = data.location || data;
                     renderSOSAlerts();
                 }
-            });
+            };
 
-            // Fallback for friend location updates
-            socket.on('friend_location_update', (data) => {
-                console.log('📍 FALLBACK friend_location_update received:', data);
-                const sosAlert = activeSOS.find(s => s.userId === data.userId);
-                if (sosAlert) {
-                    sosAlert.location = data.location;
-                    renderSOSAlerts();
-                }
-            });
-
-            // Generic SOS updates (e.g., phone number updated)
             socket.on('sos_updated', (sos) => {
                 try {
                     console.log('🔄 SOS updated received:', sos);
@@ -1362,7 +1331,6 @@
                     if (idx !== -1) {
                         activeSOS[idx] = Object.assign({}, activeSOS[idx], sos);
                     } else {
-                        // If not found, prepend to activeSOS
                         activeSOS.unshift(sos);
                     }
                     renderSOSAlerts();
@@ -1378,7 +1346,7 @@
             socket.on('disconnect', (reason) => {
                 console.warn('Socket disconnected:', reason);
             });
-        }
+        
         
         async function loadReports() {
                 if (!API_URL) {
@@ -1905,22 +1873,22 @@
                     <div style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; margin: 15px 0;">
                         <strong>📍 Live Location</strong>
                         <div style="margin-top: 8px;">
-                            ${sos.location ? `
+                            ${sos.location && typeof sos.location.latitude === 'number' ? `
                                 <div><strong>Address:</strong> ${sos.location.address || 'Getting location...'}</div>
                                 <div><strong>Campus:</strong> ${sos.location.campus || 'University Malaya'}</div>
-                                <div><strong>Coordinates:</strong> ${sos.location.latitude?.toFixed(6)}, ${sos.location.longitude?.toFixed(6)}</div>
-                            ` : 'Acquiring GPS coordinates...'}
+                                <div><strong>Coordinates:</strong> ${sos.location.latitude.toFixed(6)}, ${sos.location.longitude.toFixed(6)}</div>
+                            ` : '<div style="color: #ffa502;">⚠️ Acquiring GPS coordinates...</div>'}
                         </div>
                     </div>
 
-                    <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <div style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
                         <button class="sos-location-btn" onclick="viewSOSOnMap('${sos.id}')">
                             🗺️ View on Map
                         </button>
-                        <button class="sos-location-btn" onclick="respondToSOS('${sos.id}')" ${sos.status !== 'active' ? 'disabled' : ''}>
+                        <button class="sos-location-btn" onclick="respondToSOS('${sos.id}')" ${sos.status !== 'active' ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>
                             ✅ Mark Responded
                         </button>
-                        <button class="sos-location-btn" onclick="callUser('${sos.userPhone}')">
+                        <button class="sos-location-btn" onclick="callUser('${sos.userPhone || ''}')">
                             📞 Call User
                         </button>
                     </div>
@@ -1936,35 +1904,81 @@
 
         function viewSOSOnMap(sosId) {
             const sos = activeSOS.find(s => s.id === sosId);
-            if (sos && sos.location) {
-                switchTab('heatmap');
-                setTimeout(() => {
+            if (!sos) {
+                alert('❌ SOS alert not found');
+                return;
+            }
+            
+            if (!sos.location || typeof sos.location.latitude !== 'number' || typeof sos.location.longitude !== 'number') {
+                alert('❌ Location data not available for this SOS alert');
+                console.error('SOS missing location:', sos);
+                return;
+            }
+            
+            // Create a snapshot of the location to prevent mutation
+            const locationSnapshot = {
+                latitude: sos.location.latitude,
+                longitude: sos.location.longitude,
+                address: sos.location.address || 'Getting location...',
+                campus: sos.location.campus || 'University Malaya'
+            };
+            
+            console.log('📍 Viewing SOS on map:', locationSnapshot);
+            
+            // Switch to heatmap tab
+            switchTab('heatmap');
+            
+            // Wait for map initialization and then show the location
+            setTimeout(() => {
+                // Ensure map is initialized
+                if (!mapInstance) {
+                    console.log('🗺️ Map not initialized, initializing now...');
+                    initHeatmap();
+                    // Wait a bit more for map to fully initialize
+                    setTimeout(() => showSOSMarker(), 200);
+                } else {
+                    showSOSMarker();
+                }
+                
+                function showSOSMarker() {
                     if (mapInstance) {
-                        mapInstance.setView([sos.location.latitude, sos.location.longitude], 18);
+                        // Center map on SOS location with high zoom
+                        mapInstance.setView([locationSnapshot.latitude, locationSnapshot.longitude], 18);
                         
-                        const marker = L.marker([sos.location.latitude, sos.location.longitude], {
+                        // Create a prominent SOS marker
+                        const marker = L.marker([locationSnapshot.latitude, locationSnapshot.longitude], {
                             icon: L.icon({
                                 iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMiIgaGVpZ2h0PSIzMiIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSIjZmY0NzU3Ij48cGF0aCBkPSJNMTIgMkM4LjEzIDIgNSA1LjEzIDUgOWMwIDUuMjUgNyAxMyA3IDEzczctNy43NSA3LTEzYzAtMy44Ny0zLjEzLTctNy03em0wIDkuNWMtMS4zOCAwLTIuNS0xLjEyLTIuNS0yLjVzMS4xMi0yLjUgMi41LTIuNSAyLjUgMS4xMiAyLjUgMi41LTEuMTIgMi41LTIuNSAyLjV6Ii8+PC9zdmc+',
-                                iconSize: [32, 32],
-                                iconAnchor: [16, 32]
+                                iconSize: [40, 40],
+                                iconAnchor: [20, 40],
+                                popupAnchor: [0, -40]
                             })
                         }).addTo(mapInstance);
 
+                        // Create detailed popup
                         marker.bindPopup(`
                             <div style="color: #000; min-width: 250px;">
                                 <h3 style="color: #ff4757; margin: 0 0 10px 0;">🆘 LIVE SOS ALERT</h3>
-                                <strong>User:</strong> ${sos.userName}<br>
-                                <strong>Phone:</strong> ${sos.userPhone}<br>
-                                <strong>Time:</strong> ${new Date(sos.createdAt).toLocaleString()}<br>
-                                <strong>Status:</strong> ${sos.status}<br>
-                                <button style="margin-top: 10px; padding: 8px 16px; background: #ff4757; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;" onclick="alert('Dispatching security team...')">
+                                <strong>User:</strong> ${sos.userName || 'Unknown'}<br>
+                                <strong>Phone:</strong> ${sos.userPhone || 'N/A'}<br>
+                                <strong>Address:</strong> ${locationSnapshot.address}<br>
+                                <strong>Campus:</strong> ${locationSnapshot.campus}<br>
+                                <strong>Coordinates:</strong> ${locationSnapshot.latitude.toFixed(6)}, ${locationSnapshot.longitude.toFixed(6)}<br>
+                                <strong>Time:</strong> ${new Date(sos.createdAt || Date.now()).toLocaleString()}<br>
+                                <strong>Status:</strong> <span style="color: #ff4757; font-weight: 600;">${sos.status || 'active'}</span><br>
+                                <button style="margin-top: 10px; padding: 8px 16px; background: #ff4757; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;" onclick="respondToSOS('${sosId}')">
                                     🚨 Dispatch Help
                                 </button>
                             </div>
                         `).openPopup();
+                        
+                        console.log('✅ SOS marker displayed on map');
+                    } else {
+                        alert('❌ Map failed to initialize. Please try refreshing the page.');
+                        console.error('Map instance is null after initialization attempt');
                     }
-                }, 300);
-            }
+                }
+            }, 300);
         }
 
         function respondToSOS(sosId) {
@@ -1996,29 +2010,28 @@
 
             // Show selected tab
             const targetTab = document.getElementById(`${tabName}-tab`);
-            if (targetTab) targetTab.classList.add('active');
-
-            // Try to activate the button that triggered this switch.
-            // If called programmatically (no event), find the .tab-btn with matching onclick
-            try {
-                if (ev && ev.target) {
-                    ev.target.classList.add('active');
-                } else {
-                    const buttons = Array.from(document.querySelectorAll('.tab-btn'));
-                    const btnToActivate = buttons.find(b => {
-                        const onclick = b.getAttribute('onclick') || '';
-                        // matches patterns like: switchTab('heatmap') or switchTab("heatmap")
-                        return onclick.includes(`'${tabName}'`) || onclick.includes(`\"${tabName}\"`);
-                    });
-                    if (btnToActivate) btnToActivate.classList.add('active');
-                }
-            } catch (e) {
-                // ignore
+            if (targetTab) {
+                targetTab.classList.add('active');
             }
+
+            // Activate the correct button
+            const buttons = document.querySelectorAll('.tab-btn');
+            buttons.forEach(btn => {
+                const onclick = btn.getAttribute('onclick') || '';
+                if (onclick.includes(`'${tabName}'`) || onclick.includes(`"${tabName}"`)) {
+                    btn.classList.add('active');
+                }
+            });
 
             // Initialize heatmap when switching to that tab
             if (tabName === 'heatmap') {
-                setTimeout(initHeatmap, 100);
+                setTimeout(() => {
+                    if (!mapInstance) {
+                        initHeatmap();
+                    } else {
+                        mapInstance.invalidateSize(); // Refresh map size
+                    }
+                }, 100);
             }
 
             // Update monthly summary when switching to that tab
@@ -2090,6 +2103,35 @@
         // Start timer according to saved preference
         const _saved = sessionStorage.getItem(REFRESH_KEY) || '10';
         if (parseInt(_saved, 10) > 0) startRefreshTimer();
+        
+        // Add CSS for pulsing SOS marker animation
+        const style = document.createElement('style');
+        style.textContent = `
+            .sos-pulse-circle {
+                animation: sos-pulse 2s infinite;
+            }
+            
+            @keyframes sos-pulse {
+                0% {
+                    opacity: 0.8;
+                    transform: scale(1);
+                }
+                50% {
+                    opacity: 0.3;
+                    transform: scale(1.5);
+                }
+                100% {
+                    opacity: 0.8;
+                    transform: scale(1);
+                }
+            }
+            
+            .sos-popup .leaflet-popup-content-wrapper {
+                border-radius: 12px;
+                box-shadow: 0 10px 30px rgba(255,71,87,0.5);
+            }
+        `;
+        document.head.appendChild(style);
     </script>
 </body>
 </html>

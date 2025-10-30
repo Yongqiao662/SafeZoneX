@@ -192,22 +192,6 @@ class WebSocketService {
     });
   }
 
-  void sendChatMessage({
-    required String userId,
-    required String userName,
-    required String message,
-    String type = 'support',
-  }) {
-    sendMessage({
-      'type': 'chat_message',
-      'userId': userId,
-      'userName': userName,
-      'message': message,
-      'chatType': type,
-      'timestamp': DateTime.now().toIso8601String(),
-    });
-  }
-
   void disconnect() {
     _socket?.disconnect();
     _socket = null;

@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'sos_active_screen.dart';
-import 'chat_screen.dart';
 import 'map_screen.dart';
 import '../services/websocket_service.dart';
 
-class HomeScreen extends StatefulWidget {
-  final VoidCallback? onChatTap;
-  
-  const HomeScreen({Key? key, this.onChatTap}) : super(key: key);
+class HomeScreen extends StatefulWidget {  
+  const HomeScreen({Key? key}) : super(key: key);
   
   @override
   _HomeScreenState createState() => _HomeScreenState();
@@ -401,19 +398,18 @@ class _HomeScreenState extends State<HomeScreen>
               children: [
                 Expanded(
                   child: _buildActionCard(
-                    icon: Icons.chat_bubble_rounded,
-                    title: 'Connect',
-                    subtitle: 'Live chat with safety advisors',
+                    icon: Icons.info_rounded,
+                    title: 'Help',
+                    subtitle: 'Safety tips and emergency contacts',
                     color: const Color(0xFF6C5CE7),
                     onTap: () {
-                      if (widget.onChatTap != null) {
-                        widget.onChatTap!();
-                      } else {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => ChatScreen()),
-                        );
-                      }
+                      // Show help dialog or navigate to help screen
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Help & Safety Information'),
+                          backgroundColor: Color(0xFF6C5CE7),
+                        ),
+                      );
                     },
                   ),
                 ),
@@ -637,33 +633,11 @@ Widget _buildActionCard({
     setState(() => _isGuardianPulseActive = true);
     HapticFeedback.heavyImpact();
     
-    // Send SOS alert with real location via WebSocket
-    try {
-      await _wsService.sendSOSAlertWithRealLocation(
-        userId: 'user_${DateTime.now().millisecondsSinceEpoch}',
-        userName: 'Current User', // Replace with actual user name
-        userPhone: '+1234567890', // Replace with actual user phone
-        alertType: 'Emergency SOS - Guardian Pulse Activated',
-        additionalInfo: 'Emergency SOS button pressed with real-time location tracking',
-      );
-      
-      print('🚨 SOS Alert sent with real GPS location to monitoring dashboard!');
-    } catch (e) {
-      print('⚠ Failed to send SOS alert: $e');
-      // Fallback to basic alert if location fails
-      _wsService.sendSOSAlert(
-        userId: 'user_${DateTime.now().millisecondsSinceEpoch}',
-        userName: 'Current User',
-        userPhone: '+1234567890',
-        latitude: 0.0, // Fallback coordinates
-        longitude: 0.0,
-        address: 'Location unavailable',
-        alertType: 'Emergency SOS - Location Failed',
-        additionalInfo: 'SOS button pressed - Location service unavailable: $e',
-      );
-    }
+    // DON'T send SOS alert here - let SOSActiveScreen handle it
+    // This prevents duplicate SOS alerts
+    print('🚨 Guardian Pulse activated - navigating to SOS screen');
     
-    // Navigate to SOS screen after a brief delay
+    // Navigate to SOS screen immediately - it will handle the alert sending
     Future.delayed(const Duration(milliseconds: 500), () {
       Navigator.push(
         context,
