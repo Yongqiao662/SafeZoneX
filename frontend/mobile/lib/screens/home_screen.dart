@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'sos_active_screen.dart';
 import 'map_screen.dart';
+import 'live_chat_screen.dart';
 import '../services/websocket_service.dart';
 
 class HomeScreen extends StatefulWidget {  
@@ -398,17 +399,16 @@ class _HomeScreenState extends State<HomeScreen>
               children: [
                 Expanded(
                   child: _buildActionCard(
-                    icon: Icons.info_rounded,
-                    title: 'Help',
-                    subtitle: 'Safety tips and emergency contacts',
+                    icon: Icons.support_agent_rounded,
+                    title: 'Live Chat',
+                    subtitle: 'Chat with security team',
                     color: const Color(0xFF6C5CE7),
                     onTap: () {
-                      // Show help dialog or navigate to help screen
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Help & Safety Information'),
-                          backgroundColor: Color(0xFF6C5CE7),
-                        ),
+                      showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
+                        builder: (context) => const LiveChatOverlay(),
                       );
                     },
                   ),

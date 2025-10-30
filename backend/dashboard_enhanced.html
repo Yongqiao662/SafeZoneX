@@ -768,6 +768,7 @@
         <button class="tab-btn" onclick="switchTab('summary')">📈 Monthly Summary</button>
         <button class="tab-btn" onclick="switchTab('heatmap')">🗺️ Safety Heatmap</button>
         <button class="tab-btn" onclick="switchTab('sos')">🆘 Live SOS Tracking</button>
+        <button class="tab-btn" onclick="switchTab('livechat')">💬 Live Chat Support</button>
     </div>
 
     <!-- REPORTS TAB -->
@@ -940,6 +941,90 @@
             <div class="sos-alerts-container" id="sosAlertsContainer">
                 <div class="no-sos">
                     ✅ No active SOS alerts. System is monitoring for emergencies.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- LIVE CHAT TAB -->
+    <div id="livechat-tab" class="tab-content">
+        <div style="padding: 20px;">
+            <div class="header">
+                <h1>💬 Live Chat Support Dashboard</h1>
+                <p>Monitor and respond to user support requests in real time</p>
+            </div>
+
+            <div class="stats" style="margin-bottom: 20px;">
+                <div class="stat-card">
+                    <div class="stat-label">Active Chats</div>
+                    <div class="stat-value" id="activeChats">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Messages Today</div>
+                    <div class="stat-value" id="messagesToday">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Avg Response Time</div>
+                    <div class="stat-value" id="avgResponseTime">--</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Users Online</div>
+                    <div class="stat-value" style="color: #2ed573;" id="usersOnline">0</div>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 20px; height: calc(100vh - 350px);">
+                <!-- Active Conversations List -->
+                <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 16px; overflow-y: auto;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <h3 style="margin: 0;">💬 Active Conversations</h3>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <div id="onlineIndicator" style="width: 8px; height: 8px; background: #2ed573; border-radius: 50%;"></div>
+                            <span style="font-size: 12px; color: rgba(255,255,255,0.7);">Online & Ready</span>
+                        </div>
+                    </div>
+                    <div id="conversationsList">
+                        <div style="text-align: center; padding: 40px 20px; color: rgba(255,255,255,0.5);">
+                            <div style="font-size: 40px; margin-bottom: 12px;">💭</div>
+                            <p style="margin: 0;">No active conversations</p>
+                            <p style="font-size: 12px; margin: 8px 0 0 0;">New chat requests will appear here</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chat Window -->
+                <div style="background: rgba(255,255,255,0.05); border-radius: 12px; display: flex; flex-direction: column;">
+                    <div id="chatHeader" style="padding: 16px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                        <div style="text-align: center; color: rgba(255,255,255,0.5); padding: 20px;">
+                            <div style="font-size: 40px; margin-bottom: 12px;">👋</div>
+                            <h3 style="margin: 0 0 8px 0;">Welcome to Live Chat Support</h3>
+                            <p style="margin: 0; font-size: 14px;">Select a user from the left panel to start responding to their messages</p>
+                            <div style="margin-top: 16px; padding: 12px; background: rgba(108,92,231,0.2); border-radius: 8px; font-size: 13px;">
+                                <strong>💡 Tip:</strong> Users can start conversations from the SafeZoneX mobile app.<br>
+                                New messages will appear automatically and you'll receive notifications.
+                            </div>
+                        </div>
+                    </div>
+                    <div id="messagesContainer" style="flex: 1; padding: 16px; overflow-y: auto; display: none;">
+                        <!-- Messages will be inserted here -->
+                    </div>
+                    <div id="chatInputArea" style="padding: 16px; border-top: 1px solid rgba(255,255,255,0.1); display: none;">
+                        <div style="display: flex; gap: 12px; align-items: center;">
+                            <input 
+                                type="text" 
+                                id="securityMessageInput" 
+                                placeholder="Type your message..." 
+                                style="flex: 1; padding: 12px 16px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 24px; color: white; font-size: 14px;"
+                                onkeypress="if(event.key==='Enter') sendSecurityMessage()"
+                            />
+                            <button 
+                                onclick="sendSecurityMessage()" 
+                                style="padding: 12px 24px; background: linear-gradient(135deg, #6c5ce7, #8b7fe8); border: none; border-radius: 24px; color: white; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(108,92,231,0.3);"
+                            >
+                                Send
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1316,13 +1401,6 @@
                     renderSOSAlerts();
                 }
             });
-                // Update existing SOS alert location
-                const sosAlert = activeSOS.find(s => s.userId === data.userId);
-                if (sosAlert) {
-                    sosAlert.location = data.location || data;
-                    renderSOSAlerts();
-                }
-            };
 
             socket.on('sos_updated', (sos) => {
                 try {
@@ -1346,6 +1424,30 @@
             socket.on('disconnect', (reason) => {
                 console.warn('Socket disconnected:', reason);
             });
+
+            // LIVE CHAT HANDLERS
+            socket.on('user_join_support', (data) => {
+                console.log('👤 User joined support chat:', data);
+                addUserConversation(data);
+                updateChatStats();
+            });
+
+            socket.on('user_support_message', (data) => {
+                console.log('💬 User message received:', data);
+                addMessageToChat(data.userId, {
+                    text: data.message,
+                    isFromUser: true,
+                    timestamp: data.timestamp || new Date().toISOString(),
+                    senderName: data.userName || 'User'
+                });
+                updateChatStats();
+            });
+
+            socket.on('user_typing', (data) => {
+                console.log('⌨️ User is typing:', data);
+                showTypingIndicator(data.userId);
+            });
+        }
         
         
         async function loadReports() {
@@ -2132,6 +2234,186 @@
             }
         `;
         document.head.appendChild(style);
+
+        // ==================== LIVE CHAT SUPPORT FUNCTIONS ====================
+        let activeConversations = [];
+        let currentChatUserId = null;
+        let chatMessages = {}; // Store messages for each user
+
+        function addUserConversation(data) {
+            const existing = activeConversations.find(c => c.userId === data.userId);
+            if (!existing) {
+                activeConversations.push({
+                    userId: data.userId,
+                    userName: data.userName || 'Student User',
+                    joinedAt: new Date(),
+                    unreadCount: 0
+                });
+                chatMessages[data.userId] = [];
+                renderConversationsList();
+            }
+        }
+
+        function renderConversationsList() {
+            const container = document.getElementById('conversationsList');
+            if (activeConversations.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 40px 20px; color: rgba(255,255,255,0.5);">
+                        <div style="font-size: 40px; margin-bottom: 12px;">💭</div>
+                        <p style="margin: 0;">No active conversations</p>
+                        <p style="font-size: 12px; margin: 8px 0 0 0;">New chat requests will appear here</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = activeConversations.map(conv => `
+                <div 
+                    onclick="selectConversation('${conv.userId}')" 
+                    style="padding: 12px; background: ${currentChatUserId === conv.userId ? 'rgba(108,92,231,0.3)' : 'rgba(255,255,255,0.05)'}; border-radius: 8px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s;"
+                    onmouseover="this.style.background='rgba(108,92,231,0.2)'" 
+                    onmouseout="this.style.background='${currentChatUserId === conv.userId ? 'rgba(108,92,231,0.3)' : 'rgba(255,255,255,0.05)'}'"
+                >
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #6c5ce7, #8b7fe8); border-radius: 20px; display: flex; align-items: center; justify-content: center; font-weight: bold;">
+                            ${conv.userName.charAt(0).toUpperCase()}
+                        </div>
+                        <div style="flex: 1;">
+                            <div style="font-weight: 600; margin-bottom: 2px;">${conv.userName}</div>
+                            <div style="font-size: 11px; color: rgba(255,255,255,0.5);">${formatChatTime(conv.joinedAt)}</div>
+                        </div>
+                        ${conv.unreadCount > 0 ? `
+                            <div style="width: 20px; height: 20px; background: #e84393; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600;">
+                                ${conv.unreadCount}
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function selectConversation(userId) {
+            currentChatUserId = userId;
+            const conv = activeConversations.find(c => c.userId === userId);
+            if (conv) conv.unreadCount = 0;
+            
+            renderConversationsList();
+            renderChatWindow(userId);
+        }
+
+        function renderChatWindow(userId) {
+            const conv = activeConversations.find(c => c.userId === userId);
+            if (!conv) return;
+
+            document.getElementById('chatHeader').style.display = 'none';
+            document.getElementById('messagesContainer').style.display = 'flex';
+            document.getElementById('chatInputArea').style.display = 'block';
+
+            const messages = chatMessages[userId] || [];
+            const container = document.getElementById('messagesContainer');
+            
+            container.innerHTML = messages.map(msg => `
+                <div style="display: flex; justify-content: ${msg.isFromUser ? 'flex-start' : 'flex-end'}; margin-bottom: 12px;">
+                    ${msg.isFromUser ? `
+                        <div style="width: 32px; height: 32px; background: linear-gradient(135deg, #6c5ce7, #8b7fe8); border-radius: 16px; display: flex; align-items: center; justify-content: center; margin-right: 8px; flex-shrink: 0;">
+                            <span style="font-size: 14px;">👤</span>
+                        </div>
+                    ` : ''}
+                    <div style="max-width: 70%;">
+                        <div style="padding: 12px 16px; background: ${msg.isFromUser ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #6c5ce7, #8b7fe8)'}; border-radius: 16px; ${msg.isFromUser ? 'border-top-left-radius: 4px;' : 'border-top-right-radius: 4px;'}">
+                            ${msg.isFromUser ? `<div style="font-size: 11px; color: rgba(255,255,255,0.7); margin-bottom: 4px; font-weight: 600;">${msg.senderName}</div>` : ''}
+                            <div style="color: white; font-size: 14px;">${escapeHtml(msg.text)}</div>
+                            <div style="font-size: 10px; color: rgba(255,255,255,0.5); margin-top: 4px;">${formatMessageTime(msg.timestamp)}</div>
+                        </div>
+                    </div>
+                    ${!msg.isFromUser ? `
+                        <div style="width: 32px; height: 32px; background: rgba(255,255,255,0.2); border-radius: 16px; display: flex; align-items: center; justify-content: center; margin-left: 8px; flex-shrink: 0;">
+                            <span style="font-size: 14px;">🛡️</span>
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('');
+
+            // Scroll to bottom
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function addMessageToChat(userId, message) {
+            if (!chatMessages[userId]) chatMessages[userId] = [];
+            chatMessages[userId].push(message);
+
+            // Update unread count if not current conversation
+            if (currentChatUserId !== userId) {
+                const conv = activeConversations.find(c => c.userId === userId);
+                if (conv) conv.unreadCount = (conv.unreadCount || 0) + 1;
+                renderConversationsList();
+            } else {
+                renderChatWindow(userId);
+            }
+        }
+
+        function sendSecurityMessage() {
+            const input = document.getElementById('securityMessageInput');
+            const text = input.value.trim();
+            if (!text || !currentChatUserId) return;
+
+            const message = {
+                text: text,
+                isFromUser: false,
+                timestamp: new Date().toISOString(),
+                senderName: 'Security Team'
+            };
+
+            addMessageToChat(currentChatUserId, message);
+            
+            // Emit to user via socket
+            if (socket && socket.connected) {
+                socket.emit('support_message', {
+                    userId: currentChatUserId,
+                    message: text,
+                    senderName: 'Security Team',
+                    timestamp: message.timestamp
+                });
+            }
+
+            input.value = '';
+            renderChatWindow(currentChatUserId);
+        }
+
+        function showTypingIndicator(userId) {
+            // Implement typing indicator if needed
+            console.log(`User ${userId} is typing...`);
+        }
+
+        function updateChatStats() {
+            document.getElementById('activeChats').textContent = activeConversations.length;
+            const totalMessages = Object.values(chatMessages).reduce((sum, msgs) => sum + msgs.length, 0);
+            document.getElementById('messagesToday').textContent = totalMessages;
+            document.getElementById('usersOnline').textContent = activeConversations.length;
+        }
+
+        function formatChatTime(date) {
+            const now = new Date();
+            const diff = now - date;
+            const minutes = Math.floor(diff / 60000);
+            if (minutes < 1) return 'Just now';
+            if (minutes < 60) return `${minutes}m ago`;
+            const hours = Math.floor(minutes / 60);
+            if (hours < 24) return `${hours}h ago`;
+            return date.toLocaleDateString();
+        }
+
+        function formatMessageTime(timestamp) {
+            const date = new Date(timestamp);
+            return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
     </script>
 </body>
 </html>

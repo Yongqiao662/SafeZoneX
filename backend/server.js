@@ -1383,6 +1383,78 @@ io.on('connection', (socket) => {
     }
   });
 
+  // ==================== LIVE CHAT SUPPORT HANDLERS ====================
+  
+  // User joins live chat support
+  socket.on('user_join_support', (data) => {
+    const userId = data.userId;
+    const userName = data.userName || 'Student User';
+    
+    socket.join('live_support');
+    socket.supportUserId = userId;
+    socket.supportUserName = userName;
+    
+    logger.info(`💬 User ${userName} (${userId}) joined live chat support`);
+    
+    // Notify security dashboard about new chat user
+    io.to('security_dashboard').emit('user_join_support', {
+      userId: userId,
+      userName: userName,
+      joinedAt: new Date().toISOString()
+    });
+  });
+
+  // User sends message to support
+  socket.on('user_support_message', (data) => {
+    const userId = socket.supportUserId || data.userId;
+    const userName = socket.supportUserName || data.userName || 'Student User';
+    
+    logger.info(`💬 Support message from ${userName}: ${data.message}`);
+    
+    // Forward message to security dashboard
+    io.to('security_dashboard').emit('user_support_message', {
+      userId: userId,
+      userName: userName,
+      message: data.message,
+      timestamp: data.timestamp || new Date().toISOString()
+    });
+  });
+
+  // User is typing indicator
+  socket.on('user_typing', (data) => {
+    const userId = socket.supportUserId || data.userId;
+    
+    // Notify security dashboard that user is typing
+    io.to('security_dashboard').emit('user_typing', {
+      userId: userId
+    });
+  });
+
+  // Security sends message to user
+  socket.on('support_message', (data) => {
+    const userId = data.userId;
+    
+    logger.info(`🛡️ Security response to ${userId}: ${data.message}`);
+    
+    // Send message to specific user via broadcast
+    io.to('live_support').emit('support_message', {
+      userId: userId,
+      message: data.message,
+      senderName: data.senderName || 'Security Team',
+      timestamp: data.timestamp || new Date().toISOString()
+    });
+  });
+
+  // Security is typing indicator
+  socket.on('security_typing', (data) => {
+    const userId = data.userId;
+    
+    // Notify user that security is typing
+    io.to('live_support').emit('security_typing', {
+      userId: userId
+    });
+  });
+
   socket.on('disconnect', async () => {
     logger.info(`🔌 Client disconnected: ${socket.id}`);
     
