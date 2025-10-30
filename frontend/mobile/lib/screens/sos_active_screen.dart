@@ -7,6 +7,7 @@ import '../services/api_service.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'map_screen.dart';
 
 class SOSActiveScreen extends StatefulWidget {
   @override
@@ -40,11 +41,13 @@ class _SOSActiveScreenState extends State<SOSActiveScreen>
   String _userId = '';
   String _userName = 'User';
   String _userPhoto = '';
+  String _userEmail = '';
+  String _userPhone = '';
   
   List<Map<String, dynamic>> _statusMessages = [
     {'text': 'Emergency contacts notified', 'completed': false},
-    {'text': 'Friends alerted via real-time notification', 'completed': false},
-    {'text': 'Location shared with security', 'completed': false},
+    {'text': 'Friends messaged with emergency alert', 'completed': false},
+    {'text': 'Location shared with security dashboard', 'completed': false},
     {'text': 'Help is on the way', 'completed': false},
   ];
 
@@ -137,13 +140,19 @@ class _SOSActiveScreenState extends State<SOSActiveScreen>
         _userId = prefs.getString('user_id') ?? 'user_${DateTime.now().millisecondsSinceEpoch}';
         _userName = prefs.getString('user_name') ?? prefs.getString('display_name') ?? 'SafeZone User';
         _userPhoto = prefs.getString('user_photo') ?? prefs.getString('photo_url') ?? '';
+        // Load additional user contact info for emergency situations
+        _userEmail = prefs.getString('user_email') ?? '';
+        _userPhone = prefs.getString('user_phone') ?? '';
       });
       print('✅ Loaded user data: $_userName ($_userId)');
+      print('📞 Phone: $_userPhone, Email: $_userEmail');
     } catch (e) {
       print('⚠️ Error loading user data: $e');
       // Fallback to defaults
       _userId = 'user_${DateTime.now().millisecondsSinceEpoch}';
       _userName = 'SafeZone User';
+      _userEmail = '';
+      _userPhone = '';
     }
   }
 
@@ -250,26 +259,30 @@ class _SOSActiveScreenState extends State<SOSActiveScreen>
 
   void _connectToBackend() async {
     try {
+      print('🔄 Attempting to connect to: ${ApiService.baseUrl}');
+      
       // Initialize socket connection (use ApiService.baseUrl so env overrides apply)
-        _socket = IO.io(ApiService.baseUrl, <String, dynamic>{
-          'transports': ['websocket'],
-          'autoConnect': false,
-        });
+      _socket = IO.io(ApiService.baseUrl, <String, dynamic>{
+        'transports': ['websocket', 'polling'], // Allow both transports
+        'autoConnect': false,
+        'timeout': 10000, // 10 second timeout
+        'forceNew': true,
+      });
 
       _socket?.connect();
 
       _socket?.onConnect((_) {
-        print('✅ Connected to backend WebSocket for SOS');
+        print('✅ Connected to backend WebSocket for SOS at ${ApiService.baseUrl}');
         if (mounted) {
           setState(() {
             _isConnected = true;
-            _status = 'Connected - Friends Notified';
+            _status = 'Connected - Getting Location...';
           });
         }
         HapticFeedback.selectionClick();
         
-        // Send initial SOS alert when connected
-        _broadcastSOSAlert();
+        // Wait for GPS coordinates before sending SOS alert
+        _waitForLocationAndBroadcast();
       });
 
       _socket?.onDisconnect((_) {
@@ -282,9 +295,41 @@ class _SOSActiveScreenState extends State<SOSActiveScreen>
         }
       });
 
+      _socket?.onConnectError((error) {
+        print('🚨 Socket connection error: $error');
+        if (mounted) {
+          setState(() {
+            _isConnected = false;
+            _status = 'Connection failed - Retrying...';
+          });
+        }
+        // Retry connection after 3 seconds
+        Timer(Duration(seconds: 3), () {
+          if (!_isConnected) {
+            _connectToBackend();
+          }
+        });
+      });
+
+      _socket?.onError((error) {
+        print('🚨 Socket error: $error');
+      });
+
       _socket?.on('sos_acknowledged', (data) {
         print('✅ SOS acknowledged by friend: $data');
         HapticFeedback.lightImpact();
+      });
+
+      // Set a timeout for connection attempts
+      Timer(Duration(seconds: 15), () {
+        if (!_isConnected && mounted) {
+          print('⏰ Connection timeout - attempting fallback');
+          setState(() {
+            _status = 'Connection timeout - Trying again...';
+          });
+          _socket?.disconnect();
+          _connectToBackend();
+        }
       });
 
     } catch (e) {
@@ -297,12 +342,42 @@ class _SOSActiveScreenState extends State<SOSActiveScreen>
     }
   }
 
+  void _waitForLocationAndBroadcast() async {
+    // Wait until we have real GPS coordinates
+    int attempts = 0;
+    while (attempts < 30 && (_currentLat == 0.0 || _currentAddress == 'Getting location...')) {
+      await Future.delayed(Duration(seconds: 1));
+      attempts++;
+      print('⏳ Waiting for GPS coordinates... Attempt $attempts');
+    }
+    
+    if (_currentLat != 0.0 && _currentAddress != 'Getting location...') {
+      print('📍 GPS ready! Broadcasting SOS with location: $_currentAddress');
+      _broadcastSOSAlert();
+      if (mounted) {
+        setState(() {
+          _status = 'Connected - Friends Notified';
+        });
+      }
+    } else {
+      print('⚠️ GPS timeout, broadcasting SOS without location');
+      _broadcastSOSAlert();
+      if (mounted) {
+        setState(() {
+          _status = 'Connected - Location Unavailable';
+        });
+      }
+    }
+  }
+
   void _broadcastSOSAlert() {
     if (_socket != null && _socket!.connected) {
       final sosData = {
         'userId': _userId,  // 🆕 REAL user ID
         'userName': _userName,  // 🆕 REAL user name
         'userPhoto': _userPhoto,  // 🆕 REAL user photo
+        'userEmail': _userEmail,  // 🆕 REAL user email
+        'userPhone': _userPhone,  // 🆕 REAL user phone
         'latitude': _currentLat,  // 🆕 REAL GPS latitude
         'longitude': _currentLng,  // 🆕 REAL GPS longitude
         'address': _currentAddress,  // 🆕 REAL address
@@ -313,6 +388,9 @@ class _SOSActiveScreenState extends State<SOSActiveScreen>
 
       _socket?.emit('sos_alert', sosData);
       print('📡 SOS alert broadcasted to all friends: $sosData');
+      
+      // Send emergency messages to friends
+      _sendEmergencyMessages();
       
       if (mounted) {
         setState(() {
@@ -336,13 +414,17 @@ class _SOSActiveScreenState extends State<SOSActiveScreen>
         desiredAccuracy: LocationAccuracy.high,
       );
       
-      setState(() {
-        _currentLat = position.latitude;
-        _currentLng = position.longitude;
-      });
-      
-      // Get updated address
+      // Get updated address first
       await _getAddressFromCoordinates(position.latitude, position.longitude);
+      
+      // Update UI with new location and address
+      if (mounted) {
+        setState(() {
+          _currentLat = position.latitude;
+          _currentLng = position.longitude;
+          // _currentAddress is already updated by _getAddressFromCoordinates
+        });
+      }
       
       if (_socket != null && _socket!.connected) {
         final locationUpdate = {
@@ -358,9 +440,115 @@ class _SOSActiveScreenState extends State<SOSActiveScreen>
 
         _socket?.emit('sos_location_update', locationUpdate);
         print('📍 Real location update sent: ${position.latitude}, ${position.longitude}');
+        print('📍 Updated address in UI: $_currentAddress');
       }
     } catch (e) {
       print('⚠️ Error updating location: $e');
+    }
+  }
+
+  void _sendEmergencyMessages() async {
+    try {
+      print('📱 Sending emergency messages to friends...');
+      print('📱 User ID: $_userId');
+      print('📱 User Name: $_userName');
+      print('📱 Current Address: $_currentAddress');
+      
+      final locationData = {
+        'address': _currentAddress,
+        'latitude': _currentLat,
+        'longitude': _currentLng,
+      };
+
+      // Test server connectivity first
+      print('🔍 Testing server connectivity...');
+      final serverTest = await _apiService.checkServerStatus();
+      print('🔍 Server status: ${serverTest['message']}');
+      
+      if (!serverTest['success']) {
+        print('❌ Server is not reachable');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('❌ Cannot reach server: ${serverTest['message']}'),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
+        return;
+      }
+
+      final result = await _apiService.sendEmergencyAlertToAllFriends(
+        userId: _userId,
+        userName: _userName,
+        emergencyMessage: 'I am in an emergency situation and need immediate help! My current location is shown above. Please contact emergency services or come to help me if you can.',
+        locationData: locationData,
+      );
+
+      if (result['success']) {
+        print('✅ Emergency messages sent: ${result['message']}');
+        
+        // Update status to show friends were messaged
+        if (mounted) {
+          setState(() {
+            int friendsNotified = result['successCount'] ?? 0;
+            _statusMessages[1]['completed'] = true; // Mark "Friends alerted" as completed
+            _status = '📱 $friendsNotified Friends Messaged';
+          });
+        }
+        
+        // Show success notification
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.white, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text('Emergency messages sent to ${result['successCount']} friends'),
+                  ),
+                ],
+              ),
+              backgroundColor: Color(0xFF4CAF50),
+              duration: Duration(seconds: 4),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              margin: EdgeInsets.all(16),
+            ),
+          );
+        }
+      } else {
+        print('❌ Failed to send emergency messages: ${result['message']}');
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.warning, color: Colors.white, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text('Could not message friends: ${result['message']}'),
+                  ),
+                ],
+              ),
+              backgroundColor: Color(0xFFFF9800),
+              duration: Duration(seconds: 4),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              margin: EdgeInsets.all(16),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('❌ Error sending emergency messages: $e');
     }
   }
 
@@ -583,7 +771,104 @@ class _SOSActiveScreenState extends State<SOSActiveScreen>
                   textAlign: TextAlign.center,
                 ),
                 
-                SizedBox(height: 32),
+                SizedBox(height: 16),
+                
+                // User Contact Information Card
+                Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.2),
+                      width: 1,
+                    ),
+                  ),
+                  padding: EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.person, color: Colors.white70, size: 20),
+                          SizedBox(width: 8),
+                          Text(
+                            'Emergency Contact Info',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white70,
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        _userName.isNotEmpty ? _userName : 'SafeZone User',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      if (_userPhone.isNotEmpty) ...[
+                        SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(Icons.phone, color: Colors.white70, size: 16),
+                            SizedBox(width: 8),
+                            Text(
+                              _userPhone,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.white70,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                      if (_userEmail.isNotEmpty) ...[
+                        SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(Icons.email, color: Colors.white70, size: 16),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _userEmail,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.white70,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                      SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(Icons.location_on, color: Colors.white70, size: 16),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _currentAddress,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.white70,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 2,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                
+                SizedBox(height: 24),
                 
                 // Countdown Timer Card
                 Container(
@@ -644,14 +929,17 @@ class _SOSActiveScreenState extends State<SOSActiveScreen>
                 Container(
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: Colors.white.withOpacity(0.05),
                     borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.1),
+                      width: 1,
+                    ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.grey.withOpacity(0.1),
-                        blurRadius: 10,
-                        spreadRadius: 0,
-                        offset: Offset(0, 4),
+                        color: Colors.black.withOpacity(0.3),
+                        blurRadius: 20,
+                        offset: const Offset(0, 10),
                       ),
                     ],
                   ),
@@ -659,15 +947,36 @@ class _SOSActiveScreenState extends State<SOSActiveScreen>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Status Updates',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.grey[800],
-                        ),
+                      Row(
+                        children: [
+                          Container(
+                            width: 30,
+                            height: 30,
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Colors.deepPurple, Colors.purpleAccent],
+                              ),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(
+                              Icons.update,
+                              color: Colors.white,
+                              size: 16,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            'Status Updates',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
                       ),
-                      SizedBox(height: 16),
+                      SizedBox(height: 20),
                       ...List.generate(
                         _statusMessages.length,
                         (index) => _buildStatusItem(
@@ -678,43 +987,6 @@ class _SOSActiveScreenState extends State<SOSActiveScreen>
                       ),
                     ],
                   ),
-                ),
-                
-                SizedBox(height: 32),
-                
-                // Action Buttons
-                _buildModernActionButton(
-                  'Call Emergency Services',
-                  Icons.phone,
-                  Color(0xFFE53E3E),
-                  () {
-                    HapticFeedback.mediumImpact();
-                    _makeEmergencyCall();
-                  },
-                ),
-                
-                SizedBox(height: 12),
-                
-                _buildModernActionButton(
-                  'Turn On Camera',
-                  Icons.camera_alt,
-                  Color(0xFF3182CE),
-                  () {
-                    HapticFeedback.lightImpact();
-                    _turnOnCameraAndMic();
-                  },
-                ),
-                
-                SizedBox(height: 12),
-                
-                _buildModernActionButton(
-                  'Share Location',
-                  Icons.my_location,
-                  Color(0xFF38A169),
-                  () {
-                    HapticFeedback.lightImpact();
-                    _shareLocation();
-                  },
                 ),
                 
                 SizedBox(height: 24),
@@ -733,15 +1005,19 @@ class _SOSActiveScreenState extends State<SOSActiveScreen>
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
-                        color: Colors.grey[600],
+                        color: Colors.white.withOpacity(0.7),
                       ),
                     ),
                     style: TextButton.styleFrom(
                       padding: EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(color: Colors.grey[300]!),
+                        borderRadius: BorderRadius.circular(16),
+                        side: BorderSide(
+                          color: Colors.white.withOpacity(0.2),
+                          width: 1,
+                        ),
                       ),
+                      backgroundColor: Colors.white.withOpacity(0.05),
                     ),
                   ),
                 ),
@@ -761,36 +1037,59 @@ class _SOSActiveScreenState extends State<SOSActiveScreen>
 
   Widget _buildStatusItem(String text, bool completed, bool visible) {
     return AnimatedOpacity(
-      opacity: visible ? 1.0 : 0.3,
+      opacity: visible ? 1.0 : 0.4,
       duration: Duration(milliseconds: 300),
-      child: Padding(
-        padding: EdgeInsets.symmetric(vertical: 6),
+      child: Container(
+        margin: EdgeInsets.symmetric(vertical: 4),
+        padding: EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: completed 
+              ? Colors.green.withOpacity(0.1) 
+              : Colors.white.withOpacity(0.03),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: completed 
+                ? Colors.green.withOpacity(0.3) 
+                : Colors.white.withOpacity(0.1),
+            width: 1,
+          ),
+        ),
         child: Row(
           children: [
             AnimatedContainer(
               duration: Duration(milliseconds: 300),
-              width: 20,
-              height: 20,
+              width: 24,
+              height: 24,
               decoration: BoxDecoration(
-                color: completed ? Color(0xFF4CAF50) : Colors.grey[300],
+                color: completed 
+                    ? Colors.green 
+                    : Colors.white.withOpacity(0.2),
                 shape: BoxShape.circle,
               ),
               child: completed 
                 ? Icon(
                     Icons.check,
-                    size: 12,
+                    size: 14,
                     color: Colors.white,
                   )
-                : null,
+                : Icon(
+                    Icons.schedule,
+                    size: 14,
+                    color: Colors.white.withOpacity(0.6),
+                  ),
             ),
-            SizedBox(width: 12),
+            SizedBox(width: 16),
             Expanded(
               child: Text(
                 text,
                 style: TextStyle(
-                  fontSize: 14,
-                  color: completed ? Colors.grey[800] : Colors.grey[600],
-                  fontWeight: completed ? FontWeight.w500 : FontWeight.normal,
+                  fontSize: 15,
+                  color: completed 
+                      ? Colors.white 
+                      : Colors.white.withOpacity(0.8),
+                  fontWeight: completed 
+                      ? FontWeight.w600 
+                      : FontWeight.w400,
                 ),
               ),
             ),
@@ -800,32 +1099,7 @@ class _SOSActiveScreenState extends State<SOSActiveScreen>
     );
   }
 
-  Widget _buildModernActionButton(String text, IconData icon, Color color, VoidCallback onPressed) {
-    return Container(
-      width: double.infinity,
-      height: 56,
-      child: ElevatedButton.icon(
-        onPressed: onPressed,
-        icon: Icon(icon, color: Colors.white, size: 20),
-        label: Text(
-          text,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: Colors.white,
-          ),
-        ),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: color,
-          elevation: 0,
-          shadowColor: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-        ),
-      ),
-    );
-  }
+
 
   Future<bool> _showCancelDialog() async {
     return await showDialog<bool>(
@@ -1063,23 +1337,37 @@ class _SOSActiveScreenState extends State<SOSActiveScreen>
   }
 
   void _shareLocation() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            Icon(Icons.check_circle, color: Colors.white, size: 20),
-            SizedBox(width: 8),
-            Text('Location shared with emergency contacts'),
-          ],
+    // Navigate to map screen to show location on safety heatmap
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MapScreen(
+          currentLatitude: _currentLat,
+          currentLongitude: _currentLng,
+          currentAddress: _currentAddress,
+          isSOSMode: true,
         ),
-        backgroundColor: Color(0xFF4CAF50),
-        duration: Duration(seconds: 3),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        margin: EdgeInsets.all(16),
       ),
-    );
+    ).then((_) {
+      // Show confirmation when returning from map
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.white, size: 20),
+              SizedBox(width: 8),
+              Text('Location shared with emergency contacts'),
+            ],
+          ),
+          backgroundColor: Color(0xFF4CAF50),
+          duration: Duration(seconds: 3),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          margin: EdgeInsets.all(16),
+        ),
+      );
+    });
   }
 }

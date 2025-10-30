@@ -264,22 +264,23 @@ class _ReportsScreenState extends State<ReportsScreen> {
     } catch (e) {
       print('❌ GPS error: $e');
       if (mounted) {
+        final fallbackPosition = Position(
+          latitude: 3.1319,
+          longitude: 101.6841,
+          timestamp: DateTime.now(),
+          accuracy: 100.0,
+          altitude: 0.0,
+          heading: 0.0,
+          speed: 0.0,
+          speedAccuracy: 0.0,
+          altitudeAccuracy: 0.0,
+          headingAccuracy: 0.0,
+        );
         setState(() {
           _currentLocationName = "GPS unavailable - Using campus location";
           _isGettingLocation = false;
-          _currentPosition = Position(
-            latitude: 3.1319,
-            longitude: 101.6841,
-            timestamp: DateTime.now(),
-            accuracy: 100.0,
-            altitude: 0.0,
-            heading: 0.0,
-            speed: 0.0,
-            speedAccuracy: 0.0,
-            altitudeAccuracy: 0.0,
-            headingAccuracy: 0.0,
-          );
-          _selectedLocation = "Current Location: University Malaya Campus (Fallback)";
+          _currentPosition = fallbackPosition;
+          _selectedLocation = _getLocationDescription(fallbackPosition);
         });
       }
     }
@@ -303,6 +304,24 @@ class _ReportsScreenState extends State<ReportsScreen> {
     }
 
     return "$closestLocation (${minDistance.round()}m away)";
+  }
+
+  String _getCleanLocationName() {
+    if (_selectedLocation == null) return 'Unknown';
+    
+    // If it's a GPS location with "Current Location:" prefix
+    if (_selectedLocation!.startsWith("Current Location:")) {
+      String locationPart = _selectedLocation!.replaceFirst("Current Location: ", "");
+      // Extract just the location name before the distance info
+      int distanceIndex = locationPart.indexOf(' (');
+      if (distanceIndex != -1) {
+        return locationPart.substring(0, distanceIndex);
+      }
+      return locationPart;
+    }
+    
+    // If it's a manually selected location, return as is
+    return _selectedLocation!;
   }
 
   Future<void> _pickImage(ImageSource source) async {
@@ -599,7 +618,7 @@ void _submitReport() async {
       userProfile: userProfile,
       metadata: {
         'activityType': _selectedActivity,
-        'locationName': _selectedLocation ?? 'Unknown',
+        'locationName': _getCleanLocationName(),
         'alertType': _selectedActivity,
         'priority': priority,
         'evidenceImages': imagesList,

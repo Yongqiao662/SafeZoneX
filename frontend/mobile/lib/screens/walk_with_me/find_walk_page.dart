@@ -48,9 +48,18 @@ class _FindWalkPageState extends State<FindWalkPage> {
     
     // Student Housing - Residential Colleges
     CampusLocation(name: 'Kolej Kediaman Pertama (KK1)', category: 'Housing', lat: 3.1250, lng: 101.6580, building: 'First College'),
+    CampusLocation(name: 'Kolej Kediaman Kedua (KK2)', category: 'Housing', lat: 3.1245, lng: 101.6575, building: 'Second College'),
+    CampusLocation(name: 'Kolej Kediaman Ketiga (KK3)', category: 'Housing', lat: 3.1248, lng: 101.6585, building: 'Third College'),
     CampusLocation(name: 'Kolej Kediaman Keempat (KK4)', category: 'Housing', lat: 3.1240, lng: 101.6599, building: 'Fourth College'),
     CampusLocation(name: 'Kolej Kediaman Kelima (KK5)', category: 'Housing', lat: 3.1260, lng: 101.6570, building: 'Fifth College'),
+    CampusLocation(name: 'Kolej Kediaman Keenam (KK6)', category: 'Housing', lat: 3.1255, lng: 101.6590, building: 'Sixth College'),
     CampusLocation(name: 'Kolej Kediaman Ketujuh (KK7)', category: 'Housing', lat: 3.1235, lng: 101.6610, building: 'Seventh College'),
+    CampusLocation(name: 'Kolej Kediaman Kelapan (KK8)', category: 'Housing', lat: 3.1230, lng: 101.6605, building: 'Eighth College'),
+    CampusLocation(name: 'Kolej Kediaman Kesembilan (KK9)', category: 'Housing', lat: 3.1265, lng: 101.6575, building: 'Ninth College'),
+    CampusLocation(name: 'Kolej Kediaman Kesepuluh (KK10)', category: 'Housing', lat: 3.1270, lng: 101.6580, building: 'Tenth College'),
+    CampusLocation(name: 'Kolej Kediaman Kesebelas (KK11)', category: 'Housing', lat: 3.1225, lng: 101.6615, building: 'Eleventh College'),
+    CampusLocation(name: 'Kolej Kediaman Keduabelas (KK12)', category: 'Housing', lat: 3.1220, lng: 101.6620, building: 'Twelfth College'),
+    CampusLocation(name: 'Kolej Kediaman Ke-13 (KK13)', category: 'Housing', lat: 3.1275, lng: 101.6585, building: 'Thirteenth College'),
     
     // Dining Areas
     CampusLocation(name: 'Dewan Selera Siswa (Main Food Court)', category: 'Dining', lat: 3.1195, lng: 101.6538, building: 'Student Center'),
@@ -336,68 +345,81 @@ class _FindWalkPageState extends State<FindWalkPage> {
             Container(
               margin: const EdgeInsets.only(top: 8),
               constraints: const BoxConstraints(maxHeight: 200),
-              child: Card(
+              decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
                 child: ListView.builder(
+                  shrinkWrap: true,
+                  padding: EdgeInsets.zero,
                   itemCount: _filteredLocations.length,
                   itemBuilder: (context, i) {
                     final location = _filteredLocations[i];
                     final isFavorite = _favoriteLocations.contains(location.name);
                     
-                    return ListTile(
-                      leading: Icon(_getCategoryIcon(location.category), color: Colors.white70, size: 20),
-                      title: Text(
-                        location.name, 
-                        style: const TextStyle(color: Colors.white, fontSize: 14),
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
-                      ),
-                      subtitle: Text(
-                        '${location.category} • ${location.building}', 
-                        style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12),
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
-                      ),
-                      trailing: SizedBox(
-                        width: 80, // Fixed width to prevent overflow
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            // Favorite star button in search results
-                            GestureDetector(
-                              onTap: () {
-                                _toggleFavorite(location.name);
-                                // Keep search results open after favoriting
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.all(4), // Reduced padding
-                                decoration: BoxDecoration(
-                                  color: isFavorite 
-                                      ? Colors.amber.withOpacity(0.2) 
-                                      : Colors.white.withOpacity(0.05),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(
+                    return Container(
+                      height: 60, // Fixed height to prevent overflow
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        leading: Icon(_getCategoryIcon(location.category), color: Colors.white70, size: 18),
+                        title: Text(
+                          location.name, 
+                          style: const TextStyle(color: Colors.white, fontSize: 13),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
+                        subtitle: Text(
+                          '${location.category} • ${location.building}', 
+                          style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 11),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
+                        trailing: SizedBox(
+                          width: 50,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              // Favorite star button in search results
+                              GestureDetector(
+                                onTap: () {
+                                  _toggleFavorite(location.name);
+                                  // Keep search results open after favoriting
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.all(2),
+                                  decoration: BoxDecoration(
                                     color: isFavorite 
-                                        ? Colors.amber.withOpacity(0.5) 
-                                        : Colors.white.withOpacity(0.1),
-                                    width: 1,
+                                        ? Colors.amber.withOpacity(0.2) 
+                                        : Colors.white.withOpacity(0.05),
+                                    borderRadius: BorderRadius.circular(3),
+                                    border: Border.all(
+                                      color: isFavorite 
+                                          ? Colors.amber.withOpacity(0.5) 
+                                          : Colors.white.withOpacity(0.1),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Icon(
+                                    isFavorite ? Icons.star : Icons.star_border,
+                                    color: isFavorite ? Colors.amber : Colors.white.withOpacity(0.7),
+                                    size: 12,
                                   ),
                                 ),
-                                child: Icon(
-                                  isFavorite ? Icons.star : Icons.star_border,
-                                  color: isFavorite ? Colors.amber : Colors.white.withOpacity(0.7),
-                                  size: 16, // Slightly smaller
-                                ),
                               ),
-                            ),
-                            const SizedBox(width: 6), // Reduced spacing
-                            // Select arrow
-                            Icon(Icons.arrow_forward_ios, color: Colors.white.withOpacity(0.4), size: 14), // Smaller arrow
-                          ],
+                              const SizedBox(width: 4),
+                              // Select arrow
+                              Icon(
+                                Icons.arrow_forward_ios, 
+                                color: Colors.white.withOpacity(0.4), 
+                                size: 10,
+                              ),
+                            ],
+                          ),
                         ),
+                        onTap: () => _selectCampusLocation(location),
                       ),
-                      onTap: () => _selectCampusLocation(location),
                     );
                   },
                 ),

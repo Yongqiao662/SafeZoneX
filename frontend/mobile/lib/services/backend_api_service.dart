@@ -31,6 +31,7 @@ class BackendApiService {
       
       print('📤 BackendApiService: Preparing report submission');
       print('   Images to send: ${evidenceImages.length}');
+      print('   Location name from metadata: $address');
       
       final body = {
         'description': text.isNotEmpty ? text : 'Test report description',
@@ -38,7 +39,7 @@ class BackendApiService {
           'latitude': latitude,
           'longitude': longitude,
           'address': address,
-          'campus': 'University Malaya',
+          'campus': address, // Use the actual selected location name instead of hardcoded 'University Malaya'
         },
         'alertType': metadata?['activityType'] ?? 'emergency',
         'priority': metadata?['priority'] ?? 'high',
@@ -303,6 +304,158 @@ class BackendApiService {
         'success': false,
         'message': 'Login error: $e'
       };
+    }
+  }
+
+  /// Get friends list for a user
+  Future<Map<String, dynamic>> getFriends(String userId) async {
+    try {
+      print('👥 Fetching friends for user: $userId');
+      print('👥 API URL: $baseUrl/api/friends/$userId');
+      
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/friends/$userId'),
+        headers: _headers,
+      ).timeout(const Duration(seconds: 10));
+
+      print('👥 Friends API response status: ${response.statusCode}');
+      print('👥 Friends API response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final result = json.decode(response.body);
+        final friends = result['friends'] ?? [];
+        print('✅ Found ${friends.length} friends');
+        
+        return {
+          'success': true,
+          'friends': friends,
+        };
+      } else {
+        final errorMsg = 'Failed to get friends (${response.statusCode}): ${response.body}';
+        print('❌ $errorMsg');
+        return {'success': false, 'message': errorMsg};
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'Error getting friends: $e'};
+    }
+  }
+
+  /// Send emergency message to a friend
+  Future<Map<String, dynamic>> sendEmergencyMessage({
+    required String senderId,
+    required String recipientId,
+    required String senderName,
+    required String message,
+    String messageType = 'emergency',
+  }) async {
+    try {
+      final body = {
+        'senderId': senderId,
+        'recipientId': recipientId,
+        'senderName': senderName,
+        'message': message,
+        'messageType': messageType,
+      };
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/messages/send'),
+        headers: _headers,
+        body: json.encode(body),
+      ).timeout(const Duration(seconds: 10));
+
+      print('📤 Sending message API call to: $baseUrl/api/messages/send');
+      print('📤 Request body: ${json.encode(body)}');
+      print('📥 Response status: ${response.statusCode}');
+      print('📥 Response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final result = json.decode(response.body);
+        return result;
+      } else {
+        final errorBody = response.body;
+        String errorMessage = 'Failed to send message (${response.statusCode})';
+        
+        try {
+          final errorJson = json.decode(errorBody);
+          errorMessage = errorJson['error'] ?? errorJson['message'] ?? errorMessage;
+        } catch (e) {
+          errorMessage = '$errorMessage: $errorBody';
+        }
+        
+        return {'success': false, 'message': errorMessage};
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'Error sending message: $e'};
+    }
+  }
+
+  /// Send emergency alerts to all friends
+  Future<Map<String, dynamic>> sendEmergencyAlertToAllFriends({
+    required String userId,
+    required String userName,
+    required String emergencyMessage,
+    required Map<String, dynamic> locationData,
+  }) async {
+    try {
+      // First get the user's friends
+      final friendsResponse = await getFriends(userId);
+      
+      if (!friendsResponse['success']) {
+        return {'success': false, 'message': 'Could not retrieve friends list'};
+      }
+
+      final friends = friendsResponse['friends'] as List;
+      if (friends.isEmpty) {
+        return {'success': false, 'message': 'No friends found to notify'};
+      }
+
+      int successCount = 0;
+      int totalFriends = friends.length;
+      List<String> errors = [];
+
+      // Send emergency message to each friend
+      for (final friend in friends) {
+        final friendId = friend['id'];
+        final friendName = friend['name'] ?? 'Friend';
+        
+        final messageText = '''🆘 EMERGENCY ALERT 🆘
+
+$userName is in an emergency situation and needs help!
+
+Location: ${locationData['address'] ?? 'Location unavailable'}
+Time: ${DateTime.now().toString()}
+
+Message: $emergencyMessage
+
+Please check on them immediately or contact emergency services if needed.''';
+
+        final messageResponse = await sendEmergencyMessage(
+          senderId: userId,
+          recipientId: friendId,
+          senderName: userName,
+          message: messageText,
+          messageType: 'emergency',
+        );
+
+        if (messageResponse['success']) {
+          successCount++;
+          print('✅ Emergency message sent to $friendName ($friendId)');
+        } else {
+          errors.add('Failed to notify $friendName: ${messageResponse['message']}');
+          print('❌ Failed to send emergency message to $friendName: ${messageResponse['message']}');
+        }
+      }
+
+      return {
+        'success': successCount > 0,
+        'message': 'Emergency alerts sent to $successCount out of $totalFriends friends',
+        'totalFriends': totalFriends,
+        'successCount': successCount,
+        'errors': errors,
+      };
+      
+    } catch (e) {
+      return {'success': false, 'message': 'Error sending emergency alerts: $e'};
     }
   }
 }

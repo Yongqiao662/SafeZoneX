@@ -28,6 +28,19 @@ class SafeZone {
 }
 
 class MapScreen extends StatefulWidget {
+  final double? currentLatitude;
+  final double? currentLongitude;
+  final String? currentAddress;
+  final bool isSOSMode;
+
+  const MapScreen({
+    Key? key,
+    this.currentLatitude,
+    this.currentLongitude, 
+    this.currentAddress,
+    this.isSOSMode = false,
+  }) : super(key: key);
+
   @override
   _MapScreenState createState() => _MapScreenState();
 }
@@ -137,6 +150,38 @@ class _MapScreenState extends State<MapScreen> {
     super.initState();
     _requestLocationPermission();
     _createMarkers();
+    _setupSOSMode();
+  }
+
+  void _setupSOSMode() {
+    if (widget.isSOSMode && widget.currentLatitude != null && widget.currentLongitude != null) {
+      // Add SOS marker in red
+      final sosMarker = Marker(
+        markerId: MarkerId('sos_location'),
+        position: LatLng(widget.currentLatitude!, widget.currentLongitude!),
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+        infoWindow: InfoWindow(
+          title: '🆘 SOS Alert Location',
+          snippet: widget.currentAddress ?? 'Emergency location',
+        ),
+      );
+      
+      setState(() {
+        _markers.add(sosMarker);
+      });
+      
+      // Move camera to SOS location
+      _moveCameraToLocation(widget.currentLatitude!, widget.currentLongitude!);
+    }
+  }
+
+  Future<void> _moveCameraToLocation(double lat, double lng) async {
+    final GoogleMapController controller = await _controller.future;
+    final CameraPosition newPosition = CameraPosition(
+      target: LatLng(lat, lng),
+      zoom: 18.0,
+    );
+    controller.animateCamera(CameraUpdate.newCameraPosition(newPosition));
   }
 
   Future<void> _requestLocationPermission() async {

@@ -26,7 +26,7 @@ const messageSchema = new mongoose.Schema({
   },
   messageType: {
     type: String,
-    enum: ['text', 'image', 'location', 'system'],
+    enum: ['text', 'image', 'location', 'system', 'emergency'],
     default: 'text'
   },
   isRead: {

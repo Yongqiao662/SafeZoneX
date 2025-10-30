@@ -418,7 +418,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
       ),
       child: SafeArea(
         child: Container(
-          height: 70,
+          height: 80,
           child: BottomNavigationBar(
             type: BottomNavigationBarType.fixed,
             backgroundColor: Colors.transparent,
@@ -428,11 +428,11 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
             elevation: 0,
             enableFeedback: true,
             selectedLabelStyle: const TextStyle(
-              fontSize: 12,
+              fontSize: 10,
               fontWeight: FontWeight.w600,
             ),
             unselectedLabelStyle: const TextStyle(
-              fontSize: 11,
+              fontSize: 9,
               fontWeight: FontWeight.w400,
             ),
             onTap: (index) {
@@ -451,7 +451,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
               ),
               BottomNavigationBarItem(
                 icon: _buildNavIcon(Icons.directions_walk_rounded, 1),
-                label: 'Walk With Me',
+                label: 'Walk',
               ),
               BottomNavigationBarItem(
                 icon: _buildNavIcon(Icons.people_rounded, 2),
@@ -478,25 +478,25 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 350),
       curve: Curves.easeInOutCubic,
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
         gradient: isSelected
             ? const LinearGradient(
                 colors: [Colors.deepPurple, Colors.purpleAccent],
               )
             : null,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
         boxShadow: isSelected
             ? [
                 BoxShadow(
                   color: Colors.deepPurple.withOpacity(0.4),
-                  blurRadius: 12,
-                  offset: const Offset(0, 6),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
                   spreadRadius: 1,
                 ),
                 BoxShadow(
                   color: Colors.purpleAccent.withOpacity(0.2),
-                  blurRadius: 8,
+                  blurRadius: 6,
                   offset: const Offset(0, 2),
                 ),
               ]
@@ -505,10 +505,10 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
       child: AnimatedScale(
         duration: const Duration(milliseconds: 350),
         curve: Curves.easeInOutCubic,
-        scale: isSelected ? 1.1 : 1.0,
+        scale: isSelected ? 1.05 : 1.0,
         child: Icon(
           icon,
-          size: 24,
+          size: 20,
           color: isSelected ? Colors.white : Colors.white.withOpacity(0.6),
         ),
       ),

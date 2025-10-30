@@ -896,7 +896,23 @@ app.post('/api/messages/send', async (req, res) => {
     });
   } catch (error) {
     logger.error('❌ Error sending message:', error);
-    res.status(500).json({ success: false, error: 'Failed to send message' });
+    
+    let errorMessage = 'Failed to send message';
+    
+    // Provide more specific error messages
+    if (error.name === 'ValidationError') {
+      errorMessage = `Validation error: ${error.message}`;
+    } else if (error.code === 11000) {
+      errorMessage = 'Duplicate message ID error';
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
+    res.status(500).json({ 
+      success: false, 
+      error: errorMessage,
+      details: error.name || 'UnknownError'
+    });
   }
 });
 
