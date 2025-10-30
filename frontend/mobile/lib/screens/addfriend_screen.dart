@@ -1556,6 +1556,7 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
     messages = List.from(widget.messages);
+    _loadChatHistory(); // Load chat history immediately on init
     _initializeSocket();
   }
 
@@ -1579,9 +1580,10 @@ class _ChatScreenState extends State<ChatScreen> {
           'type': 'chat'
         });
         print('🏠 Joined personal room for user: $currentUserId');
+        
+        // Refresh chat history after successful socket connection
+        _loadChatHistory();
       }
-      
-      _loadChatHistory(); // Load chat history when connected
     });
 
     // Listen for incoming messages
@@ -1602,16 +1604,8 @@ class _ChatScreenState extends State<ChatScreen> {
           ));
         });
 
-        // Auto scroll to bottom when receiving message
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (_scrollController.hasClients) {
-            _scrollController.animateTo(
-              _scrollController.position.maxScrollExtent,
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOut,
-            );
-          }
-        });
+        // Auto scroll to bottom when receiving message using centralized method
+        _scrollToBottom();
       }
     });
 
@@ -1650,17 +1644,42 @@ class _ChatScreenState extends State<ChatScreen> {
             )).toList();
           });
           
-          // Auto scroll to bottom after loading
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (_scrollController.hasClients) {
-              _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
-            }
-          });
+          print('✅ Loaded ${messages.length} messages for chat with ${widget.friend.name}');
+          
+          // Auto scroll to bottom after loading - use multiple strategies to ensure it works
+          _scrollToBottom();
         }
       }
     } catch (e) {
       print('❌ Error loading chat history: $e');
     }
+  }
+
+  void _scrollToBottom() {
+    // Strategy 1: Immediate attempt
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients && messages.isNotEmpty) {
+        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+      }
+    });
+    
+    // Strategy 2: Delayed attempt to ensure ListView is fully rendered
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted && _scrollController.hasClients && messages.isNotEmpty) {
+        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+      }
+    });
+    
+    // Strategy 3: Final attempt with animation for smoothness
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted && _scrollController.hasClients && messages.isNotEmpty) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+        );
+      }
+    });
   }
 
   @override
@@ -2019,16 +2038,8 @@ class _ChatScreenState extends State<ChatScreen> {
       
       _messageController.clear();
       
-      // Auto scroll to bottom
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_scrollController.hasClients) {
-          _scrollController.animateTo(
-            _scrollController.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOut,
-          );
-        }
-      });
+      // Auto scroll to bottom using centralized method
+      _scrollToBottom();
 
       // Send message to backend for real-time delivery
       _sendMessageToBackend(messageText);
