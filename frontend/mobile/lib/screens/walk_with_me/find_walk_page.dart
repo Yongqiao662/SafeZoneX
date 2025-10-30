@@ -113,9 +113,16 @@ class _FindWalkPageState extends State<FindWalkPage> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
+Widget build(BuildContext context) {
+  return Scaffold(
+    resizeToAvoidBottomInset: false, // Prevents keyboard from shrinking navigation bar
+    body: GestureDetector(
+      // Dismiss keyboard when tapping outside
+      onTap: () {
+        FocusScope.of(context).unfocus();
+        setState(() => _showSearchResults = false);
+      },
+      child: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
@@ -130,9 +137,9 @@ class _FindWalkPageState extends State<FindWalkPage> {
         child: SafeArea(
           child: Column(
             children: [
-              // Title Section - Matching Friends page style
+              // Title Section - Reduced padding
               Padding(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 12), // Reduced vertical padding
                 child: Row(
                   children: [
                     Container(
@@ -165,24 +172,24 @@ class _FindWalkPageState extends State<FindWalkPage> {
                   ],
                 ),
               ),
-              // Scrollable content
+              // FIXED: Scrollable content with minimal padding to prevent overflow
               Expanded(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
+                  keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0), // Remove vertical padding
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Welcome card as part of scrollable content
                       _buildWelcomeCard(),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 16), // Reduced from 20
                       _buildDestinationSelector(),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 16), // Reduced from 20
                       _buildDepartureTimeSelector(),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 16), // Reduced from 20
                       _buildPreferences(),
-                      const SizedBox(height: 30),
+                      const SizedBox(height: 24), // Reduced from 30
                       _buildFindWalkButton(),
-                      const SizedBox(height: 20), // Extra space at bottom
+                      const SizedBox(height: 80), // Reduced from 100
                     ],
                   ),
                 ),
@@ -191,8 +198,9 @@ class _FindWalkPageState extends State<FindWalkPage> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildWelcomeCard() {
     return Container(
@@ -269,7 +277,7 @@ class _FindWalkPageState extends State<FindWalkPage> {
 
   Widget _buildDestinationSelector() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.05),
         borderRadius: BorderRadius.circular(20),
@@ -280,6 +288,7 @@ class _FindWalkPageState extends State<FindWalkPage> {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             children: [
@@ -314,29 +323,37 @@ class _FindWalkPageState extends State<FindWalkPage> {
                     child: Text(
                       'Selected: $selectedDestination',
                       style: const TextStyle(color: Colors.white, fontSize: 14),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
               ),
             ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           // Campus-only search box
           TextField(
             controller: _searchCtrl,
-            style: const TextStyle(color: Colors.white),
+            style: const TextStyle(color: Colors.white, fontSize: 14),
             decoration: InputDecoration(
               hintText: 'Search campus locations',
-              hintStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
-              prefixIcon: const Icon(Icons.search, color: Colors.white70),
+              hintStyle: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 14),
+              prefixIcon: const Icon(Icons.search, color: Colors.white70, size: 20),
               suffixIcon: _searchCtrl.text.isNotEmpty
                   ? IconButton(
-                      icon: const Icon(Icons.clear, color: Colors.white70),
+                      icon: const Icon(Icons.clear, color: Colors.white70, size: 20),
                       onPressed: () => _clearSearch(),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
                     )
                   : null,
               filled: true,
               fillColor: Colors.white.withOpacity(0.03),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              isDense: true,
             ),
             onChanged: (v) => _onCampusSearchChanged(v),
             onTap: () => setState(() => _showSearchResults = true),
@@ -344,96 +361,123 @@ class _FindWalkPageState extends State<FindWalkPage> {
           if (_showSearchResults && _filteredLocations.isNotEmpty && _searchCtrl.text.isNotEmpty)
             Container(
               margin: const EdgeInsets.only(top: 8),
-              constraints: const BoxConstraints(maxHeight: 200),
+              constraints: const BoxConstraints(
+                maxHeight: 200, // Increased to show more results
+              ),
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.08),
                 borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: ListView.builder(
-                  shrinkWrap: true,
                   padding: EdgeInsets.zero,
+                  shrinkWrap: true, // CRITICAL: Prevents overflow
+                  physics: const BouncingScrollPhysics(),
                   itemCount: _filteredLocations.length,
                   itemBuilder: (context, i) {
                     final location = _filteredLocations[i];
                     final isFavorite = _favoriteLocations.contains(location.name);
                     
-                    return Container(
-                      height: 60, // Fixed height to prevent overflow
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                        leading: Icon(_getCategoryIcon(location.category), color: Colors.white70, size: 18),
-                        title: Text(
-                          location.name, 
-                          style: const TextStyle(color: Colors.white, fontSize: 13),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                        ),
-                        subtitle: Text(
-                          '${location.category} • ${location.building}', 
-                          style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 11),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                        ),
-                        trailing: SizedBox(
-                          width: 50,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              // Favorite star button in search results
-                              GestureDetector(
-                                onTap: () {
-                                  _toggleFavorite(location.name);
-                                  // Keep search results open after favoriting
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.all(2),
-                                  decoration: BoxDecoration(
-                                    color: isFavorite 
-                                        ? Colors.amber.withOpacity(0.2) 
-                                        : Colors.white.withOpacity(0.05),
-                                    borderRadius: BorderRadius.circular(3),
-                                    border: Border.all(
-                                      color: isFavorite 
-                                          ? Colors.amber.withOpacity(0.5) 
-                                          : Colors.white.withOpacity(0.1),
-                                      width: 1,
-                                    ),
-                                  ),
-                                  child: Icon(
-                                    isFavorite ? Icons.star : Icons.star_border,
-                                    color: isFavorite ? Colors.amber : Colors.white.withOpacity(0.7),
-                                    size: 12,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              // Select arrow
-                              Icon(
-                                Icons.arrow_forward_ios, 
-                                color: Colors.white.withOpacity(0.4), 
-                                size: 10,
-                              ),
-                            ],
+                    return InkWell(
+                      onTap: () {
+                        _selectCampusLocation(location);
+                        FocusScope.of(context).unfocus(); // Dismiss keyboard
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(
+                              color: Colors.white.withOpacity(0.05),
+                              width: 1,
+                            ),
                           ),
                         ),
-                        onTap: () => _selectCampusLocation(location),
+                        child: Row(
+                          children: [
+                            Icon(_getCategoryIcon(location.category), color: Colors.white70, size: 18),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    location.name, 
+                                    style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '${location.category} • ${location.building}', 
+                                    style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 11),
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            // Favorite star button
+                            GestureDetector(
+                              onTap: () {
+                                _toggleFavorite(location.name);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: isFavorite 
+                                      ? Colors.amber.withOpacity(0.2) 
+                                      : Colors.white.withOpacity(0.05),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(
+                                    color: isFavorite 
+                                        ? Colors.amber.withOpacity(0.5) 
+                                        : Colors.white.withOpacity(0.1),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Icon(
+                                  isFavorite ? Icons.star : Icons.star_border,
+                                  color: isFavorite ? Colors.amber : Colors.white.withOpacity(0.7),
+                                  size: 14,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Icon(
+                              Icons.arrow_forward_ios, 
+                              color: Colors.white.withOpacity(0.4), 
+                              size: 12,
+                            ),
+                          ],
+                        ),
                       ),
                     );
                   },
                 ),
               ),
             ),
-          const SizedBox(height: 12),
-          // Location list controls
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+          // Only show location list controls when NOT searching
+          if (!_showSearchResults || _searchCtrl.text.isEmpty) ...[
+            const SizedBox(height: 12),
+            // Location list controls
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                     Text(
                       _showFavoritesOnly 
                           ? 'Favorite Locations' 
@@ -509,20 +553,26 @@ class _FindWalkPageState extends State<FindWalkPage> {
                       ),
                     ),
                   ),
-                ],
+                  ],
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: 12),
-          // Location list based on current filter
-          ...(_getDisplayLocations()).map((location) => _buildLocationTile(location)),
+            ),
+            const SizedBox(height: 8),
+            // Location list based on current filter - wrapped in constrained container
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 300),
+              child: SingleChildScrollView(
+                child: Column(
+                  children: (_getDisplayLocations()).map((location) => _buildLocationTile(location)).toList(),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
-  }
-
-  Widget _buildLocationTile(CampusLocation location) {
+  }  Widget _buildLocationTile(CampusLocation location) {
     final isSelected = selectedDestination == location.name;
     final isFavorite = _favoriteLocations.contains(location.name);
     
@@ -913,6 +963,8 @@ class _FindWalkPageState extends State<FindWalkPage> {
       _showSearchResults = false;
       _filteredLocations = [];
     });
+    FocusScope.of(context).unfocus(); // Dismiss keyboard
+    _showSnackBar('Selected: ${location.name}', Icons.location_on, Colors.green);
   }
 
   void _clearSearch() {
@@ -921,6 +973,7 @@ class _FindWalkPageState extends State<FindWalkPage> {
       _filteredLocations = [];
       _showSearchResults = false;
     });
+    FocusScope.of(context).unfocus(); // Dismiss keyboard
   }
 
   // Get locations to display based on current filters
