@@ -11,23 +11,26 @@ class ApiService {
 
   static String _resolveBaseUrl() {
     final env = dotenv.env;
-    // Allow an explicit override (useful for CI or production)
-    final override = env['API_BASE_URL_OVERRIDE'];
-    if (override != null && override.isNotEmpty) return override.trim();
-
-    // Web default: prefer API_BASE_URL from .env, else localhost
-    if (kIsWeb) return env['API_BASE_URL']?.trim() ?? 'http://localhost:8080';
-
+    
+    // For Android Emulator, ALWAYS use 10.0.2.2 (maps to host localhost)
     try {
       if (Platform.isAndroid) {
-        // Use Android emulator localhost (10.0.2.2 maps to host localhost)
-        return env['API_BASE_URL']?.trim() ?? 'http://10.0.2.2:8080';
+        // Check if we're in emulator - use special emulator localhost
+        print('🤖 Android detected - using emulator localhost: http://10.0.2.2:8080');
+        return 'http://10.0.2.2:8080';
       } else if (Platform.isIOS) {
         return env['API_BASE_URL_IOS']?.trim() ?? env['API_BASE_URL']?.trim() ?? 'http://localhost:8080';
       }
     } catch (_) {
       // Platform not available (e.g., tests) - fall back below
     }
+
+    // Allow an explicit override (useful for CI or production)
+    final override = env['API_BASE_URL_OVERRIDE'];
+    if (override != null && override.isNotEmpty) return override.trim();
+
+    // Web default: prefer API_BASE_URL from .env, else localhost
+    if (kIsWeb) return env['API_BASE_URL']?.trim() ?? 'http://localhost:8080';
 
     // Final fallback: localhost backend
     return env['API_BASE_URL']?.trim() ?? 'http://localhost:8080';

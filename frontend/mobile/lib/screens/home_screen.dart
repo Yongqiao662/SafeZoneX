@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'sos_active_screen.dart';
 import 'map_screen.dart';
-import 'live_chat_screen.dart';
 import '../services/websocket_service.dart';
+import '../services/live_chat_service.dart';
+import '../services/api_service.dart';
 
 class HomeScreen extends StatefulWidget {  
   const HomeScreen({Key? key}) : super(key: key);
@@ -707,4 +708,500 @@ Widget _buildActionCard({
       ),
     );
   }
+}
+
+// LiveChatOverlay moved here to avoid creating a separate file
+class LiveChatOverlay extends StatefulWidget {
+  const LiveChatOverlay({Key? key}) : super(key: key);
+
+  @override
+  _LiveChatOverlayState createState() => _LiveChatOverlayState();
+}
+
+class _LiveChatOverlayState extends State<LiveChatOverlay> 
+    with SingleTickerProviderStateMixin {
+  final LiveChatService _chatService = LiveChatService();
+  final TextEditingController _messageController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  List<ChatMessage> messages = [];
+  bool isConnected = false;
+  bool isTyping = false;
+  late AnimationController _animationController;
+  late Animation<Offset> _slideAnimation;
+  String? _userId;
+  String? _userName;
+
+  @override
+  void initState() {
+    super.initState();
+    _initAnimation();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    _userId = await ApiService.getCurrentUserId();
+    _userName = await ApiService.getCurrentUserName();
+    
+    if (_userId == null) {
+      _userId = 'user_${DateTime.now().millisecondsSinceEpoch}';
+    }
+    if (_userName == null) {
+      _userName = 'Student User';
+    }
+    
+    print('📱 Live chat user: $_userName (ID: $_userId)');
+    _setupChatService();
+  }
+
+  void _initAnimation() {
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 1),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeOut,
+    ));
+    _animationController.forward();
+  }
+
+  void _setupChatService() {
+    if (_userId == null || _userName == null) {
+      return;
+    }
+    
+    _chatService.connect();
+    setState(() => isConnected = _chatService.isConnected);
+
+    _chatService.removeConnectionListener(_onConnectionChanged);
+    _chatService.removeMessageListener(_onMessageReceived);
+    _chatService.removeTypingListener(_onTypingReceived);
+
+    _chatService.addConnectionListener(_onConnectionChanged);
+    _chatService.addMessageListener(_onMessageReceived);
+    _chatService.addTypingListener(_onTypingReceived);
+
+    if (_chatService.isConnected) {
+      _chatService.joinSupport(_userId!, _userName!);
+    }
+  }
+
+  void _onConnectionChanged(bool connected) {
+    if (mounted) {
+      setState(() => isConnected = connected);
+      if (connected && _userId != null && _userName != null) {
+        _chatService.joinSupport(_userId!, _userName!);
+      }
+    }
+  }
+
+  void _onMessageReceived(dynamic data) {
+    if (mounted) {
+      setState(() {
+        messages.add(ChatMessage(
+          text: data['message'],
+          isFromUser: false,
+          timestamp: DateTime.now(),
+          senderName: data['senderName'] ?? 'Security Team',
+        ));
+        isTyping = false;
+      });
+      _scrollToBottom();
+    }
+  }
+
+  void _onTypingReceived(dynamic data) {
+    if (mounted) {
+      setState(() => isTyping = true);
+      Future.delayed(const Duration(seconds: 3), () {
+        if (mounted) setState(() => isTyping = false);
+      });
+    }
+  }
+
+  void _sendMessage() {
+    if (_messageController.text.trim().isEmpty) return;
+
+    final messageText = _messageController.text.trim();
+    setState(() {
+      messages.add(ChatMessage(
+        text: messageText,
+        isFromUser: true,
+        timestamp: DateTime.now(),
+        senderName: 'You',
+      ));
+    });
+
+    _chatService.sendMessage(messageText);
+    _messageController.clear();
+    _scrollToBottom();
+  }
+
+  void _scrollToBottom() {
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _chatService.removeConnectionListener(_onConnectionChanged);
+    _chatService.removeMessageListener(_onMessageReceived);
+    _chatService.removeTypingListener(_onTypingReceived);
+    
+    _messageController.dispose();
+    _scrollController.dispose();
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SlideTransition(
+      position: _slideAnimation,
+      child: Material(
+        color: Colors.transparent,
+        child: Container(
+          height: MediaQuery.of(context).size.height * 0.85,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFF1a1a2e), Color(0xFF16213e), Color(0xFF0f0f1e)],
+            ),
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(24),
+              topRight: Radius.circular(24),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.5),
+                blurRadius: 20,
+                offset: const Offset(0, -5),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              _buildHeader(),
+              Expanded(child: _buildMessageList()),
+              if (isTyping) _buildTypingIndicator(),
+              _buildInputArea(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(24),
+          topRight: Radius.circular(24),
+        ),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.3),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF6C5CE7), Color(0xFF8B7FE8)],
+                  ),
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF6C5CE7).withOpacity(0.3),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: const Icon(Icons.support_agent_rounded, color: Colors.white, size: 24),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Live Chat Support', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600)),
+                    if (_userName != null)
+                      Text('Chatting as $_userName', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 11)),
+                    Row(
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: isConnected ? Colors.green : Colors.orange,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          isConnected ? 'Security Online' : 'Connecting...',
+                          style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 12),
+                        ),
+                        if (!isConnected) ...[
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: () {
+                              _chatService.disconnect();
+                              Future.delayed(const Duration(milliseconds: 500), () {
+                                _chatService.connect();
+                                if (_userId != null && _userName != null) {
+                                  _chatService.joinSupport(_userId!, _userName!);
+                                }
+                              });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.withOpacity(0.3),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.blue.withOpacity(0.5)),
+                              ),
+                              child: const Text('Retry', style: TextStyle(color: Colors.lightBlueAccent, fontSize: 10, fontWeight: FontWeight.w600)),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close, color: Colors.white),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMessageList() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      child: messages.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(40),
+                    ),
+                    child: Icon(Icons.waving_hand_rounded, size: 40, color: Colors.white.withOpacity(0.5)),
+                  ),
+                  const SizedBox(height: 16),
+                  Text('Welcome to Live Chat Support', style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 18, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  Text('Our security team is here to help you\nStart a conversation below', textAlign: TextAlign.center, style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 14)),
+                ],
+              ),
+            )
+          : ListView.builder(
+              controller: _scrollController,
+              itemCount: messages.length,
+              itemBuilder: (context, index) => _buildMessageBubble(messages[index]),
+            ),
+    );
+  }
+
+  Widget _buildMessageBubble(ChatMessage message) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        mainAxisAlignment: message.isFromUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (!message.isFromUser) ...[
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [Color(0xFF6C5CE7), Color(0xFF8B7FE8)]),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Icon(Icons.security_rounded, color: Colors.white, size: 16),
+            ),
+            const SizedBox(width: 8),
+          ],
+          Flexible(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                gradient: message.isFromUser ? const LinearGradient(colors: [Color(0xFF6C5CE7), Color(0xFF8B7FE8)]) : null,
+                color: message.isFromUser ? null : Colors.white.withOpacity(0.1),
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(16),
+                  topRight: const Radius.circular(16),
+                  bottomLeft: Radius.circular(message.isFromUser ? 16 : 4),
+                  bottomRight: Radius.circular(message.isFromUser ? 4 : 16),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (!message.isFromUser)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text(message.senderName, style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 11, fontWeight: FontWeight.w600)),
+                    ),
+                  Text(message.text, style: const TextStyle(color: Colors.white, fontSize: 14)),
+                  const SizedBox(height: 4),
+                  Text('${message.timestamp.hour.toString().padLeft(2, '0')}:${message.timestamp.minute.toString().padLeft(2, '0')}', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10)),
+                ],
+              ),
+            ),
+          ),
+          if (message.isFromUser) const SizedBox(width: 8),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTypingIndicator() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(colors: [Color(0xFF6C5CE7), Color(0xFF8B7FE8)]),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Icon(Icons.security_rounded, color: Colors.white, size: 16),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              children: List.generate(3, (i) => Padding(
+                padding: EdgeInsets.only(right: i < 2 ? 4 : 0),
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.5),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              )),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInputArea() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        border: Border(top: BorderSide(color: Colors.white.withOpacity(0.1), width: 1)),
+      ),
+      child: SafeArea(
+        child: Row(
+          children: [
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: TextField(
+                  controller: _messageController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    hintText: 'Type your message...',
+                    hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  ),
+                  maxLines: null,
+                  textCapitalization: TextCapitalization.sentences,
+                  onChanged: (text) {
+                    if (text.isNotEmpty) _chatService.sendTypingIndicator();
+                  },
+                  onSubmitted: (_) => _sendMessage(),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            GestureDetector(
+              onTap: _sendMessage,
+              child: Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [Color(0xFF6C5CE7), Color(0xFF8B7FE8)]),
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF6C5CE7).withOpacity(0.3),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class ChatMessage {
+  final String text;
+  final bool isFromUser;
+  final DateTime timestamp;
+  final String senderName;
+
+  ChatMessage({
+    required this.text,
+    required this.isFromUser,
+    required this.timestamp,
+    required this.senderName,
+  });
 }

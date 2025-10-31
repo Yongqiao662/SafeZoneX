@@ -36,7 +36,7 @@ class _PartnerResultsScreenState extends State<PartnerResultsScreen> {
         const UserProfile(
           id: '23003849',
           name: 'Ivan Ooi',
-          profilePicture: '👩‍🎓',
+          profilePicture: 'https://drive.google.com/uc?export=view&id=1qbyws_9N0CJqN7SN_NGd_mPFYXgi8v81',
           rating: 4.8,
           walkCount: 156,
           isVerified: true,
@@ -47,8 +47,8 @@ class _PartnerResultsScreenState extends State<PartnerResultsScreen> {
         ),
         const UserProfile(
           id: '24064850',
-          name: 'Ahmad Rahman',
-          profilePicture: '👨‍🎓',
+          name: 'Lau Hiap Meng',
+          profilePicture: 'https://drive.google.com/uc?export=view&id=10ABBiHCh7ozVJEjiQ0ncfNpAAa4L6qjQ',
           rating: 4.9,
           walkCount: 203,
           isVerified: true,
@@ -60,10 +60,10 @@ class _PartnerResultsScreenState extends State<PartnerResultsScreen> {
         const UserProfile(
           id: '25012951',
           name: 'Tai Jin Wei',
-          profilePicture: '👩‍🔬',
+          profilePicture: 'https://drive.google.com/uc?export=view&id=1uJKds_-jlvHzAcAD7CfSs1s-Va9aZuCT',
           rating: 4.7,
           walkCount: 89,
-          isVerified: false,
+          isVerified: true,
           department: 'Computer Science',
           creditScore: 780,
           location: LatLng(3.1240, 101.6520),
@@ -71,8 +71,8 @@ class _PartnerResultsScreenState extends State<PartnerResultsScreen> {
         ),
         const UserProfile(
           id: '4',
-          name: 'Liam Chen',
-          profilePicture: '👨‍💼',
+          name: 'Liam Loh',
+          profilePicture: 'https://drive.google.com/uc?export=view&id=1zFV90THW7zQYTsPq_L4ijf1pfHSvLuNk',
           rating: 4.6,
           walkCount: 134,
           isVerified: true,
@@ -84,6 +84,26 @@ class _PartnerResultsScreenState extends State<PartnerResultsScreen> {
       ];
       isLoading = false;
     });
+  }
+
+  Widget _buildFallbackAvatar(UserProfile partner) {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.deepPurple, Colors.purpleAccent],
+        ),
+      ),
+      child: Center(
+        child: Text(
+          partner.name[0],
+          style: const TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -198,20 +218,36 @@ class _PartnerResultsScreenState extends State<PartnerResultsScreen> {
                 width: 60,
                 height: 60,
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Colors.deepPurple, Colors.purpleAccent],
-                  ),
                   borderRadius: BorderRadius.circular(30),
-                ),
-                child: Center(
-                  child: Text(
-                    partner.profilePicture ?? partner.name[0],
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
+                  border: Border.all(
+                    color: Colors.purpleAccent.withOpacity(0.5),
+                    width: 2,
                   ),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(28),
+                  child: partner.profilePicture != null
+                    ? (partner.profilePicture!.startsWith('http')
+                        ? Image.network(
+                            partner.profilePicture!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              print('❌ Network image error: $error');
+                              return _buildFallbackAvatar(partner);
+                            },
+                          )
+                        : Image.asset(
+                            partner.profilePicture!,
+                            fit: BoxFit.cover,
+                            width: 60,
+                            height: 60,
+                            errorBuilder: (context, error, stackTrace) {
+                              print('❌ Asset image error for ${partner.profilePicture}: $error');
+                              print('📍 Stack trace: $stackTrace');
+                              return _buildFallbackAvatar(partner);
+                            },
+                          ))
+                    : _buildFallbackAvatar(partner),
                 ),
               ),
               

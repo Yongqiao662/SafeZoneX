@@ -185,14 +185,26 @@ class PartnerProfileScreen extends StatelessWidget {
   }
 
   Widget _buildProfileImage() {
+    if (partner.profilePicture == null) {
+      return CircleAvatar(
+        radius: 50,
+        backgroundColor: Colors.deepPurple,
+        child: Text(
+          partner.name[0],
+          style: const TextStyle(fontSize: 40, color: Colors.white),
+        ),
+      );
+    }
+
+    // Check if it's a network URL or local asset
+    final isNetworkImage = partner.profilePicture!.startsWith('http');
+    
     return CircleAvatar(
       radius: 50,
-      backgroundImage: partner.profilePicture != null
-          ? NetworkImage(partner.profilePicture!)
-          : null,
-      child: partner.profilePicture == null
-          ? Text(partner.name[0], style: TextStyle(fontSize: 40))
-          : null,
+      backgroundColor: Colors.deepPurple,
+      backgroundImage: isNetworkImage
+          ? NetworkImage(partner.profilePicture!) as ImageProvider
+          : AssetImage(partner.profilePicture!),
     );
   }
 }
