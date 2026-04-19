@@ -63,6 +63,30 @@
 - 🗺️ Google Maps & Directions API integration with campus safety zone heatmaps
 - 🔗 **Stack:** Flutter · Node.js · Express · MongoDB · Socket.io · TensorFlow.js · Google Maps
 
+### 🔐 [Cypher](https://github.com/Yongqiao662/Cypher)
+> **[Short tagline — e.g. "Secure end-to-end encrypted messaging app"]**
+
+- 🔒 [Key feature — e.g. AES-256 encryption for all messages]
+- 🧩 [Key feature — e.g. Zero-knowledge architecture, no plain-text stored server-side]
+- 📡 [Key feature — e.g. Real-time delivery via WebSocket]
+- 🔗 **Stack:** [e.g. Flutter · Node.js · MongoDB · Crypto.js]
+
+### 👻 [Specter](https://github.com/Yongqiao662/Specter)
+> **[Short tagline — e.g. "Anonymous reporting platform for campus incidents"]**
+
+- 🕵️ [Key feature — e.g. Fully anonymous submission pipeline]
+- 📊 [Key feature — e.g. Admin dashboard with real-time incident analytics]
+- 🔔 [Key feature — e.g. Push notification system for updates]
+- 🔗 **Stack:** [e.g. React · Express · PostgreSQL · Firebase]
+
+### 🌊 [Amana](https://github.com/Yongqiao662/Amana)
+> **[Short tagline — e.g. "Trust-based peer support and well-being platform"]**
+
+- 💬 [Key feature — e.g. Peer-to-peer counselling matchmaking]
+- 🧠 [Key feature — e.g. Mood tracking with AI-powered insights]
+- 🤝 [Key feature — e.g. Community circles for group support sessions]
+- 🔗 **Stack:** [e.g. Flutter · Python · FastAPI · MongoDB]
+
 ---
 
 ## 📊 GitHub Stats
