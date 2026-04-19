@@ -63,29 +63,32 @@
 - 🗺️ Google Maps & Directions API integration with campus safety zone heatmaps
 - 🔗 **Stack:** Flutter · Node.js · Express · MongoDB · Socket.io · TensorFlow.js · Google Maps
 
-### 🔐 [Cypher](https://github.com/Yongqiao662/Cypher)
-> **[Short tagline — e.g. "Secure end-to-end encrypted messaging app"]**
+### 📈 [Cypher](https://github.com/Yongqiao662/Cypher)
+> **Institutional-grade AI financial analysis** — SEC filings, Bull vs Bear debates, and audio research summaries
 
-- 🔒 [Key feature — e.g. AES-256 encryption for all messages]
-- 🧩 [Key feature — e.g. Zero-knowledge architecture, no plain-text stored server-side]
-- 📡 [Key feature — e.g. Real-time delivery via WebSocket]
-- 🔗 **Stack:** [e.g. Flutter · Node.js · MongoDB · Crypto.js]
+- 📄 Auto-extracts SEC 10-K/10-Q filings with AI-generated insights and investment perspectives
+- 🐂🐻 Bull vs Bear debate engine powered by Claude Sonnet 4 for balanced analysis
+- 🔊 Daily broadcast with professional audio summaries via ElevenLabs TTS + PDF report export
+- 📊 Live market integration with TradingView and real-time data feeds
+- 🔗 **Stack:** React · Vite · TailwindCSS · Express.js · Claude Sonnet 4 · ElevenLabs · Apify
 
-### 👻 [Specter](https://github.com/Yongqiao662/Specter)
-> **[Short tagline — e.g. "Anonymous reporting platform for campus incidents"]**
+### 🔮 [Specter](https://github.com/Yongqiao662/Specter)
+> **Autonomous AI agent for UX testing** — vision-based signup flow analysis with cognitive friction scoring
 
-- 🕵️ [Key feature — e.g. Fully anonymous submission pipeline]
-- 📊 [Key feature — e.g. Admin dashboard with real-time incident analytics]
-- 🔔 [Key feature — e.g. Push notification system for updates]
-- 🔗 **Stack:** [e.g. React · Express · PostgreSQL · Firebase]
+- 👁️ Multimodal navigator using Claude Vision — no hardcoded selectors, fully autonomous decision-making
+- 🧑‍🤝‍🧑 Simulates 5 user personas (normal, cautious, confused, elderly, mobile novice) across device/network profiles
+- 📐 Mathematical F-Score friction metric, AI uncertainty heatmaps, ghost replay GIFs, and P0–P3 severity routing
+- 🔧 Specter Healer auto-generates GitHub PRs with AI-suggested UX fixes via NVIDIA NIM
+- 🔗 **Stack:** Next.js · FastAPI · Claude Vision · Kokoro-ONNX TTS · Playwright · NVIDIA NIM
 
-### 🌊 [Amana](https://github.com/Yongqiao662/Amana)
-> **[Short tagline — e.g. "Trust-based peer support and well-being platform"]**
+### 🌙 [AMANA](https://github.com/Yongqiao662/AMANA)
+> **AI-powered Halal certification assistant** — democratising JAKIM compliance for Malaysian SMEs
 
-- 💬 [Key feature — e.g. Peer-to-peer counselling matchmaking]
-- 🧠 [Key feature — e.g. Mood tracking with AI-powered insights]
-- 🤝 [Key feature — e.g. Community circles for group support sessions]
-- 🔗 **Stack:** [e.g. Flutter · Python · FastAPI · MongoDB]
+- 🔍 Ingredient Guard: snap & scan product labels with GPT-4V + voice search in Manglish/BM/EN via Whisper
+- 📚 IHCS Auto-Architect: conversational AI generates a full 50-page MPPHM 2020 compliance manual in 30 minutes
+- ✅ Pre-Audit Readiness module scores document completeness (0–100%) against JAKIM requirements
+- 🌐 Multi-language support (Manglish, Bahasa Malaysia, English) with RAG over JAKIM halal databases
+- 🔗 **Stack:** Next.js 14 · TypeScript · JamAI Base · GPT-4V · Whisper API
 
 ---
 
